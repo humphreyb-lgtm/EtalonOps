@@ -1,6 +1,6 @@
 # Verified retail rates and next Azure spending gate
 
-Prepared October 17, 2026. **No spending approval has been given and no Azure resource has been provisioned.** This replaces the unverified planning prices in the original proposal; architecture/security approval and frontend visual approval do not authorize billing.
+Prepared October 17, 2026. **The owner approved the approximately $25/month base pilot and the illustrated AI usage estimate on October 17, 2026 (roughly $30/month combined planning total). No Azure resource has been provisioned by this project yet.** This replaces the unverified planning prices in the original proposal; architecture/security approval and frontend visual approval do not authorize billing.
 
 Rates were retrieved from the [official Azure Retail Prices API](https://prices.azure.com/api/retail/prices). The [saved meter evidence](pricing/retail-rates-2026-10-17.json) contains exact SKU/meter IDs, units, tiers and effective dates. These are USD public retail rates, not subscription-specific quotes. Tenant availability, quotas, currency, taxes and discounts require secure Azure access and final verification before creation.
 
@@ -24,18 +24,18 @@ Deploy first to the Azure-provided HTTPS hostname. Enforce single-tenant authent
 
 Rollback retains immutable application artifacts and uses backward-compatible migrations. SQL point-in-time restore and storage retention must be configured and tested in Azure after provisioning; local SQL backup/recovery success does not prove a cloud recovery objective. Record actual policies/costs before accepting real data.
 
-## AI rates — informational; not included in the base approval
+## AI rates — illustrated usage approved; service chain still requires verification
 
 The official rate card lists East US **GPT-4.1-mini regional standard** input at **$0.00044/1K tokens** ($0.44/million) and output at **$0.00176/1K** ($1.76/million). This is not provisioned throughput, fine-tuning, batch or Global model pricing. A listed meter does not prove deployment availability/quota in the selected subscription.
 
 **Grounding with Bing Search** is listed at **$14/1K transactions**, in **Global**. This corrects the original illustrative $35/1K assumption. It is an Agent Service tool, not a general direct product-search API. Its complete service-chain charges, terms, regional processing implications, source/thumbnail suitability and quota behavior must be verified before enabling it. Do not silently substitute Global processing for a regional model requirement.
 
-For illustration only: 200 discovery sessions/month × 2 model turns × 3,000 input/600 output tokens would be about **$0.95** in model tokens; 200 single retrieval transactions about **$2.80**. Those **$3.75** exclude any additional required agent/storage/retrieval components and are **not a complete AI deployment quote or authorization**. Sessions, token budgets, retries and paid tool calls must have atomic server-side limits and a kill switch. No unbounded agent loops or automatic paid retries.
+For illustration only: 200 discovery sessions/month × 2 model turns × 3,000 input/600 output tokens would be about **$0.95** in model tokens; 200 single retrieval transactions about **$2.80**. Those **$3.75** exclude any additional required agent/storage/retrieval components and are **not a complete AI deployment quote**. The owner approved this illustrated expense after reviewing the exclusions; activation must wait until the complete service chain fits the approved planning scope, or an updated quote is approved. Sessions, token budgets, retries and paid tool calls must have atomic server-side limits and a kill switch. No unbounded agent loops or automatic paid retries.
 
 ## Next decisions and prerequisites
 
 1. Secure Microsoft sign-in to inspect the intended tenant/subscription, allowed region/SKUs and existing bindings. Do not ask for passwords, tokens or MFA codes in chat. Azure CLI installation itself creates no Azure resources.
-2. Present the final available resource names, subscription-specific costs and role scope, then obtain **express approval** for base pilot spending before creation. The current proposed base target is $25/month; no approval is inferred from this document or the earlier $0 frontend approval.
+2. Present the final available resource names, subscription-specific costs and role scope, then verify the approved scope before creation. The current proposed base target is $25/month; approval comes from the owner's explicit chat instruction, not this document or the earlier $0 frontend approval.
 3. Quote and approve AI enablement separately once its full service chain is understood. Preserve manual-description fallback if disabled.
 4. Request separate approval for any later `dev.etalonops.com` DNS changes after the secure Azure preview passes acceptance tests. Preserve all existing apex/mail records.
 

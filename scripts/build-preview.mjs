@@ -8,7 +8,7 @@ const built = await build({
     write: false,
     cssCodeSplit: false,
     lib: { entry: 'src/main.tsx', name: 'EtalonOpsPreview', formats: ['iife'] },
-    rollupOptions: { output: { inlineDynamicImports: true } },
+    rollupOptions: { input: 'src/main.tsx', output: { inlineDynamicImports: true } },
   },
 });
 const files = (Array.isArray(built) ? built : [built]).flatMap(result => result.output);

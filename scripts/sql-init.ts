@@ -20,6 +20,13 @@ if (!master) throw new Error('SQL Server unavailable.');
 try {
   // Identifier is selected from two hardcoded local names, never request input.
   await master.request().query(`IF DB_ID('${database}') IS NULL CREATE DATABASE ${database}`);
+  // The master connection can be ready while a retained database is recovering.
+  for (let attempt = 0; ; attempt++) {
+    const status = await master.request().input('name', sql.NVarChar(128), database).query('SELECT state_desc AS state FROM sys.databases WHERE name=@name');
+    if (status.recordset[0]?.state === 'ONLINE') break;
+    if (attempt >= 59) throw new Error('Retained database did not finish recovery; data was not reset.');
+    await setTimeout(1000);
+  }
   await master.request().input('password', sql.NVarChar(200), localSqlConfig().password).query("IF NOT EXISTS(SELECT 1 FROM sys.server_principals WHERE name='etalonops_local_app') BEGIN DECLARE @command nvarchar(max)=N'CREATE LOGIN etalonops_local_app WITH PASSWORD='+QUOTENAME(@password,CHAR(39))+N', CHECK_POLICY=ON'; EXEC sp_executesql @command; END");
 } finally { await master.close(); }
 const admin = await new sql.ConnectionPool(localSqlConfig(true, database)).connect();

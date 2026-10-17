@@ -49,3 +49,9 @@ npm audit --cache /workspace/.cache/npm
 The three provided screenshots all depict the clarification conversation despite their filenames. The interface follows their shared shell and styling; additional result and populated-item states follow the written requirements. The written refinements take precedence: sharp 2–4 px corners, thin dividers, compact panel gaps, no large colored banners, and practical phone controls.
 
 Desktop/mobile visual approval was received. Both local SQL Server and SQLite persistence, draft ownership checks, deterministic translator search and admin import APIs are implemented and tested. Actual Microsoft sign-in, live AI, image administration and Azure deployment remain pending. Paid provisioning requires a subscription-specific quote and separate approval; DNS requires its own approval. The downloaded HTML remains the standalone demo, not the database application.
+
+## Approved Azure pilot deployment
+
+The owner approved the approximately $25/month base pilot and illustrated AI usage costs on October 17, 2026 (roughly $30/month combined planning estimate, not a cap). AI remains disabled until its complete service-chain cost is verified within that scope; DNS still needs separate approval. Existing MaterialsManagement resources remain outside this deployment. See [Cloud Shell deployment instructions](docs/CLOUD_DEPLOYMENT.md) and [pricing assumptions](docs/COST_UPDATE.md).
+
+The cloud launcher (`npm start`) requires explicit Entra configuration and Azure SQL managed identity. It never enables mock sign-in or imports fixtures. The local launcher remains `npm run api` with the documented local configuration. Source/build tests do not establish a live Azure deployment or real Microsoft sign-in.

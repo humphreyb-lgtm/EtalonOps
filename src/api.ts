@@ -1,11 +1,13 @@
 import type { Candidate, Draft } from './domain';
+import { cloudMode, cloudToken } from './cloud-auth';
 
-export const databaseMode = window.location.protocol !== 'file:' && new URLSearchParams(window.location.search).get('database') === '1';
+export const databaseMode = cloudMode || window.location.protocol !== 'file:' && new URLSearchParams(window.location.search).get('database') === '1';
 export const localIdentity = new URLSearchParams(window.location.search).get('identity') ?? 'foreman-one';
 let token: string | null = null;
 let tokenPromise: Promise<string> | null = null;
 type SavedDraft = Omit<Draft, 'ownerId' | 'schemaVersion'> & { id: string; version: number };
 async function accessToken(): Promise<string> {
+  if (cloudMode) return cloudToken();
   if (token) return token;
   if (!tokenPromise) tokenPromise = fetch('/api/dev/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identity: localIdentity }) })
     .then(async response => { if (!response.ok) throw new Error('Local database session unavailable. Start the local API; Microsoft sign-in is not configured.'); token = (await response.json()).token; return token!; })

@@ -10,3 +10,4 @@ test-results/
 .runtime/
 artifacts/*.zip
 __pycache__/
+dist-server/

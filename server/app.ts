@@ -22,7 +22,7 @@ export function createApp(store: Repository, authOptions: AuthOptions) {
   });
   app.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.use(express.json({ limit: '1mb' }));
-  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: false }); });
+  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
     const { identity } = z.object({ identity: z.string() }).strict().parse(req.body);
     const token = await auth.issueLocal(identity);
@@ -46,8 +46,16 @@ export function createApp(store: Repository, authOptions: AuthOptions) {
   });
   app.get('/api/projects/:project/draft', async (req, res) => res.json({ draft: await store.getProjectDraft(principal(res), req.params.project) }));
   app.get('/api/drafts/:id', async (req, res) => res.json({ draft: await store.getDraft(principal(res), req.params.id) }));
-  app.post('/api/drafts', async (req, res) => res.status(201).json({ draft: await store.saveDraft(principal(res), draftBody.parse(req.body)) }));
-  app.put('/api/drafts/:id', async (req, res) => res.json({ draft: await store.saveDraft(principal(res), draftBody.parse(req.body), req.params.id) }));
+  app.post('/api/drafts', async (req, res) => {
+    const body = draftBody.parse(req.body);
+    if (!local && body.lines.some(line => line.source.endsWith('_fixture'))) throw new ApiError(400, 'Demo fixtures cannot be saved in the cloud pilot.');
+    res.status(201).json({ draft: await store.saveDraft(principal(res), body) });
+  });
+  app.put('/api/drafts/:id', async (req, res) => {
+    const body = draftBody.parse(req.body);
+    if (!local && body.lines.some(line => line.source.endsWith('_fixture'))) throw new ApiError(400, 'Demo fixtures cannot be saved in the cloud pilot.');
+    res.json({ draft: await store.saveDraft(principal(res), body, req.params.id) });
+  });
   app.post('/api/admin/imports/preview', async (req, res) => {
     const { csv } = z.object({ csv: z.string().max(800000) }).strict().parse(req.body);
     res.json(await store.previewImport(principal(res), csv));

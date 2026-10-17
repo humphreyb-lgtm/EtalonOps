@@ -11,6 +11,7 @@ import {
   type Candidate, type Draft, type Line, type Unit,
 } from './domain';
 
+import { cloudMode, cloudDisplayName, cloudSignOut } from './cloud-auth';
 import { databaseMode, localIdentity, readDatabaseDraft, saveDatabaseDraft, databaseSearch, clearLocalSession } from './api';
 
 type Stage = 'idle' | 'verified' | 'clarify';
@@ -137,7 +138,7 @@ export default function App() {
     if (!databaseMode) return;
     let cancelled = false;
     readDatabaseDraft('riverside').then(saved => {
-      if (!cancelled) { setDraft(saved ?? freshDraft('riverside')); setAnnouncement(saved ? 'Draft restored from the local database.' : 'Local database ready. Fixture catalog; test session only.'); }
+      if (!cancelled) { setDraft(saved ?? freshDraft('riverside')); setAnnouncement(cloudMode ? (saved ? 'Draft restored from Azure SQL.' : 'Azure SQL ready. AI discovery is disabled.') : saved ? 'Draft restored from the local database.' : 'Local database ready. Fixture catalog; test session only.'); }
     }).catch(error => { if (!cancelled) setStorageError(error instanceof Error ? error.message : 'Local database unavailable.'); })
       .finally(() => { if (!cancelled) setDatabaseBusy(false); });
     return () => { cancelled = true; };
@@ -214,7 +215,9 @@ export default function App() {
     if (!text) return;
     const context = [...messages.filter(m => m.author === 'user').map(m => m.text), text].join(' ');
     let reply: string;
-    if (/black|device|electrical box|6.?32/i.test(context)) {
+    if (cloudMode) {
+      reply = 'AI discovery is not enabled yet. Use My Description to retain your wording, quantity and unit.';
+    } else if (/black|device|electrical box|6.?32/i.test(context)) {
       reply = 'Are you looking for black 6-32 device mounting screws? I’ve shown two illustrative options below. What length do you need? No live catalog or AI search has been run.';
       setSuggestions(discoveryFixtures);
     } else if (/hex|metal|pan|screw|tek/i.test(context)) {
@@ -234,7 +237,7 @@ export default function App() {
       const saved = databaseMode ? await saveDatabaseDraft(draft) : { ...draft, savedAt: new Date().toISOString() };
       if (!databaseMode) localStorage.setItem(storageKey(projectId), JSON.stringify(saved));
       setDraft(saved); setDirty(false); setStorageError('');
-      setAnnouncement(databaseMode ? 'Draft saved in the local development database for this test account.' : 'Draft saved in this browser. You can leave the demo and resume it here.');
+      setAnnouncement(cloudMode ? 'Draft saved in Azure SQL.' : databaseMode ? 'Draft saved in the local development database for this test account.' : 'Draft saved in this browser. You can leave the demo and resume it here.');
       return true;
     } catch (error) {
       setStorageError(databaseMode ? (error instanceof Error ? error.message : 'Database save failed. Your items are still here.') : 'Your browser could not save this draft. Your items are still here. Free up browser storage or allow site storage, then try again.');
@@ -261,13 +264,13 @@ export default function App() {
   async function finishNavigation(save: boolean) {
     if (save && !await saveDraft()) return;
     if (pendingProject) await activateProject(pendingProject);
-    if (pendingLeave) { setActive(false); clearLocalSession(); setProfileOpen(false); setDirty(false); }
+    if (pendingLeave) { setActive(false); clearLocalSession(); if (cloudMode) void cloudSignOut(); setProfileOpen(false); setDirty(false); }
     closeConfirmation();
   }
 
   function leaveDemo() {
     if (dirty) setPendingLeave(true);
-    else { setActive(false); clearLocalSession(); setProfileOpen(false); }
+    else { setActive(false); clearLocalSession(); if (cloudMode) void cloudSignOut(); setProfileOpen(false); }
   }
 
   function resumeDemo() {
@@ -307,23 +310,23 @@ export default function App() {
   if (!active) return <main className="resume-page"><Brand /><section className="resume-panel"><span className="eyebrow">LOCAL PROOF OF CONCEPT</span><h1>Your work, ready when you are.</h1><p>You’ve left the demo. {databaseMode ? 'Saved drafts remain in the local database for this test account.' : 'Saved drafts remain in this browser; unsaved changes are not retained.'}</p><button className="button primary" onClick={resumeDemo}>Resume demo <ArrowRight size={16} aria-hidden="true" /></button><p className="fine-print">This is a local demo session, not Microsoft sign-in. {databaseMode ? 'Data is stored in your local development database.' : 'No data is sent to a server.'}</p></section></main>;
 
   return <>
-    {databaseBusy && <div className="database-progress" role="status">Connecting to local database…</div>}
+    {databaseBusy && <div className="database-progress" role="status">{cloudMode ? 'Connecting to Azure SQL…' : 'Connecting to local database…'}</div>}
     <a className="skip-link" href="#main">Skip to MRF Builder</a>
     <aside className="desktop-sidebar"><Brand /><Navigation /></aside>
     <header className="topbar">
       <button className="icon-button menu-button" aria-label="Open navigation" onClick={() => menuRef.current?.showModal()}><Menu size={23} aria-hidden="true" /></button>
       <div className="project-picker"><label htmlFor="project-select" className="sr-only">Project</label><div className="project-select-wrap"><select id="project-select" value={projectId} onChange={event => { if (dirty) setPendingProject(event.target.value); else activateProject(event.target.value); }}>{projects.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div><span>Project #{project.number} <span className="project-mock">· Demo</span></span></div>
       <form className="global-search" onSubmit={event => { event.preventDefault(); if (globalSearch.trim()) { setDescription(globalSearch.trim()); resetEntry(); descriptionRef.current?.focus(); setAnnouncement('Description filled. Enter a quantity, then Find Matches.'); } }}><Search size={17} aria-hidden="true" /><input aria-label="Search demo materials" placeholder="Search demo materials…" value={globalSearch} onChange={event => setGlobalSearch(event.target.value)} /><button className="sr-only" type="submit">Use search as description</button></form>
-      <div className="profile"><button className="avatar" aria-label="Demo session menu" aria-expanded={profileOpen} onClick={() => setProfileOpen(current => !current)}>DM</button>{profileOpen && <div className="profile-menu"><strong>{databaseMode ? localIdentity : 'Demo foreman'}</strong><span>Local session · no sign-in</span><button className="button text-button" onClick={leaveDemo}><LogOut size={15} aria-hidden="true" />Leave demo</button></div>}</div>
+      <div className="profile"><button className="avatar" aria-label={cloudMode ? 'Account menu' : 'Demo session menu'} aria-expanded={profileOpen} onClick={() => setProfileOpen(current => !current)}>DM</button>{profileOpen && <div className="profile-menu"><strong>{cloudMode ? cloudDisplayName() : databaseMode ? localIdentity : 'Demo foreman'}</strong><span>{cloudMode ? 'Microsoft work account' : 'Local session · no sign-in'}</span><button className="button text-button" onClick={leaveDemo}><LogOut size={15} aria-hidden="true" />{cloudMode ? 'Sign out' : 'Leave demo'}</button></div>}</div>
     </header>
 
     <main id="main" className="workspace" tabIndex={-1} inert={databaseBusy || undefined} aria-busy={databaseBusy}>
-      <div className="page-heading"><h1>MRF Builder</h1><span className="demo-badge">Local preview</span></div>
-      <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{databaseMode ? 'Local database demo · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
+      <div className="page-heading"><h1>MRF Builder</h1><span className="demo-badge">{cloudMode ? 'Cloud pilot' : 'Local preview'}</span></div>
+      <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{cloudMode ? 'Microsoft sign-in · Azure SQL · AI discovery disabled · example projects.' : databaseMode ? 'Local database demo · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
       <section className="panel draft-header" aria-label="MRF header">
-        <div className="foreman"><span className="header-icon"><span className="person-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="7" r="3.2" /><path d="M4.5 20v-2a7.5 7.5 0 0 1 15 0v2z" /></svg></span></span><div><span className="field-caption">Foreman</span><strong>{databaseMode ? localIdentity : 'Demo foreman'}</strong></div></div>
+        <div className="foreman"><span className="header-icon"><span className="person-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="7" r="3.2" /><path d="M4.5 20v-2a7.5 7.5 0 0 1 15 0v2z" /></svg></span></span><div><span className="field-caption">Foreman</span><strong>{cloudMode ? cloudDisplayName() : databaseMode ? localIdentity : 'Demo foreman'}</strong></div></div>
         <div className="header-date"><label htmlFor="delivery-date" className="field-caption">MRF Delivery Date</label><input id="delivery-date" type="date" required value={draft.deliveryDate} onChange={event => { if (event.target.value) changeDraft(current => ({ ...current, deliveryDate: event.target.value })); }} /><span className="sr-only">Default for items using the MRF date</span></div>
-        <div className="save-area"><button className="button save-button" onClick={saveDraft}><Save size={16} aria-hidden="true" />Save as Draft</button><span className={`save-status ${dirty ? 'unsaved' : ''}`}>{dirty ? 'Unsaved changes' : draft.savedAt ? (databaseMode ? 'Saved in local database' : 'Saved in this browser') : 'Not saved yet'}</span></div>
+        <div className="save-area"><button className="button save-button" onClick={saveDraft}><Save size={16} aria-hidden="true" />Save as Draft</button><span className={`save-status ${dirty ? 'unsaved' : ''}`}>{dirty ? 'Unsaved changes' : draft.savedAt ? (cloudMode ? 'Saved in Azure SQL' : databaseMode ? 'Saved in local database' : 'Saved in this browser') : 'Not saved yet'}</span></div>
       </section>
       {storageError && <div className="error-message" role="alert"><AlertCircle size={17} aria-hidden="true" /><span>{storageError}</span></div>}
 

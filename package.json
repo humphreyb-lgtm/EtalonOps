@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run build:server",
     "build:preview": "node scripts/build-preview.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc -b",
@@ -18,12 +18,15 @@
     "sql:prepare": "python scripts/sql-local.py && tsx scripts/sql-init.ts && tsx scripts/sql-init.ts --tests",
     "test:sql": "tsx --test server/sql.integration.ts",
     "test:browser:sql": "ETALONOPS_TEST_DB_ENGINE=sqlserver playwright test",
-    "sql:recovery-check": "tsx scripts/sql-recovery-check.ts"
+    "sql:recovery-check": "tsx scripts/sql-recovery-check.ts",
+    "start": "node dist-server/main.mjs",
+    "build:server": "esbuild server/cloud-main.ts --bundle --platform=node --format=esm --packages=external --outfile=dist-server/main.mjs"
   },
   "engines": {
     "node": ">=24.0.0"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.25.1",
     "csv-parse": "^7.0.3",
     "csv-stringify": "^6.9.0",
     "express": "^5.3.0",
@@ -45,6 +48,7 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.5.0",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "~5.8.3",
     "vite": "^6.3.5"
