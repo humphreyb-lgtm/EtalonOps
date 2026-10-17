@@ -14,7 +14,7 @@ Create separate manufacturer records and manufacturer-product records. Each manu
 
 Verify meaningful specification equivalence before linking a manufacturer product. Preserve source evidence and verification status. The brands named in the discussion were invented examples and must not be inserted as real verified manufacturers.
 
-Plan for future job-specific allowed-manufacturer restrictions using these relationships. Do not enforce brand restrictions in the initial implementation; this is a later feature. Canonical materials must remain reusable across jobs with different allowed brands.
+Plan for future job-specific allowed-manufacturer restrictions using these relationships. Build the supporting relationships and validation now, but leave actual-job enforcement inactive initially (updated by the later discussion below). Canonical materials must remain reusable across jobs with different allowed brands.
 
 ## Learn translations from user selections
 
@@ -52,6 +52,26 @@ For `10' Stick PVC 40`, retrieve relevant potential catalog matches without an A
 
 These particular rules need implementation and tests; the existing shorthand foundation does not establish that this entire example works today.
 
+## Bulk catalog and translation imports
+
+The owner plans to commission another AI to prepare a large initial parts catalog and a separate translation dataset. Support administrator bulk file imports in CSV or a comparable structured format for launch seeding and subsequent updates. Exact columns, table layouts and file relationships will be agreed later; do not freeze a schema or demand reformatting now.
+
+Extend the existing reviewed CSV import foundation to cover canonical materials, defining specifications, manufacturer/product relationships and phrase-to-material translations as those relationships are implemented. Catalog and translation files must be linkable through stable identifiers rather than guessed description matches. Support staged imports so material records can be loaded before their related products and translations.
+
+Provide a validation/preview step, counts and actionable row-level errors, duplicate/conflict detection, explicit administrator apply, import provenance and a batch history. Re-importing the same dataset must not duplicate materials or relationships. Reject or isolate unresolved references and conflicting specifications; do not silently overwrite reviewed records. Preserve the ability to correct or roll back a batch without breaking existing MRF references or removing subsequent independently learned translations.
+
+Record supplied evidence and AI origin. An administrator approving an import batch does not by itself verify every AI-generated product fact or phrase. Preserve explicit verification states rather than converting a large AI-generated dump into verified manufacturer data. Bound file processing and use staged/batched application where needed; agree supported launch volumes and test with representative large datasets once the format/volume is known. Do not claim large-dataset readiness from the existing small-fixture import tests.
+
+## Additional agreed product behavior
+
+- Store category-specific structured specifications and build consistent catalog descriptions from supported facts. Bracket actual span and nominal stud spacing are separate attributes. Do not infer dimensions from a part number. Manufacturer web/document retrieval with evidence is required for future AI discovery; the current clarification client is insufficient.
+- Preserve explicit manufacturer intent in search: requested-brand products first; any other-brand alternatives must be clearly distinguished. Exact part-number searches prioritize that product; generic searches may group equivalent manufacturer products under one material.
+- Track material selection frequency and allow administrator high-use designation. Boost relevant high-use results without overriding explicit dimensions, brand or part constraints.
+- Permit a preferred manufacturer product on a canonical material. It can populate an MRF line as the normal purchase example without creating another material or silently asserting No Substitutions.
+- Show manufacturer and manufacturer part number on MRF lines. A per-line No Substitutions restriction requires both values and communicates the exact required product to purchasing. For unrestricted lines these values are examples and substitutions are allowed subject to job rules. Snapshot them with the line so later catalog changes do not silently change requests.
+- Build job manufacturer/product restriction relationships and validation now, while leaving actual-job enforcement inactive initially. Support allowed manufacturers and specific manufacturer products at appropriate job/category/material scope. When active, filter choices and validate before submission; flag conflicting drafts rather than silently changing them. No Substitutions is a separate, stricter line constraint and cannot bypass job restrictions.
+- The owner later wrote TSGB1426 after previously discussing TSGB1624. The exact intended part number remains unresolved; do not treat those strings as aliases or create a verified product from this discussion. The preferred-product design was agreed independently of that identifier.
+
 ## Implementation and acceptance checklist
 
 - [ ] Define category-specific material identity and duplicate-prevention rules; inspect existing data before any merge.
@@ -61,6 +81,8 @@ These particular rules need implementation and tests; the existing shorthand fou
 - [ ] Implement bounded, validated AI phrase generation within existing usage controls; preserve manual operation when AI is off.
 - [ ] Implement deterministic shorthand matching and ambiguity handling for the example above.
 - [ ] Test that different brands link to one material; meaningful specification differences stay separate; repeated selections do not duplicate links; ambiguous phrases retain alternatives; AI content never becomes verified automatically.
-- [ ] Keep future job-brand restrictions documented but inactive in the initial release.
+- [ ] Build and test job manufacturer/product restriction relationships and validation, keeping actual-job enforcement inactive initially.
+- [ ] Extend reviewed bulk imports to the revised catalog/manufacturer/translation relationships after file formats are agreed.
+- [ ] Implement high-use/preferred-product ranking and MRF manufacturer snapshots/No Substitutions validation.
 
 No schema migration, data consolidation, new live AI call or catalog behavior change was performed solely to record this discussion.
