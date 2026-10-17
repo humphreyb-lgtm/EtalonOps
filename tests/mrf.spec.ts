@@ -21,7 +21,8 @@ async function clarification(page: Page) {
   await expect(page.getByLabel('Tell the assistant what you are looking for')).toBeFocused();
   await page.getByLabel('Tell the assistant what you are looking for').fill('I need the black screws we use to mount devices to electrical boxes.');
   await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByRole('log')).toContainText('black 6-32 device mounting screws');
+  await expect(page.getByRole('log')).toContainText('What length do you need?');
+  await expect(page.getByRole('log').locator('.message-bubble').last()).not.toContainText('6-32');
 }
 
 async function noOverflow(page: Page) {
@@ -204,7 +205,8 @@ test.describe('Touch interaction', () => {
     await page.setViewportSize({ width: 390, height: 400 });
     await page.getByLabel('Tell the assistant what you are looking for').fill('Black device screws');
     await page.getByRole('button', { name: 'Send message' }).tap();
-    await expect(page.getByRole('log')).toContainText('black 6-32');
+    await expect(page.getByRole('log')).toContainText('What length do you need?');
+    await expect(page.getByRole('log').locator('.message-bubble').last()).not.toContainText('6-32');
     await page.getByRole('button', { name: 'Use My Description' }).tap();
     await expect(page.getByTestId('mrf-line')).toHaveCount(1);
     await noOverflow(page);

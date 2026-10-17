@@ -415,3 +415,30 @@ dialog::backdrop { background: #14203c55; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+.clarification-summary { display: grid; gap: 5px; margin: 10px 0; min-width: 0; }
+.clarification-summary textarea, .catalog-fields textarea { width: 100%; min-width: 0; padding: 8px; border: 1px solid #cbd2d9; border-radius: 3px; resize: vertical; font: inherit; }
+.catalog-modal { width: min(850px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.catalog-fields { display: grid; gap: 7px; margin: 12px 0; padding: 10px; border: 1px solid #dce1e7; min-width: 0; }
+.catalog-fields input[type=file] { width: 100%; min-width: 0; }
+.catalog-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.catalog-records { max-height: 320px; overflow: auto; border-block: 1px solid #dce1e7; }
+.catalog-record { padding: 8px 0; border-bottom: 1px solid #e4e7eb; overflow-wrap: anywhere; }
+.catalog-record h4 { margin: 0 0 6px; }
+.catalog-record dl { display: grid; grid-template-columns: 135px minmax(0, 1fr); gap: 4px 8px; margin: 0; font-size: 12px; }
+.catalog-record dd { margin: 0; }
+.catalog-record dt { color: #5f6c7b; }
+.catalog-review { display: flex; gap: 8px; align-items: flex-start; padding: 12px 0; }
+.catalog-review input { flex: 0 0 auto; margin-top: 3px; }
+.catalog-errors { max-height: 180px; overflow-y: auto; padding-left: 20px; color: #a12622; }
+.catalog-history-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e4e7eb; }
+.catalog-history-row span { min-width: 0; overflow-wrap: anywhere; }
+.catalog-history-row small { display: block; margin-top: 4px; color: #5f6c7b; }
+.catalog-history-row button { flex: 0 0 auto; }
+.catalog-rollback { margin-top: 10px; border: 1px solid #dce1e7; padding: 10px; }
+@media (max-width: 600px) {
+  .catalog-modal .button, .catalog-modal input[type=file] { min-height: 44px; }
+  .catalog-record dl { grid-template-columns: 1fr; }
+  .catalog-history-row { align-items: flex-start; flex-direction: column; }
+  .catalog-records { max-height: 240px; }
+}

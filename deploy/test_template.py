@@ -59,4 +59,15 @@ class DeploymentScope(unittest.TestCase):
             result=subprocess.run(command,input=output,text=True,capture_output=True)
             self.assertNotEqual(result.returncode,0)
 
+    def test_ephemeral_shell_recovery_requires_exact_pilot_identity(self):
+        import copy
+        from deploy.recover_identity import recover
+        state={'identityName':'Pilot','appName':'test-app'}
+        app={'id':'object-id','appId':'client-id','displayName':'Pilot','tags':['EtalonOpsPOC'],'signInAudience':'AzureADMyOrg','spa':{'redirectUris':['https://test-app.azurewebsites.net/auth-callback.html']},'appRoles':[{'id':i,'value':v,'isEnabled':True,'allowedMemberTypes':['User']} for i,v in [('9c6c4e1a-3830-4400-9b69-ce15aa8a0bdd','Admin'),('49dbde60-3bed-4ec8-9c21-3d6c8dc355a8','Foreman')]],'api':{'requestedAccessTokenVersion':2,'oauth2PermissionScopes':[{'id':'895f3efb-fef1-4b7c-840e-50ad2e0ee2cc','value':'access_as_user','isEnabled':True}]}}
+        self.assertEqual(recover(state,[app]),{'id':'object-id','appId':'client-id'})
+        for key,value in [('tags',[]),('signInAudience','AzureADMultipleOrgs'),('passwordCredentials',[{'keyId':'unexpected'}]),('requiredResourceAccess',[{}]),('spa',{'redirectUris':['https://foreign.invalid']})]:
+            bad=copy.deepcopy(app);bad[key]=value
+            with self.assertRaises(ValueError): recover(state,[bad])
+        with self.assertRaises(ValueError): recover(state,[app,app])
+
 if __name__=='__main__': unittest.main()

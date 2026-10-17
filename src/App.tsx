@@ -11,6 +11,8 @@ import {
   type Candidate, type Draft, type Line, type Unit,
 } from './domain';
 
+import { CatalogAdmin } from './CatalogAdmin';
+import { lookupContext, fallbackDescription } from './lookup';
 import { cloudMode, cloudDisplayName, cloudSignOut } from './cloud-auth';
 import { databaseMode, localIdentity, readDatabaseDraft, saveDatabaseDraft, databaseSearch, clearLocalSession } from './api';
 
@@ -79,6 +81,7 @@ export default function App() {
   const [choice, setChoice] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [message, setMessage] = useState('');
+  const [customDescription, setCustomDescription] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Candidate[]>([]);
   const [added, setAdded] = useState<string[]>([]);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -151,7 +154,7 @@ export default function App() {
 
   function resetEntry() {
     setStage('idle'); setMatches([]); setSuggestions([]); setChoice('');
-    setMessages([]); setMessage(''); setAdded([]); setEntryError('');
+    setMessages([]); setMessage(''); setCustomDescription(null); setAdded([]); setEntryError('');
   }
 
   async function search(event?: FormEvent, override?: string) {
@@ -182,9 +185,11 @@ export default function App() {
     if (candidate && added.includes(candidate.id)) return;
     if (!candidate && added.includes('description')) return;
     if (!requireEntry()) return;
+    const ownDescription = customDescription ?? fallbackDescription(description, messages);
+    if (!candidate && (!ownDescription.trim() || ownDescription.length > 2000)) { setEntryError('Your description must contain 1–2000 characters. Edit Description to add before continuing.'); return; }
     const line: Line = {
       id: crypto.randomUUID(), quantity, requestedUnit: unit as Unit,
-      description: candidate?.description ?? description.trim(),
+      description: candidate?.description ?? ownDescription.trim(),
       rawInput: { quantity, description: searchedDescription || description.trim(), requestedUnit: unit as Unit },
       candidate: candidate ? { ...candidate, specs: [...candidate.specs] } : null,
       source: candidate?.source ?? 'user_description', deliveryMode: 'inherit', overrideDate: null,
@@ -202,32 +207,21 @@ export default function App() {
 
   function chooseOption(id: string) {
     setChoice(id);
-    const selected = clarificationOptions.find(option => option.id === id)!;
     setSuggestions([]);
-    setMessages([{ id: crypto.randomUUID(), author: 'assistant', text: id === 'other'
-      ? 'Tell me what you’re using it for, or describe the material in your own words.'
-      : `You chose ${selected.title.toLowerCase()}. What size, finish, or application do you need?` }]);
+    // Retain the transcript when changing an option for this same lookup.
+    setMessages(current => [...current, { id: crypto.randomUUID(), author: 'assistant', text: lookupContext(searchedDescription || description, current, id).reply }]);
   }
 
   function sendMessage(event: FormEvent) {
     event.preventDefault();
     const text = message.trim();
     if (!text) return;
-    const context = [...messages.filter(m => m.author === 'user').map(m => m.text), text].join(' ');
-    let reply: string;
-    if (cloudMode) {
-      reply = 'AI discovery is not enabled yet. Use My Description to retain your wording, quantity and unit.';
-    } else if (/black|device|electrical box|6.?32/i.test(context)) {
-      reply = 'Are you looking for black 6-32 device mounting screws? I’ve shown two illustrative options below. What length do you need? No live catalog or AI search has been run.';
-      setSuggestions(discoveryFixtures);
-    } else if (/hex|metal|pan|screw|tek/i.test(context)) {
-      reply = 'What thread or diameter, length, and finish do you need? For example: black 6-32 device screws. This demo uses scripted replies, not live AI.';
-    } else {
-      reply = 'Could you tell me what it attaches to, its approximate size, and any material or finish? If you’re unsure, Use My Description will keep your wording without a catalog match.';
-    }
-    setMessages(current => [...current, { id: crypto.randomUUID(), author: 'user', text }, { id: crypto.randomUUID(), author: 'assistant', text: reply }]);
+    const next: Message[] = [...messages, { id: crypto.randomUUID(), author: 'user', text }];
+    const result = lookupContext(searchedDescription || description, next, choice);
+    if (!cloudMode && /black|device|electrical box|6.?32/i.test([searchedDescription, ...next.filter(m => m.author === 'user').map(m => m.text)].join(' '))) setSuggestions(discoveryFixtures);
+    setMessages([...next, { id: crypto.randomUUID(), author: 'assistant', text: result.reply }]);
     setMessage('');
-    setAnnouncement('Demo assistant replied.');
+    setAnnouncement('Clarification details retained.');
     chatRef.current?.focus();
   }
 
@@ -321,7 +315,7 @@ export default function App() {
     </header>
 
     <main id="main" className="workspace" tabIndex={-1} inert={databaseBusy || undefined} aria-busy={databaseBusy}>
-      <div className="page-heading"><h1>MRF Builder</h1><span className="demo-badge">{cloudMode ? 'Cloud pilot' : 'Local preview'}</span></div>
+      <div className="page-heading"><h1>MRF Builder</h1><CatalogAdmin /><span className="demo-badge">{cloudMode ? 'Cloud pilot' : 'Local preview'}</span></div>
       <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{cloudMode ? 'Microsoft sign-in · Azure SQL · AI discovery disabled · example projects.' : databaseMode ? 'Local database demo · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
       <section className="panel draft-header" aria-label="MRF header">
         <div className="foreman"><span className="header-icon"><span className="person-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="7" r="3.2" /><path d="M4.5 20v-2a7.5 7.5 0 0 1 15 0v2z" /></svg></span></span><div><span className="field-caption">Foreman</span><strong>{cloudMode ? cloudDisplayName() : databaseMode ? localIdentity : 'Demo foreman'}</strong></div></div>
@@ -348,8 +342,9 @@ export default function App() {
         <section className="panel clarification-panel" aria-label="Material clarification">
           <SectionHeading title="Are you looking for…?">Choose the closest option, or tell the assistant what you need in your own words.</SectionHeading>
           <fieldset className="clarification-options"><legend className="sr-only">Clarify your material</legend>{clarificationOptions.map(option => <label className={`clarification-option ${choice === option.id ? 'selected' : ''}`} key={option.id}><input type="radio" name="clarification" value={option.id} checked={choice === option.id} onChange={() => chooseOption(option.id)} /><span className="choice-image">{option.id === 'other' ? <Ellipsis size={23} aria-hidden="true" /> : <ProductImage category="screw" small />}</span><span><strong>{option.title}</strong><span className="choice-detail">{option.detail}</span></span></label>)}</fieldset>
-          {choice ? <div className="conversation"><div className="conversation-label"><Sparkles size={14} aria-hidden="true" />Demo assistant<span>Scripted responses</span></div><div className="transcript" ref={transcriptRef} role="log" aria-label="Clarification conversation" aria-live="polite">{messages.map(m => <div className={`message ${m.author}`} key={m.id}><span className={`message-avatar ${m.author === 'assistant' ? 'ai-avatar' : ''}`} aria-hidden="true">{m.author === 'assistant' ? <Sparkles size={20} /> : 'DM'}</span><div className="message-bubble"><span className="sr-only">{m.author === 'assistant' ? 'Demo assistant' : 'You'}: </span>{m.text}</div></div>)}</div><form className="chat-form" onSubmit={sendMessage}><MessageSquare size={19} className="chat-icon" aria-hidden="true" /><label className="sr-only" htmlFor="chat-input">Tell the assistant what you are looking for</label><textarea id="chat-input" ref={chatRef} value={message} maxLength={2000} placeholder="Describe what you need…" rows={1} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendMessage(event); } }} /><button className="icon-button send-button" type="submit" disabled={!message.trim()} aria-label="Send message"><Send size={19} aria-hidden="true" /></button></form></div>
+          {choice ? <div className="conversation"><div className="conversation-label"><Sparkles size={14} aria-hidden="true" />{cloudMode ? 'Material clarification' : 'Demo assistant'}<span>{cloudMode ? 'AI discovery disabled' : 'Scripted responses'}</span></div><div className="transcript" ref={transcriptRef} role="log" aria-label="Clarification conversation" aria-live="polite">{messages.map(m => <div className={`message ${m.author}`} key={m.id}><span className={`message-avatar ${m.author === 'assistant' ? 'ai-avatar' : ''}`} aria-hidden="true">{m.author === 'assistant' ? <Sparkles size={20} /> : 'DM'}</span><div className="message-bubble"><span className="sr-only">{m.author === 'assistant' ? 'Demo assistant' : 'You'}: </span>{m.text}</div></div>)}</div><form className="chat-form" onSubmit={sendMessage}><MessageSquare size={19} className="chat-icon" aria-hidden="true" /><label className="sr-only" htmlFor="chat-input">Tell the assistant what you are looking for</label><textarea id="chat-input" ref={chatRef} value={message} maxLength={2000} placeholder="Describe what you need…" rows={1} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendMessage(event); } }} /><button className="icon-button send-button" type="submit" disabled={!message.trim()} aria-label="Send message"><Send size={19} aria-hidden="true" /></button></form></div>
             : <p className="clarify-hint"><MessageSquare size={15} aria-hidden="true" />Select “Other / none of these” to start a conversation.</p>}
+          {messages.some(m => m.author === 'user') && <div className="clarification-summary"><label htmlFor="clarified-description">Description to add</label><textarea id="clarified-description" value={customDescription ?? fallbackDescription(description, messages)} onChange={event => setCustomDescription(event.target.value)} rows={3} />{customDescription !== null && <button className="button text-button" onClick={() => setCustomDescription(null)}>Use conversation wording</button>}<span className="muted">Your original entry and these clarification details stay separate from verified catalog facts. You can edit the line after adding it.</span></div>}
           <div className="panel-footer fallback-footer"><span className="muted">Can’t find the right item? Keep your own wording.</span><button className="button" type="button" disabled={added.includes('description')} onClick={() => addLine(null)}>{added.includes('description') ? <Check size={15} aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}{added.includes('description') ? 'Description added' : 'Use My Description'}</button></div>
         </section>
         {suggestions.length > 0 && <section className="panel results-panel" aria-label="AI suggestions"><SectionHeading title="Suggested materials" aside={<span className="source-tag provisional"><Sparkles size={12} aria-hidden="true" />Mock discovery</span>}>Illustrative candidates only. Live product discovery, sources, and approved photos are not connected.</SectionHeading>{resultTable(suggestions, true)}</section>}

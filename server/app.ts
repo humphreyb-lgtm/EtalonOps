@@ -4,6 +4,7 @@ import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { createAuth, type AuthOptions } from './auth';
 import { ApiError, draftBody, type Principal } from './contracts';
+import { parseCatalog } from './catalog';
 import type { Repository } from './repository';
 
 export function createApp(store: Repository, authOptions: AuthOptions) {
@@ -56,9 +57,11 @@ export function createApp(store: Repository, authOptions: AuthOptions) {
     if (!local && body.lines.some(line => line.source.endsWith('_fixture'))) throw new ApiError(400, 'Demo fixtures cannot be saved in the cloud pilot.');
     res.json({ draft: await store.saveDraft(principal(res), body, req.params.id) });
   });
+  app.get('/api/admin/imports', async (_req, res) => res.json({ batches: await store.listImports(principal(res)) }));
   app.post('/api/admin/imports/preview', async (req, res) => {
     const { csv } = z.object({ csv: z.string().max(800000) }).strict().parse(req.body);
-    res.json(await store.previewImport(principal(res), csv));
+    const preview = await store.previewImport(principal(res), csv);
+    res.json({ ...preview, records: parseCatalog(csv).rows });
   });
   app.post('/api/admin/imports/:id/apply', async (req, res) => {
     const { approval } = z.object({ approval: z.string() }).strict().parse(req.body);

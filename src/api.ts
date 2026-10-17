@@ -14,7 +14,7 @@ async function accessToken(): Promise<string> {
     .finally(() => { tokenPromise = null; });
   return tokenPromise;
 }
-async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+export async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const response = await fetch(`/api${path}`, { method, headers: { Authorization: `Bearer ${await accessToken()}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   const value = await response.json();
   if (!response.ok) throw new Error(value.error ?? 'Database request failed. Your on-screen items are preserved.');
@@ -30,3 +30,14 @@ export async function saveDatabaseDraft(draft: Draft): Promise<Draft> {
   return { ...saved, schemaVersion: 1, ownerId: 'local-demo-foreman' };
 }
 export async function databaseSearch(query: string) { return (await request<{ matches: Candidate[] }>(`/materials?q=${encodeURIComponent(query)}`)).matches; }
+
+export type ImportRecord = { manufacturer: string; manufacturer_part_number: string; specifications_json: string; external_key: string; description: string; aliases_json: string; requested_uom: string; product_uom: string; source_url: string; verification_basis: string; dataset_kind: string };
+export type ImportBatch = { id: string; state: string; report: { rows: number; errors: { row: number; message: string }[]; kind: string }; reviewer?: string | null; approvedAt?: string | null };
+export type ImportPreview = ImportBatch & { records: ImportRecord[] };
+export async function downloadCatalog() {
+  const response = await fetch('/api/admin/catalog.csv', { headers: { Authorization: `Bearer ${await accessToken()}` } });
+  if (!response.ok) throw new Error('Catalog export failed.');
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a'); link.href = url; link.download = 'etalonops-catalog.csv'; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

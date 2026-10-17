@@ -37,10 +37,15 @@ if [ "$(az group exists --name "$rg" -o tsv)" = true ]; then
 fi
 if ! python3 -c 'import json;assert json.load(open(".runtime/azure-deployment.json")).get("clientId")' 2>/dev/null; then
   identity_name=$(value identityName)
-  count=$(az ad app list --display-name "$identity_name" --query 'length(@)' -o tsv)
-  [ "$count" = 0 ] || { echo 'An identity with this name already exists. Restore reviewed deployment state; do not create duplicates.' >&2; exit 1; }
-  python3 deploy/identity.py .runtime/azure-deployment.json > .runtime/identity.json
-  az rest --method POST --url https://graph.microsoft.com/v1.0/applications --body @.runtime/identity.json --output json > .runtime/identity-created.json
+  az ad app list --display-name "$identity_name" --output json > .runtime/identity-candidates.json
+  count=$(python3 -c 'import json;print(len(json.load(open(".runtime/identity-candidates.json"))))')
+  if [ "$count" = 0 ]; then
+    python3 deploy/identity.py .runtime/azure-deployment.json > .runtime/identity.json
+    az rest --method POST --url https://graph.microsoft.com/v1.0/applications --body @.runtime/identity.json --output json > .runtime/identity-created.json
+  else
+    python3 deploy/recover_identity.py .runtime/azure-deployment.json .runtime/identity-candidates.json > .runtime/identity-created.json
+    echo 'Recovered the exact marked EtalonOps identity; no duplicate registration created.'
+  fi
   remember clientId "$(python3 -c 'import json;print(json.load(open(".runtime/identity-created.json"))["appId"])')"
   remember applicationObjectId "$(python3 -c 'import json;print(json.load(open(".runtime/identity-created.json"))["id"])')"
 fi

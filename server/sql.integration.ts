@@ -42,7 +42,11 @@ test('SQL Server uses verified TLS; the app login cannot run DDL or alter audit 
 test('SQL import dry-run, repeated apply, conflicts, ranking, export and rollback work on the actual engine', async () => {
   const { admin, user } = identities();
   await assert.rejects(async () => store.previewImport(user, fixture), /Administrator/);
+  await assert.rejects(async () => store.listImports(user), /Administrator/);
+  assert.equal((await store.listImports(admin)).length, 0);
   const preview = await store.previewImport(admin, fixture);
+  assert.equal((await store.listImports(admin))[0].state, 'preview');
+  assert.equal((await store.listImports({ ...admin, tenant: 'foreign' })).length, 0);
   assert.equal((await store.search(user, '1" PVC')).length, 0);
   await assert.rejects(() => store.applyImport(admin, preview.id, 'I reviewed this batch', false), /fixtures/);
   await store.applyImport(admin, preview.id, 'I reviewed this batch', true);

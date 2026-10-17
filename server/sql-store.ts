@@ -169,6 +169,11 @@ export class SqlStore implements Repository {
       return { state: 'rolled_back', historyPreserved: true };
     });
   }
+  async listImports(p: Principal) {
+    this.requireAdmin(p);
+    const rows = (await this.q('SELECT TOP (50) id,state,report,reviewer,approved_at FROM dbo.import_batches WHERE tenant=@p0 ORDER BY approved_at DESC,id', p.tenant)).recordset;
+    return rows.map(row => ({ id: String(row.id).toLowerCase(), state: String(row.state), report: JSON.parse(row.report) as Report, reviewer: row.reviewer ? String(row.reviewer) : null, approvedAt: row.approved_at ? new Date(row.approved_at).toISOString() : null }));
+  }
   async exportCsv(p: Principal) {
     this.requireAdmin(p);
     const records = (await this.q('SELECT details FROM dbo.materials WHERE tenant=@p0 AND active=1 ORDER BY external_key', p.tenant)).recordset;

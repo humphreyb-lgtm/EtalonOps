@@ -156,6 +156,10 @@ export class Store {
       return { state: 'rolled_back', historyPreserved: true };
     });
   }
+  listImports(p: Principal) {
+    this.requireAdmin(p);
+    return this.db.prepare('SELECT id,state,report,reviewer,approved_at FROM import_batches WHERE tenant=? ORDER BY rowid DESC LIMIT 50').all(p.tenant).map(row => ({ id: String(row.id), state: String(row.state), report: JSON.parse(String(row.report)) as Report, reviewer: row.reviewer ? String(row.reviewer) : null, approvedAt: row.approved_at ? String(row.approved_at) : null }));
+  }
   exportCsv(p: Principal) {
     this.requireAdmin(p);
     const rows = this.db.prepare('SELECT details FROM materials WHERE tenant=? AND active=1 ORDER BY external_key').all(p.tenant).map(row => {

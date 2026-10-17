@@ -8,8 +8,12 @@ Try the 1-inch PVC and self tappers examples. Enter a quantity unit, add a resul
 edit the MRF lines, test delivery-date overrides, and Save as Draft.
 The DM button lets you leave/resume the demo using browser-local storage.
 
-All catalog records are fictional fixtures; AI responses are scripted.
+All catalog records are fictional fixtures; no live AI calls are made.
+Clarification now retains supplied details and lets you edit the description
+before adding it. Catalog administration requires the API and is absent here.
 Do not enter sensitive information. Drafts stay in this browser. Browser policies
 may restrict downloaded HTML or local storage. The PDF provides a static review.
 
-No cloud services have been provisioned and no DNS records have been changed.
+This file does not deploy anything. Azure hosting is separately awaiting quota
+approval; no paid pilot services were deployed and no DNS records were changed.
+The PDF captures the earlier approved visual layout, not the new admin screen.
