@@ -3,25 +3,40 @@
 set -euo pipefail
 umask 077
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# West US 3 was explicitly approved after full-template validation and pricing review.
+region="${1:-westus3}"
+case "$region" in eastus|westus3) ;; *) echo 'Unreviewed region; stopped.' >&2; exit 1 ;; esac
 command -v az >/dev/null
 command -v python3 >/dev/null
 source scripts/node-cloud.sh
 mkdir -p .runtime
-python3 - <<'PY'
-import hashlib,json,os,subprocess
+python3 - "$region" <<'PY'
+import hashlib,json,os,subprocess,sys
+from deploy.region import merge_state,check_inventory,REGIONS
 account=json.loads(subprocess.check_output(['az','account','show','-o','json']))
 if account['id']!='a428f249-9b2a-4314-8619-6b3fd33c805e' or account['name']!='Azure Standard' or account['state']!='Enabled':
     raise SystemExit('Select the approved Azure Standard subscription before deployment.')
 owner=json.loads(subprocess.check_output(['az','ad','signed-in-user','show','-o','json']))
 suffix=hashlib.sha256(account['id'].encode()).hexdigest()[:8]
 s=dict(subscription=account['id'],tenant=account['tenantId'],ownerId=owner['id'],ownerLogin=owner['userPrincipalName'],resourceGroup='rg-etalonops-poc',appName='etalonops-'+suffix,planName='etalonops-'+suffix+'-plan',sqlName='etalonops-'+suffix+'-sql',storageName='etalonops'+suffix,logsName='etalonops-'+suffix+'-logs',insightsName='etalonops-'+suffix+'-insights',identityName='EtalonOps POC '+suffix)
+region=sys.argv[1]
+exists=subprocess.check_output(['az','group','exists','--name',s['resourceGroup'],'-o','tsv'],text=True).strip().lower()=='true'
+if exists:
+    group=json.loads(subprocess.check_output(['az','group','show','--name',s['resourceGroup'],'-o','json']))
+    if (group.get('tags') or {}).get('etalonops')!='poc': raise SystemExit('Existing group is not owned by this POC; stopped.')
+    inventory=json.loads(subprocess.check_output(['az','resource','list','--resource-group',s['resourceGroup'],'-o','json']))
+    check_inventory(inventory,region)
 p='.runtime/azure-deployment.json'
-if os.path.exists(p):
-    prior=json.load(open(p))
-    if any(prior.get(k)!=s[k] for k in s): raise SystemExit('Existing deployment state belongs to another account. Refusing to change it.')
-    s=prior
+prior=json.load(open(p)) if os.path.exists(p) else None
+s=merge_state(s,prior,region)
+# Recover the actual hostname as well when resuming an already created pilot.
+if exists and any(str(r.get('type','')).lower()=='microsoft.web/sites' and r.get('name')==s['appName'] for r in inventory):
+    host=subprocess.check_output(['az','webapp','show','-g',s['resourceGroup'],'-n',s['appName'],'--query','defaultHostName','-o','tsv'],text=True).strip()
+    from deploy.callback import callback_settings
+    callback_settings(host)
+    s['appHost']=host
 json.dump(s,open(p,'w'),indent=2)
-print('Approved subscription verified. Target: new EtalonOps POC group, East US, one B1 app and Basic SQL. AI disabled.')
+print(f'Approved subscription verified. Target: EtalonOps POC group, {REGIONS[region]}, one B1 app and Basic SQL. AI disabled.')
 PY
 value() { python3 -c 'import json,sys;print(json.load(open(".runtime/azure-deployment.json"))[sys.argv[1]])' "$1"; }
 remember() { python3 -c 'import json,sys;p=".runtime/azure-deployment.json";s=json.load(open(p));s[sys.argv[1]]=sys.argv[2];json.dump(s,open(p,"w"),indent=2)' "$1" "$2"; }
@@ -30,7 +45,13 @@ app=$(value appName)
 sql_name=$(value sqlName)
 # Stop before paid creation if the runtime, region or identity prerequisites fail.
 az webapp list-runtimes --os linux --output tsv | python3 -c 'import sys; assert any(v.upper() in ("NODE|24-LTS","NODE:24-LTS") for v in sys.stdin.read().split()),"Azure Node 24 runtime unavailable; stop before provisioning."'
-az appservice list-locations --sku B1 --linux-workers-enabled --query "[?name=='East US'].name" --output tsv | python3 -c 'import sys; assert "East US" in sys.stdin.read(),"East US B1 listing unavailable."'
+az appservice list-locations --sku B1 --linux-workers-enabled --output json > .runtime/b1-locations.json
+python3 - "$region" <<'PY'
+import json,sys
+from deploy.region import REGIONS
+locations=json.load(open('.runtime/b1-locations.json'))
+assert any(row.get('name')==REGIONS[sys.argv[1]] or row.get('name')==sys.argv[1] for row in locations), 'Selected region B1 listing unavailable.'
+PY
 # Existing group names must carry our ownership marker; never adopt an unrelated group.
 if [ "$(az group exists --name "$rg" -o tsv)" = true ]; then
   [ "$(az group show -n "$rg" --query tags.etalonops -o tsv)" = poc ] || { echo 'Existing group is not owned by this POC; stopped.' >&2; exit 1; }
@@ -73,18 +94,20 @@ npm ci --cache /tmp/etalonops-npm-cache --no-audit --no-fund
 npm run build
 npm run test:server
 python3 deploy/template.py .runtime/azure-deployment.json > .runtime/azure-template.json
-az group create --name "$rg" --location eastus --tags etalonops=poc --output none
+# Preserve an existing group's metadata location (it may remain East US).
+if [ "$(az group exists --name "$rg" -o tsv)" != true ]; then
+  az group create --name "$rg" --location "$region" --tags etalonops=poc --output none
+fi
+az deployment group validate --resource-group "$rg" --template-file .runtime/azure-template.json --output none
 # The What-If report is retained for review; the script is already within approved spending scope.
 az deployment group what-if --resource-group "$rg" --template-file .runtime/azure-template.json --no-pretty-print > .runtime/azure-what-if.json
-python3 - <<'PY'
-import json
-r=json.load(open('.runtime/azure-what-if.json'))
-if r.get('status') not in [None,'Succeeded']: raise SystemExit('ARM what-if did not succeed.')
-for change in r.get('changes',[]):
-    if change.get('changeType')=='Delete': raise SystemExit('Unexpected deletion in ARM what-if; stopped.')
-print('ARM preview checked: no deletions. Creating only approved POC infrastructure.')
-PY
+python3 deploy/preview.py .runtime/azure-what-if.json .runtime/azure-template.json .runtime/azure-deployment.json
 az deployment group create --name etalonops-base --resource-group "$rg" --template-file .runtime/azure-template.json --output none
+# Azure can assign a regional/hash hostname rather than appName.azurewebsites.net.
+app_host=$(az webapp show -g "$rg" -n "$app" --query defaultHostName -o tsv)
+python3 deploy/callback.py "$app_host" > .runtime/callback.json
+az rest --method PATCH --url "https://graph.microsoft.com/v1.0/applications/$application_object" --body @.runtime/callback.json --output none
+remember appHost "$app_host"
 runtime=$(az webapp identity show -g "$rg" -n "$app" --query principalId -o tsv)
 remember runtimePrincipal "$runtime"
 # Scope Blob access to this one POC account, not subscription or other storage.
@@ -116,8 +139,8 @@ if [ "$shell_ip" != already-allowed ]; then cleanup; trap - EXIT; fi
 # Ship dependencies built in Linux. No credentials, deployment state, caches or local fixtures.
 python3 deploy/package.py
 az webapp deploy -g "$rg" -n "$app" --src-path .runtime/app.zip --type zip --async false --output none
-url="https://${app}.azurewebsites.net"
+url="https://${app_host}"
 python3 deploy/check-cloud.py "$url"
 echo "Cloud pilot: $url"
-echo 'Sign in with your assigned owner account. Live AI and catalog image administration are not yet enabled.'
+echo 'Sign in with your assigned owner account. Live AI/search are disabled; image administration requires the Admin role and live storage acceptance.'
 echo 'Preserve .runtime/azure-deployment.json (non-secret identifiers) before this ephemeral Cloud Shell closes.'

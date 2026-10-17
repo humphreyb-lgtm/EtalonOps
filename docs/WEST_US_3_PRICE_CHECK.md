@@ -1,6 +1,6 @@
 # West US 3 pilot checks — October 17, 2026
 
-The owner ran validation-only checks through authenticated Azure Cloud Shell. A Linux B1 plan check and then the full existing pilot template, with regional resources changed from East US to West US 3, each returned Succeeded. This is preflight evidence, not deployment, a capacity reservation, or live application acceptance. Existing production deployment scripts still default to East US; do not run them expecting a regional change without adapting and testing that path.
+The owner ran validation-only checks through authenticated Azure Cloud Shell. A Linux B1 plan check and then the full existing pilot template, with regional resources changed from East US to West US 3, each returned Succeeded. This is preflight evidence, not deployment, a capacity reservation, or live application acceptance. The regional deployment runner now defaults to West US 3 and accepts it explicitly; it preserves existing group metadata and refuses to relocate already deployed regional resources.
 
 Owner portal screenshots showed Linux B1 at USD 12.41/month and Basic SQL (5 DTUs, 2 GB) at USD 4.90/month in the West US 3 configuration.
 
@@ -21,4 +21,4 @@ For the same earlier light-use assumptions (1 GB of total retained Blob data inc
 
 Retain the approximately $25/month base planning estimate to allow for usage variation, before tax, extra outbound transfer and backup/retention overages. This is not a fixed bill or hard cap. The existing template's $30 monthly group budget is an alert threshold, not a spending limit. Existing unrelated subscription charges remain additional. Live AI/search remain disabled and excluded from this base quote.
 
-No services, subscriptions, paid model calls or DNS records were created by these checks. This document is evidence, not financial authorization. The owner requires express approval before new spending commitments. Confirm the proposed regional deployment scope with the owner before provisioning; preserve Entra-only identity, private Blob access, SQL managed identity and existing MaterialsManagement resources.
+No services, subscriptions, paid model calls or DNS records were created by these checks. This document is evidence, not financial authorization. The owner requires express approval before new spending commitments. The owner explicitly approved provisioning this West US 3 pilot at the approximately $25/month base estimate after reviewing this quote. That approval covers this pilot, not new services or paid AI/search. Preserve Entra-only identity, private Blob access, SQL managed identity and existing MaterialsManagement resources.

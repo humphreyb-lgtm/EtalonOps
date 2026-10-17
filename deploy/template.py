@@ -11,7 +11,8 @@ def add(resource_type, api, name, properties=None, **extra):
         r['properties'] = properties
     resources.append(r)
     return "[resourceId(" + ", ".join(repr(v) for v in [resource_type, *name.split("/")]) + ")]"
-loc = 'eastus'
+loc = state.get('region', 'eastus')
+if loc not in ['eastus', 'westus3']: raise SystemExit('Unreviewed pilot region; stopped.')
 logs = add('Microsoft.OperationalInsights/workspaces', '2023-09-01', state['logsName'], {'sku': {'name': 'PerGB2018'}, 'retentionInDays': 30, 'workspaceCapping': {'dailyQuotaGb': 0.1}, 'features': {'enableLogAccessUsingOnlyResourcePermissions': True}}, location=loc)
 insights = add('Microsoft.Insights/components', '2020-02-02', state['insightsName'], {'Application_Type': 'web', 'WorkspaceResourceId': logs}, location=loc, kind='web', dependsOn=[logs])
 plan = add('Microsoft.Web/serverfarms', '2023-12-01', state['planName'], {'reserved': True}, location=loc, kind='linux', sku={'name': 'B1', 'tier': 'Basic', 'size': 'B1', 'capacity': 1})

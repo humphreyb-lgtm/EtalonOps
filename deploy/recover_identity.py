@@ -6,7 +6,7 @@ def recover(state, candidates):
     if len(candidates) != 1:
         raise ValueError('Expected exactly one matching pilot identity; refusing to guess.')
     app = candidates[0]
-    expected_redirect = f"https://{state['appName']}.azurewebsites.net/auth-callback.html"
+    expected_redirect = f"https://{state.get('appHost',state['appName']+'.azurewebsites.net')}/auth-callback.html"
     roles = {(r['id'],r['value']) for r in app.get('appRoles',[]) if r.get('isEnabled') and r.get('allowedMemberTypes') == ['User']}
     required_roles = {('9c6c4e1a-3830-4400-9b69-ce15aa8a0bdd','Admin'),('49dbde60-3bed-4ec8-9c21-3d6c8dc355a8','Foreman')}
     scopes = app.get('api',{}).get('oauth2PermissionScopes',[])
