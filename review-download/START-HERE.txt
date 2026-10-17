@@ -10,7 +10,8 @@ The DM button lets you leave/resume the demo using browser-local storage.
 
 All catalog records are fictional fixtures; no live AI calls are made.
 Clarification now retains supplied details and lets you edit the description
-before adding it. Catalog and image administration and optional model clarification require the
+before adding it. Manufacturer / part details and No Substitutions can be edited on MRF lines.
+Catalog and image administration and optional model clarification require the
 API-backed application; these features are absent from this offline demo.
 Do not enter sensitive information. Drafts stay in this browser. Browser policies
 may restrict downloaded HTML or local storage. The PDF provides a static review.
