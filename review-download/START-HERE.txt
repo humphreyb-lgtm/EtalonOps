@@ -1,0 +1,15 @@
+EtalonOps MRF Builder — local preview
+
+Download EtalonOps-preview.zip, extract it to a normal folder such as Downloads,
+and double-click EtalonOps-preview.html to open it in Chrome or Edge.
+No administrator/root access, Node.js installation, or Azure account is required.
+
+Try the 1-inch PVC and self tappers examples. Enter a quantity unit, add a result,
+edit the MRF lines, test delivery-date overrides, and Save as Draft.
+The DM button lets you leave/resume the demo using browser-local storage.
+
+All catalog records are fictional fixtures; AI responses are scripted.
+Do not enter sensitive information. Drafts stay in this browser. Browser policies
+may restrict downloaded HTML or local storage. The PDF provides a static review.
+
+No cloud services have been provisioned and no DNS records have been changed.
