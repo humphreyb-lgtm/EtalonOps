@@ -11,7 +11,7 @@ export function imageRoutes(app: express.Express,store: Repository,assets?: Imag
   const principal=(res:express.Response):Principal=>res.locals.principal;
   const storage=()=>{if(!assets)throw new ApiError(503,'Image storage is not configured.');return assets;};
   const admin:express.RequestHandler=async(_req,res,next)=>{try{await store.requireAdmin(principal(res));next();}catch(error){next(error);}};
-  const uploadLimit=rateLimit({windowMs:60_000,limit:30,standardHeaders:'draft-8',legacyHeaders:false,keyGenerator:(_req,res)=>`${principal(res).tenant}/${principal(res).oid}`});
+  const uploadLimit=rateLimit({windowMs:60_000,limit:30,handler:(_req,res)=>{res.status(429).json({error:'Image upload rate limit reached. Wait a minute before retrying.'});},standardHeaders:'draft-8',legacyHeaders:false,keyGenerator:(_req,res)=>`${principal(res).tenant}/${principal(res).oid}`});
   let uploads=0;
   const slots:express.RequestHandler=(_req,res,next)=>{
     if(uploads>=2){next(new ApiError(429,'Two image uploads are already processing. Try again shortly.'));return;}
@@ -20,6 +20,7 @@ export function imageRoutes(app: express.Express,store: Repository,assets?: Imag
   };
   app.get('/api/admin/materials/:id/images',admin,async(req,res)=>res.json({images:await store.listImages(principal(res),param(req,'id'))}));
   app.post('/api/admin/materials/:id/images',admin,uploadLimit,slots,express.raw({type:['image/jpeg','image/png','image/webp','application/octet-stream'],limit:'5mb'}),async(req,res)=>{
+    const productId=z.uuid().nullable().parse(req.get('x-image-product-id')||null);
     const p=principal(res);await store.imageMaterial(p,param(req,'id'),true);
     if(!Buffer.isBuffer(req.body))throw new ApiError(400,'Upload a JPEG, PNG or WebP file.');
     let evidence: z.infer<typeof imageEvidence>;
@@ -28,7 +29,7 @@ export function imageRoutes(app: express.Express,store: Repository,assets?: Imag
     const image=await normalizeImage(req.body);
     const prior=(await store.listImages(p,param(req,'id'))).find(record=>record.contentHash===image.hash);
     if(prior?.status==='rejected')throw new ApiError(409,'This image was rejected for this product; choose a different image.');
-    const association=await store.submitImage(p,param(req,'id'),image.hash,evidence);
+    const association=await store.submitImage(p,param(req,'id'),image.hash,evidence,productId);
     await storage().put(imageKey(p.tenant,param(req,'id'),image.hash),image.bytes);
     res.status(201).json({image:association});
   });
@@ -47,7 +48,7 @@ export function imageRoutes(app: express.Express,store: Repository,assets?: Imag
     res.set('Cache-Control','private, no-store').type('image/webp').send(await storage().get(imageKey(p.tenant,param(req,'id'),image.contentHash)));
   });
   app.get('/api/materials/:id/image',async(req,res)=>{
-    const p=principal(res);const image=await store.approvedImage(p,param(req,'id'));
+    const p=principal(res);const image=await store.approvedImage(p,param(req,'id'),z.uuid().nullable().parse(req.query.productId??null));
     if(!image)throw new ApiError(404,'No approved image.');
     res.set('Cache-Control','private, no-store').type('image/webp').send(await storage().get(imageKey(p.tenant,param(req,'id'),image.contentHash)));
   });

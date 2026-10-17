@@ -175,3 +175,7 @@ test('SQL persistent AI reservations are atomic, tenant scoped and not reset by 
   const reconnected=await new sql.ConnectionPool(localSqlConfig(false,'EtalonOpsSqlTests')).connect();
   try{assert.equal((await new SqlStore(reconnected).aiUsage(admin)).requests,2);}finally{await reconnected.close();}
 });
+
+// The same domain scenarios execute against the real restricted SQL connection.
+const { catalogScenarios } = await import('./catalog-scenarios');
+for(const scenario of catalogScenarios)test(`SQL catalog: ${scenario.name}`,async()=>scenario.run(store));

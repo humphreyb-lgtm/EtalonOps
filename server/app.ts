@@ -25,7 +25,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
     }
     next();
   });
-  app.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: 'draft-8', legacyHeaders: false }));
+  app.use(rateLimit({ windowMs: 60_000, limit: 1800, handler:(_req,res)=>{res.status(429).json({error:'Too many requests. Wait a minute before retrying.'});}, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.use(express.json({ limit: '1mb' }));
   app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
@@ -43,13 +43,15 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
       next();
     } catch (error) { next(error); }
   });
+  app.use('/api',rateLimit({windowMs:60_000,limit:600,standardHeaders:'draft-8',legacyHeaders:false,keyGenerator:(_req,res)=>`${res.locals.principal.tenant}/${res.locals.principal.oid}`,handler:(_req,res)=>{res.status(429).json({error:'Account request limit reached. Wait a minute before retrying.'});}}));
   const principal = (res: express.Response): Principal => res.locals.principal;
   imageRoutes(app,store,services.images);
   aiRoutes(app,store,services.ai);
+  app.post('/api/catalog/:action',async(req,res)=>res.json(await store.catalogCommand(principal(res),z.string().parse(req.params.action),req.body)));
   app.get('/api/me', async (_req, res) => res.json({ ...principal(res), mode: authOptions.mode }));
   app.get('/api/materials', async (req, res) => {
     const query = z.string().trim().min(1).max(2000).parse(req.query.q);
-    res.json({ matches: await store.search(principal(res), query) });
+    res.json({ matches: await store.search(principal(res), query,z.enum(['riverside','northside']).optional().parse(req.query.projectId)) });
   });
   app.get('/api/projects/:project/draft', async (req, res) => res.json({ draft: await store.getProjectDraft(principal(res), req.params.project) }));
   app.get('/api/drafts/:id', async (req, res) => res.json({ draft: await store.getDraft(principal(res), req.params.id) }));
@@ -66,11 +68,13 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   app.get('/api/admin/imports', async (_req, res) => res.json({ batches: await store.listImports(principal(res)) }));
   app.post('/api/admin/imports/preview', async (req, res) => {
     const { csv } = z.object({ csv: z.string().max(800000) }).strict().parse(req.body);
+    if(parseCatalog(csv).rows.some(row=>row.dataset_kind==='reviewed'))throw new ApiError(400,'Use structured imports for new real catalog materials so identity and manufacturer relationships are preserved.');
     const preview = await store.previewImport(principal(res), csv);
     res.json({ ...preview, records: parseCatalog(csv).rows });
   });
   app.post('/api/admin/imports/:id/apply', async (req, res) => {
     const { approval } = z.object({ approval: z.string() }).strict().parse(req.body);
+    if(!local)throw new ApiError(400,'Use structured catalog imports for the cloud pilot.');
     res.json(await store.applyImport(principal(res), req.params.id, approval, local));
   });
   app.post('/api/admin/imports/:id/rollback', async (req, res) => res.json(await store.rollbackImport(principal(res), req.params.id)));

@@ -11,6 +11,9 @@ const file = `/var/opt/mssql/data/etalonops-test-${suffix}.bak`;
 const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
 let restored = false;
 try {
+  const catalogTables=['catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references'];
+  const catalogCounts=(db:string)=>catalogTables.map(table=>`(SELECT COUNT(*) FROM [${db}].dbo.${table}) AS [${table}]`).join(',');
+  const beforeCatalog=(await pool.request().query(`SELECT ${catalogCounts('EtalonOpsSqlTests')}`)).recordset[0];
   const before = await pool.request().query('SELECT (SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.materials) AS materials,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.drafts) AS drafts,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.draft_lines) AS lines,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.image_associations) AS images,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.audit_events) AS audits');
   assert.ok(before.recordset[0].materials > 0 && before.recordset[0].drafts > 0, 'Run the SQL integration suite first; an empty restore is not a recovery demonstration.');
   await pool.request().query(`BACKUP DATABASE EtalonOpsSqlTests TO DISK=${literal(file)} WITH COPY_ONLY,CHECKSUM`);
@@ -23,6 +26,7 @@ try {
   restored = true;
   const after = await pool.request().query(`SELECT (SELECT COUNT(*) FROM [${restore}].dbo.materials) AS materials,(SELECT COUNT(*) FROM [${restore}].dbo.drafts) AS drafts,(SELECT COUNT(*) FROM [${restore}].dbo.draft_lines) AS lines,(SELECT COUNT(*) FROM [${restore}].dbo.image_associations) AS images,(SELECT COUNT(*) FROM [${restore}].dbo.audit_events) AS audits`);
   assert.deepEqual(after.recordset[0], before.recordset[0]);
+  assert.deepEqual((await pool.request().query(`SELECT ${catalogCounts(restore)}`)).recordset[0],beforeCatalog);
   await pool.request().query(`DBCC CHECKDB ([${restore}]) WITH NO_INFOMSGS`);
   console.log('SQL native backup checksum, restore, relational data counts and CHECKDB passed. Original databases retained.');
 } finally {

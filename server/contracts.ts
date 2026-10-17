@@ -1,3 +1,4 @@
+import { purchaseSchema } from './purchasing';
 import { z } from 'zod';
 
 export const unit = z.enum(['EA', 'FT', 'STICK', 'BOX', 'ROLL', 'PAIR']);
@@ -6,6 +7,7 @@ const date = z.iso.date();
 const quantity = z.string().regex(/^(?:\d{1,12}(?:\.\d{1,6})?|\.\d{1,6})$/).refine(value => Number(value) > 0);
 export const candidate = z.object({
   id: z.string().max(100), description: text, specs: z.array(z.string().max(500)).max(30),
+  verification: z.enum(['provisional','reviewed']).optional(),
   productUnit: unit, source: z.enum(['verified_fixture', 'ai_fixture', 'verified']),
   category: z.enum(['conduit', 'screw', 'tape', 'general']),
 });
@@ -13,6 +15,7 @@ export const line = z.object({
   id: z.uuid(), quantity, requestedUnit: unit, description: text,
   rawInput: z.object({ quantity, description: text, requestedUnit: unit }).strict(),
   candidate: candidate.nullable(), source: z.enum(['verified_fixture', 'ai_fixture', 'user_description', 'verified']),
+  purchasing: purchaseSchema.optional(),
   deliveryMode: z.enum(['inherit', 'override']), overrideDate: date.nullable(),
 }).strict().superRefine((value, context) => {
   if ((value.deliveryMode === 'inherit') !== (value.overrideDate === null)) context.addIssue({ code: 'custom', message: 'Inherited lines cannot have an override; overridden lines require a date.' });

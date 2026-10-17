@@ -1,6 +1,8 @@
 # Catalog and translator development decisions
 
-Recorded October 17, 2026, from the owner's discussion and instruction to track these requirements. These are requirements for subsequent development, not a claim that the current database/search implements them. They supersede earlier guidance to wait for PO reconciliation before learning translations.
+Recorded October 17, 2026, from the owner's discussion and instruction to track these requirements. This is the decision log; the linked milestone records implemented behavior and remaining gaps. They supersede earlier guidance to wait for PO reconciliation before learning translations.
+
+Implementation evidence and remaining limits: [Catalog relationships milestone](CATALOG_RELATIONSHIPS_MILESTONE.md). Development authorization covers this portion only; additions incurring costs or subscriptions always require express owner approval before commitment for the life of development.
 
 ## One material per meaningful specification
 

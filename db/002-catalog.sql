@@ -1,0 +1,16 @@
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+IF EXISTS(SELECT 1 FROM dbo.schema_migrations WHERE version=2) BEGIN COMMIT; RETURN; END;
+CREATE TABLE dbo.catalog_profiles(material_id uniqueidentifier PRIMARY KEY REFERENCES dbo.materials(id),tenant nvarchar(64) NOT NULL,identity_key char(64) NOT NULL,attributes nvarchar(max) NOT NULL CHECK(ISJSON(attributes)=1),verification varchar(16) NOT NULL CHECK(verification IN ('provisional','reviewed')),high_use bit NOT NULL DEFAULT 0,preferred_product_id uniqueidentifier,UNIQUE(tenant,identity_key));
+CREATE TABLE dbo.manufacturers(id uniqueidentifier PRIMARY KEY,tenant nvarchar(64) NOT NULL,name nvarchar(200) NOT NULL,normalized nvarchar(200) NOT NULL,UNIQUE(tenant,normalized));
+CREATE TABLE dbo.manufacturer_products(id uniqueidentifier PRIMARY KEY,tenant nvarchar(64) NOT NULL,material_id uniqueidentifier NOT NULL REFERENCES dbo.materials(id),manufacturer_id uniqueidentifier NOT NULL REFERENCES dbo.manufacturers(id),part_number nvarchar(200) NOT NULL,normalized_part nvarchar(200) NOT NULL,title nvarchar(500) NOT NULL,source_url nvarchar(2000) NOT NULL,verification varchar(16) NOT NULL CHECK(verification IN ('provisional','reviewed')),active bit NOT NULL DEFAULT 1,UNIQUE(tenant,manufacturer_id,normalized_part));
+CREATE TABLE dbo.translations(id uniqueidentifier PRIMARY KEY,tenant nvarchar(64) NOT NULL,material_id uniqueidentifier NOT NULL REFERENCES dbo.materials(id),phrase nvarchar(500) NOT NULL,normalized nvarchar(500) NOT NULL,origin varchar(24) NOT NULL CHECK(origin IN ('user_selection','ai_generated','admin_reviewed','ai_import')),actor nvarchar(64) NOT NULL,created_at nvarchar(30) NOT NULL,active bit NOT NULL DEFAULT 1,batch_id uniqueidentifier,UNIQUE(tenant,material_id,normalized,origin));
+CREATE INDEX translation_lookup ON dbo.translations(tenant,normalized);
+CREATE TABLE dbo.selection_events(id uniqueidentifier PRIMARY KEY,tenant nvarchar(64) NOT NULL,actor nvarchar(64) NOT NULL,project nvarchar(64) NOT NULL,material_id uniqueidentifier NOT NULL REFERENCES dbo.materials(id),product_id uniqueidentifier REFERENCES dbo.manufacturer_products(id),phrase nvarchar(500) NOT NULL,created_at nvarchar(30) NOT NULL);
+CREATE TABLE dbo.job_restrictions(id uniqueidentifier PRIMARY KEY,tenant nvarchar(64) NOT NULL,project nvarchar(64) NOT NULL,material_id uniqueidentifier REFERENCES dbo.materials(id),category nvarchar(64),enabled bit NOT NULL DEFAULT 0,manufacturer_ids nvarchar(max) NOT NULL,product_ids nvarchar(max) NOT NULL);
+CREATE TABLE dbo.catalog_batches(id uniqueidentifier PRIMARY KEY,tenant nvarchar(64) NOT NULL,digest char(64) NOT NULL,state varchar(16) NOT NULL,csv nvarchar(max) NOT NULL,report nvarchar(max) NOT NULL,created_at nvarchar(30) NOT NULL,UNIQUE(tenant,digest));
+CREATE TABLE dbo.image_references(id uniqueidentifier PRIMARY KEY,tenant nvarchar(64) NOT NULL,material_id uniqueidentifier NOT NULL REFERENCES dbo.materials(id),product_id uniqueidentifier REFERENCES dbo.manufacturer_products(id),source_url nvarchar(2000) NOT NULL,rights_basis nvarchar(2000) NOT NULL,status varchar(16) NOT NULL DEFAULT 'pending',batch_id uniqueidentifier);
+ALTER TABLE dbo.draft_lines ADD purchasing nvarchar(max);
+ALTER TABLE dbo.image_associations ADD product_id uniqueidentifier REFERENCES dbo.manufacturer_products(id);
+INSERT dbo.schema_migrations(version) VALUES(2);
+COMMIT;

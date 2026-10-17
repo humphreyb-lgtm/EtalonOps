@@ -52,6 +52,10 @@ The three provided screenshots all depict the clarification conversation despite
 
 Desktop/mobile visual approval was received. Both local SQL Server and SQLite persistence, draft ownership checks, deterministic translator search and admin import APIs are implemented and tested. Image administration and a guarded direct Azure model client are now implemented; see the [image and AI milestone](docs/IMAGES_AND_AI_MILESTONE.md). Real Microsoft sign-in, live managed-identity integrations and Azure hosting acceptance remain pending. Pilot spending is approved within the scope below; DNS requires separate approval. The downloaded HTML remains the standalone demo, not the database application.
 
+## Catalog and purchasing development
+
+The [catalog relationships milestone](docs/CATALOG_RELATIONSHIPS_MILESTONE.md) implements canonical specifications, manufacturer products, selection-learned translations, high-use/preferred choices, manufacturer snapshots and No Substitutions, inactive-by-default job restrictions, and staged imports/image references. Live external discovery and purchasing submission remain pending. New costs or subscriptions always require express owner approval before commitment.
+
 ## Approved Azure pilot deployment
 
 The owner approved the approximately $25/month base pilot and illustrated AI usage costs on October 17, 2026 (roughly $30/month combined planning estimate, not a cap). AI remains disabled until its complete service-chain cost is verified within that scope; DNS still needs separate approval. Existing MaterialsManagement resources remain outside this deployment. See [Cloud Shell deployment instructions](docs/CLOUD_DEPLOYMENT.md) and [pricing assumptions](docs/COST_UPDATE.md).

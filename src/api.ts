@@ -29,7 +29,7 @@ export async function saveDatabaseDraft(draft: Draft): Promise<Draft> {
   const { draft: saved } = await request<{ draft: SavedDraft }>(draft.id ? `/drafts/${draft.id}` : '/drafts', draft.id ? 'PUT' : 'POST', { projectId: draft.projectId, deliveryDate: draft.deliveryDate, lines: draft.lines, version: draft.version ?? 0 });
   return { ...saved, schemaVersion: 1, ownerId: 'local-demo-foreman' };
 }
-export async function databaseSearch(query: string) { return (await request<{ matches: Candidate[] }>(`/materials?q=${encodeURIComponent(query)}`)).matches; }
+export async function databaseSearch(query: string,projectId?:string) { return (await request<{ matches: Candidate[] }>(`/materials?q=${encodeURIComponent(query)}${projectId?`&projectId=${encodeURIComponent(projectId)}`:''}`)).matches; }
 
 export type ImportRecord = { manufacturer: string; manufacturer_part_number: string; specifications_json: string; external_key: string; description: string; aliases_json: string; requested_uom: string; product_uom: string; source_url: string; verification_basis: string; dataset_kind: string };
 export type ImportBatch = { id: string; state: string; report: { rows: number; errors: { row: number; message: string }[]; kind: string }; reviewer?: string | null; approvedAt?: string | null };
@@ -42,16 +42,16 @@ export async function downloadCatalog() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export type ImageRecord = { id: string; materialId: string; contentHash: string; sourceUrl: string; rightsBasis: string; status: 'pending'|'approved'|'rejected'; reviewer: string|null; reviewedAt: string|null };
+export type ImageRecord = { id: string; materialId: string; productId?:string|null; contentHash: string; sourceUrl: string; rightsBasis: string; status: 'pending'|'approved'|'rejected'; reviewer: string|null; reviewedAt: string|null };
 export async function imageBlob(path: string) {
   const response=await fetch(`/api${path}`,{headers:{Authorization:`Bearer ${await accessToken()}`}});
   if(!response.ok)throw new Error('Product image unavailable.');
   return response.blob();
 }
-export async function uploadProductImage(id: string,file: File,sourceUrl: string,rightsBasis: string) {
+export async function uploadProductImage(id: string,file: File,sourceUrl: string,rightsBasis: string,productId:string|null=null) {
   const encodedSource=encodeURIComponent(sourceUrl),encodedRights=encodeURIComponent(rightsBasis);
   if(encodedSource.length+encodedRights.length>8000)throw new Error('Shorten the source evidence URL or usage-rights description before uploading.');
-  const response=await fetch(`/api/admin/materials/${id}/images`,{method:'POST',headers:{Authorization:`Bearer ${await accessToken()}`,'Content-Type':file.type||'application/octet-stream','x-image-source-url':encodedSource,'x-image-rights-basis':encodedRights},body:file});
+  const response=await fetch(`/api/admin/materials/${id}/images`,{method:'POST',headers:{Authorization:`Bearer ${await accessToken()}`,'Content-Type':file.type||'application/octet-stream','x-image-source-url':encodedSource,'x-image-rights-basis':encodedRights,...(productId?{'x-image-product-id':productId}:{})},body:file});
   const value=await response.json();if(!response.ok)throw new Error(value.error??'Image upload failed.');return value as {image:ImageRecord};
 }
 

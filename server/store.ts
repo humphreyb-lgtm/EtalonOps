@@ -1,3 +1,4 @@
+import { catalogAction, searchCatalog, validatePurchase, productForMaterial, type Operation } from './catalog-v2';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -6,7 +7,7 @@ import { stringify } from 'csv-stringify/sync';
 import { ApiError, csvColumns, type DraftBody, type ImportRow, type Principal } from './contracts';
 import { checkAIReservation, aiUsage, aiPeriod, type AIReservation } from './ai-policy';
 import { imageLimits, type ImageRecord, type ImageEvidence } from './image-contracts';
-import { normalize, score } from './search';
+import { normalize } from './search';
 
 type Row = Record<string, SQLInputValue>;
 import { parseCatalog, type Report } from './catalog';
@@ -23,6 +24,12 @@ export class Store {
     if (!exists) this.transaction(() => { this.db.exec(migration); this.db.prepare('INSERT INTO schema_migrations(version,checksum) VALUES(1,?)').run(hash(migration)); });
     const applied = this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=1').get();
     if (applied?.checksum !== hash(migration)) throw new Error('Applied migration checksum changed. Create a new migration instead.');
+    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql']] as const){
+      const next=readFileSync(new URL(`../db/migrations/${file}`,import.meta.url),'utf8');
+      const prior=this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=?').get(version);
+      if(prior&&prior.checksum!==hash(next))throw new Error('Applied catalog migration checksum changed.');
+      if(!prior)this.transaction(()=>{this.db.exec(next);this.db.prepare('INSERT INTO schema_migrations(version,checksum) VALUES(?,?)').run(version,hash(next));});
+    }
   }
   engine = 'SQLite local development';
   health() { this.db.prepare('SELECT 1').get(); }
@@ -53,7 +60,7 @@ export class Store {
     const lines = this.db.prepare('SELECT * FROM draft_lines WHERE draft_id=? ORDER BY position').all(row.id).map(line => ({
       id: line.id, quantity: line.quantity, requestedUnit: line.requested_uom, description: line.description,
       rawInput: JSON.parse(String(line.raw_input)), candidate: line.candidate ? JSON.parse(String(line.candidate)) : null,
-      source: line.source, deliveryMode: line.delivery_mode, overrideDate: line.override_date,
+      purchasing: line.purchasing ? JSON.parse(String(line.purchasing)) : undefined, source: line.source, deliveryMode: line.delivery_mode, overrideDate: line.override_date,
     }));
     return { id: row.id, projectId: row.project, deliveryDate: row.delivery_date, version: row.version, savedAt: row.updated_at, lines };
   }
@@ -66,41 +73,43 @@ export class Store {
       const draftId = String(existing?.id ?? randomUUID());
       if (existing) this.db.prepare('UPDATE drafts SET delivery_date=?,version=version+1,updated_at=? WHERE id=? AND tenant=? AND owner=?').run(body.deliveryDate, now(), draftId, p.tenant, p.oid);
       else this.db.prepare('INSERT INTO drafts VALUES(?,?,?,?,?,1,?)').run(draftId, p.tenant, p.oid, body.projectId, body.deliveryDate, now());
-      const priorMaterials = new Map(this.db.prepare('SELECT id,material_id FROM draft_lines WHERE draft_id=?').all(draftId).map(line => [String(line.id), line.material_id]));
+      const priorMaterials = new Map(this.db.prepare('SELECT id,material_id,purchasing FROM draft_lines WHERE draft_id=?').all(draftId).map(line => [String(line.id), {materialId:line.material_id,purchasing:line.purchasing}]));
       this.db.prepare('DELETE FROM draft_lines WHERE draft_id=?').run(draftId);
       body.lines.forEach((line, index) => {
         let materialId: string | null = null;
         if (line.source === 'verified' || line.source === 'verified_fixture') {
           const material = this.db.prepare('SELECT * FROM materials WHERE id=? AND tenant=?').get(line.candidate!.id, p.tenant);
-          if (!material || (!material.active && priorMaterials.get(line.id) !== material.id)) throw new ApiError(400, 'Catalog candidate no longer exists. Re-run matching.');
+          if (!material || (!material.active && priorMaterials.get(line.id)?.materialId !== material.id)) throw new ApiError(400, 'Catalog candidate no longer exists. Re-run matching.');
           const details = JSON.parse(String(material.details));
           const expectedSource = material.dataset_kind === 'fixture' ? 'verified_fixture' : 'verified';
           if (line.source !== expectedSource || line.candidate!.description !== material.description || line.candidate!.productUnit !== material.product_uom
             || JSON.stringify(line.candidate!.specs) !== JSON.stringify(details.specs) || line.candidate!.category !== details.category) throw new ApiError(400, 'Catalog snapshot does not match its source record.');
           materialId = String(material.id);
         }
+        this.catalogRun(validatePurchase(p,body.projectId,materialId,line.purchasing,false,Boolean(priorMaterials.get(line.id)?.materialId===materialId&&priorMaterials.get(line.id)?.purchasing===JSON.stringify(line.purchasing))));
         const snapshot = materialId ? (() => {
           const material = this.db.prepare('SELECT * FROM materials WHERE id=?').get(materialId)!;
           const details = JSON.parse(String(material.details));
-          return { ...line.candidate, provenance: { sourceUrl: details.row.source_url, verificationBasis: details.row.verification_basis, datasetKind: material.dataset_kind } };
+          const profile=this.db.prepare('SELECT verification FROM catalog_profiles WHERE tenant=? AND material_id=?').get(p.tenant,materialId);
+          return { ...line.candidate,verification:profile?.verification??'reviewed', provenance: { sourceUrl: details.row.source_url, verificationBasis: details.row.verification_basis, datasetKind: material.dataset_kind } };
         })() : line.candidate;
-        this.db.prepare('INSERT INTO draft_lines VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(line.id, draftId, index, materialId, line.quantity, line.requestedUnit, line.description, JSON.stringify(line.rawInput), snapshot ? JSON.stringify(snapshot) : null, line.source, line.deliveryMode, line.overrideDate);
+        this.db.prepare('INSERT INTO draft_lines(id,draft_id,position,material_id,quantity,requested_uom,description,raw_input,candidate,source,delivery_mode,override_date,purchasing) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(line.id, draftId, index, materialId, line.quantity, line.requestedUnit, line.description, JSON.stringify(line.rawInput), snapshot ? JSON.stringify(snapshot) : null, line.source, line.deliveryMode, line.overrideDate, line.purchasing ? JSON.stringify(line.purchasing) : null);
       });
       this.audit(p, 'draft.saved', draftId);
       return this.getDraft(p, draftId);
     });
   }
-  search(p: Principal, query: string) {
-    const materials = this.db.prepare('SELECT * FROM materials WHERE tenant=? AND active=1').all(p.tenant);
-    return materials.map(material => {
-      const details = JSON.parse(String(material.details));
-      const rawAliases: string[] = JSON.parse(details.row.aliases_json);
-      const rank = Math.max(...[String(material.description), ...rawAliases].map(phrase => score(query, phrase)));
-      return { id: material.id, description: material.description, productUnit: material.product_uom, specs: details.specs, category: details.category,
-        source: material.dataset_kind === 'fixture' ? 'verified_fixture' : 'verified', score: rank, reason: rank === 100 ? 'Exact normalized alias' : 'All requested terms matched',
-        provenance: { sourceUrl: details.row.source_url, verificationBasis: details.row.verification_basis, datasetKind: material.dataset_kind } };
-    }).filter(item => item.score >= 85).sort((a, b) => b.score - a.score || String(a.description).localeCompare(String(b.description))).slice(0, 10);
+  catalogRun<T>(operation: Operation<T>): T {
+    let step=operation.next();
+    while(!step.done){
+      const {text,values}=step.value;const bound: SQLInputValue[]=[];
+      const statement=text.replace(/@p(\d+)/g,(_match,index)=>{const value=values[Number(index)];bound.push(value==null?null:typeof value==='number'?value:String(value));return '?';});
+      const rows=this.db.prepare(statement).all(...bound);step=operation.next(rows);
+    }
+    return step.value;
   }
+  catalogCommand(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(catalogAction(p,action,data)));}
+  search(p:Principal,query:string,projectId?:string){return this.catalogRun(searchCatalog(p,query,projectId));}
   parseImport(file: string) { return parseCatalog(file); }
 
   conflicts(p: Principal, rows: ImportRow[]) {
@@ -149,6 +158,7 @@ export class Store {
     return this.transaction(() => {
       const batch = this.db.prepare('SELECT * FROM import_batches WHERE id=? AND tenant=?').get(id, p.tenant);
       if (!batch) throw new ApiError(404, 'Import batch not found.');
+      if (batch.hash === hash('catalog-v2-materials')) throw new ApiError(409,'Use structured import history for catalog relationship rollback.');
       if (batch.state === 'rolled_back') return { state: 'rolled_back', unchanged: true };
       if (batch.state !== 'applied') throw new ApiError(409, 'Only applied batches can be rolled back.');
       this.db.prepare('UPDATE materials SET active=0 WHERE tenant=? AND batch_id=?').run(p.tenant, id);
@@ -168,26 +178,27 @@ export class Store {
     const row = this.db.prepare('SELECT id,active FROM materials WHERE tenant=? AND id=?').get(p.tenant,id);
     if (!row || (activeOnly && !row.active)) throw new ApiError(404,'Material not found.');
   }
-  private mapImage(row: Row): ImageRecord { return { id:String(row.id),materialId:String(row.material_id),contentHash:String(row.content_hash),sourceUrl:String(row.source_url),rightsBasis:String(row.rights_basis),status:String(row.status) as ImageRecord['status'],reviewer:row.reviewer ? String(row.reviewer):null,reviewedAt:row.reviewed_at ? String(row.reviewed_at):null }; }
+  private mapImage(row: Row): ImageRecord { return { id:String(row.id),materialId:String(row.material_id),productId:row.product_id?String(row.product_id).toLowerCase():null,contentHash:String(row.content_hash),sourceUrl:String(row.source_url),rightsBasis:String(row.rights_basis),status:String(row.status) as ImageRecord['status'],reviewer:row.reviewer ? String(row.reviewer):null,reviewedAt:row.reviewed_at ? String(row.reviewed_at):null }; }
   listImages(p: Principal, id: string) {
     this.requireAdmin(p);this.imageMaterial(p,id);
     return this.db.prepare('SELECT * FROM image_associations WHERE tenant=? AND material_id=? ORDER BY reviewed_at DESC,id').all(p.tenant,id).map(row=>this.mapImage(row));
   }
-  approvedImage(p: Principal, id: string): ImageRecord | null {
+  approvedImage(p: Principal, id: string, productId: string|null = null): ImageRecord | null {
     this.imageMaterial(p,id);
-    const row=this.db.prepare("SELECT * FROM image_associations WHERE tenant=? AND material_id=? AND status='approved'").get(p.tenant,id);
+    const row=this.db.prepare("SELECT * FROM image_associations WHERE tenant=? AND material_id=? AND status='approved' AND ((product_id IS NULL AND ? IS NULL) OR product_id=?)").get(p.tenant,id,productId,productId);
     return row ? this.mapImage(row):null;
   }
-  submitImage(p: Principal,id: string,hash: string,evidence: ImageEvidence) {
+  submitImage(p: Principal,id: string,hash: string,evidence: ImageEvidence,productId:string|null=null) {
     this.requireAdmin(p);
     return this.transaction(()=>{
       this.imageMaterial(p,id,true);
+      if(productId)this.catalogRun(productForMaterial(p,id,productId));
       const prior=this.db.prepare('SELECT * FROM image_associations WHERE tenant=? AND material_id=? AND content_hash=?').get(p.tenant,id,hash);
-      if (prior) { if (prior.status==='rejected') throw new ApiError(409,'This image was rejected for this product; choose a different image.'); return this.mapImage(prior); }
+      if (prior) { if((prior.product_id?String(prior.product_id).toLowerCase():null)!==productId)throw new ApiError(409,'These bytes already belong to another image scope; select a different photo.'); if (prior.status==='rejected') throw new ApiError(409,'This image was rejected for this product; choose a different image.'); return this.mapImage(prior); }
       const count=this.db.prepare('SELECT COUNT(*) AS count FROM image_associations WHERE tenant=?').get(p.tenant)!;
       if(Number(count.count)>=imageLimits.maxAssociations) throw new ApiError(429,'The pilot limit of 500 retained image associations has been reached.');
       const imageId=randomUUID();
-      this.db.prepare("INSERT INTO image_associations(id,tenant,material_id,content_hash,source_url,rights_basis,status) VALUES(?,?,?,?,?,?,'pending')").run(imageId,p.tenant,id,hash,evidence.sourceUrl,evidence.rightsBasis);
+      this.db.prepare("INSERT INTO image_associations(id,tenant,material_id,content_hash,source_url,rights_basis,status,product_id) VALUES(?,?,?,?,?,?,'pending',?)").run(imageId,p.tenant,id,hash,evidence.sourceUrl,evidence.rightsBasis,productId);
       this.audit(p,'image.uploaded',imageId);
       return this.listImages(p,id).find(image=>image.id===imageId)!;
     });
@@ -202,8 +213,8 @@ export class Store {
       if (row.status==='rejected' && status==='approved') throw new ApiError(409,'Rejected associations cannot be silently reapproved. Upload a different reviewed image.');
       if (status==='approved') {
         this.imageMaterial(p,id,true);
-        const replaced=this.db.prepare("SELECT id FROM image_associations WHERE tenant=? AND material_id=? AND status='approved'").all(p.tenant,id);
-        this.db.prepare("UPDATE image_associations SET status='rejected',reviewer=?,reviewed_at=? WHERE tenant=? AND material_id=? AND status='approved'").run(p.oid,now(),p.tenant,id);
+        const replaced=this.db.prepare("SELECT id FROM image_associations WHERE tenant=? AND material_id=? AND status='approved' AND ((product_id IS NULL AND ? IS NULL) OR product_id=?)").all(p.tenant,id,row.product_id,row.product_id);
+        this.db.prepare("UPDATE image_associations SET status='rejected',reviewer=?,reviewed_at=? WHERE tenant=? AND material_id=? AND status='approved' AND ((product_id IS NULL AND ? IS NULL) OR product_id=?)").run(p.oid,now(),p.tenant,id,row.product_id,row.product_id);
         for (const old of replaced) this.audit(p,'image.replaced',String(old.id));
       }
       this.db.prepare('UPDATE image_associations SET status=?,reviewer=?,reviewed_at=? WHERE tenant=? AND material_id=? AND id=?').run(status,p.oid,now(),p.tenant,id,imageId);
@@ -213,7 +224,7 @@ export class Store {
   }
   listImports(p: Principal) {
     this.requireAdmin(p);
-    return this.db.prepare('SELECT id,state,report,reviewer,approved_at FROM import_batches WHERE tenant=? ORDER BY rowid DESC LIMIT 50').all(p.tenant).map(row => ({ id: String(row.id), state: String(row.state), report: JSON.parse(String(row.report)) as Report, reviewer: row.reviewer ? String(row.reviewer) : null, approvedAt: row.approved_at ? String(row.approved_at) : null }));
+    return this.db.prepare('SELECT id,state,report,reviewer,approved_at FROM import_batches WHERE tenant=? AND hash<>? ORDER BY rowid DESC LIMIT 50').all(p.tenant,hash('catalog-v2-materials')).map(row => ({ id: String(row.id), state: String(row.state), report: JSON.parse(String(row.report)) as Report, reviewer: row.reviewer ? String(row.reviewer) : null, approvedAt: row.approved_at ? String(row.approved_at) : null }));
   }
   exportCsv(p: Principal) {
     this.requireAdmin(p);

@@ -1,3 +1,5 @@
+export type Purchasing={productId:string|null;manufacturer:string;partNumber:string;noSubstitutions:boolean};
+export type ManufacturerProduct={id:string;manufacturer:string;partNumber:string;verification?:'provisional'|'reviewed';allowed?:boolean};
 export type Unit = 'EA' | 'FT' | 'STICK' | 'BOX' | 'ROLL' | 'PAIR';
 export const units: Unit[] = ['EA', 'FT', 'STICK', 'BOX', 'ROLL', 'PAIR'];
 export type Source = 'verified_fixture' | 'ai_fixture' | 'user_description' | 'verified';
@@ -7,6 +9,10 @@ export type Candidate = {
   specs: string[];
   productUnit: Unit;
   source: Exclude<Source, 'user_description'>;
+  verification?: 'provisional'|'reviewed';
+  products?: ManufacturerProduct[];
+  preferredProductId?: string|null;
+  highUse?: boolean;
   category: 'conduit' | 'screw' | 'tape' | 'general';
 };
 export type Line = {
@@ -17,6 +23,7 @@ export type Line = {
   rawInput: { quantity: string; description: string; requestedUnit: Unit };
   candidate: Candidate | null;
   source: Source;
+  purchasing?:Purchasing;
   deliveryMode: 'inherit' | 'override';
   overrideDate: string | null;
 };
@@ -112,6 +119,7 @@ export function loadDraft(projectId: string): { draft: Draft; error?: string; re
       || !value.lines.every((line: Line) => line && typeof line.id === 'string' && typeof line.description === 'string'
         && line.description.trim() && line.description.length <= 2000 && positiveQuantity(line.quantity)
         && isUnit(line.requestedUnit) && ['verified_fixture', 'ai_fixture', 'user_description'].includes(line.source)
+        && (!line.purchasing || (typeof line.purchasing.manufacturer==='string' && typeof line.purchasing.partNumber==='string' && typeof line.purchasing.noSubstitutions==='boolean' && (line.purchasing.productId===null||typeof line.purchasing.productId==='string') && (!line.purchasing.noSubstitutions||Boolean(line.purchasing.manufacturer.trim()&&line.purchasing.partNumber.trim()))))
         && line.rawInput && typeof line.rawInput.description === 'string' && typeof line.rawInput.quantity === 'string'
         && isUnit(line.rawInput.requestedUnit) && candidateValid(line.candidate)
         && ((line.deliveryMode === 'inherit' && line.overrideDate === null) || (line.deliveryMode === 'override' && isDate(line.overrideDate))))
