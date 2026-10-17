@@ -40,6 +40,8 @@ npm audit --cache /workspace/.cache/npm
 
 ## Review and implementation
 
+The [catalog and translator requirements](docs/CATALOG_AND_TRANSLATOR_REQUIREMENTS.md) record the owner’s latest decisions on unique materials, manufacturer products, learning from selections, AI-generated phrases and deterministic search. These guide subsequent development; recording them does not mean they are already implemented.
+
 - [Visual review and evidence](docs/VISUAL_REVIEW.md)
 - [Architecture, security, schema and cost proposal](docs/ARCHITECTURE_PROPOSAL.md)
 - [Original V2 kickoff](docs/handoff/CODEX_KICKOFF_V2.md)
