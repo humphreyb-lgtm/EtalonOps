@@ -1,0 +1,5 @@
+schema_version,external_key,description,aliases_json,requested_uom,product_uom,manufacturer,manufacturer_part_number,specifications_json,conversion_basis_json,source_url,verification_basis,dataset_kind
+1,fixture-pvc-40,"1 in. PVC conduit, Schedule 40","[""1 inch PVC"",""one inch pvc"",""1 pvc"",""1 inch PVC schedule 40""]",FT,STICK,,,"[""10 ft length"",""Plain end"",""Gray""]",null,,Fictional test fixture only. Not a real verified product.,fixture
+1,fixture-pvc-80,"1 in. PVC conduit, Schedule 80","[""1 inch PVC schedule 80""]",FT,STICK,,,"[""10 ft length"",""Heavy wall"",""Gray""]",null,,Fictional test fixture only. Not a real verified product.,fixture
+1,fixture-pvc-elbow,1 in. PVC 90° conduit elbow,"[""1 inch PVC elbow""]",EA,EA,,,"[""Schedule 40"",""Standard radius"",""Gray""]",null,,Fictional test fixture only. Not a real verified product.,fixture
+1,fixture-tape,Black electrical tape,"[""electrical tape"",""black tape"",""elec tape""]",ROLL,ROLL,,,"[""3/4 in. width"",""General purpose"",""Black""]",null,,Fictional test fixture only. Not a real verified product.,fixture

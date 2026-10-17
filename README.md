@@ -1,0 +1,51 @@
+# EtalonOps — MRF Builder
+
+MRF Builder proof of concept based on the approved V2 handoff. **Frontend visuals approved; local database/API implementation available.** No Azure resources or DNS records have been changed. See [local persistence, import tools and validation limits](docs/DATABASE_MILESTONE.md).
+
+## Try the preview
+
+Download `artifacts/EtalonOps-preview.html` and open the downloaded HTML in a normal desktop browser. It contains the application, styles and icons in one file; no Node installation or cloud account is needed. Browser policies may restrict opening HTML files or local storage. The managed development browser blocks `file://`, so automated tests validate the unchanged single-file document over a local HTTP response with no external asset requests, rather than claiming a successful file-opening test.
+
+1. Click **1" PVC** under “Try a demo,” then **Find Matches**. Choose a quantity unit before adding. Product UOM is separate; no feet/stick conversion is assumed.
+2. Click **Next material**, enter `200`, `EA`, and `self tappers`, then **Find Matches**.
+3. Select **Other / none of these** and type “I need the black screws we use to mount devices to electrical boxes.” Send the message, ask a follow-up, then add either mock candidate. **Use My Description** preserves your original wording instead.
+4. Edit/remove a line. Change one line to **Item Delivery Override**, change the main date, then reset the line to **Use MRF Date**.
+5. **Save as Draft**, open the DM session button, **Leave demo**, and **Resume demo**. Saved lines and date choices return in the same browser. Project switching offers to save unsaved changes.
+
+All product names/specifications are fictional fixtures, not verified manufacturer facts. Photos are deliberately absent until approved or lawfully sourced. The assistant is scripted. “Catalog fixture” demonstrates the verified-result layout; it does not assert real verification. No supplier selection or submission workflow is implemented.
+
+The downloaded preview uses browser-local storage with one mock foreman identity. It is not Microsoft authentication, secure ownership isolation, a database, cross-device persistence or a production service. Do not enter sensitive project data. These standalone drafts are scoped to the browser and file/site origin; moving/renaming an offline HTML file may change its storage context. Clearing site data can delete them. The optional API-backed mode has separate database persistence, documented in the database milestone.
+
+## Develop
+
+Node 24+ is required for the local SQLite API; this environment was validated with Node 24.19.0 and npm 11.9.0. Use the existing isolated `/workspace/EtalonOps` checkout; do not create a worktree unless requested.
+
+```bash
+cd /workspace/EtalonOps
+npm ci --cache /workspace/.cache/npm --no-audit --no-fund
+npm run dev
+```
+
+Vite uses port 5173. Use local browser validation inside the development environment; no public preview deployment is created. The cloud onboarding UI does not expose loopback URLs as preview links. The HTML artifact and captured screenshots provide the owner review path without Azure provisioning.
+
+```bash
+npm run build
+npm run build:preview
+npm run test:server
+npm test
+npm audit --cache /workspace/.cache/npm
+```
+
+`npm run build` runs strict TypeScript checks and the production build. `npm run build:preview` regenerates the single-file review artifact from the same React source. Run it before tests after source changes, because the test suite also checks that artifact. Tests start isolated API/frontend services on ports 3002/5174 using a separate fixture database. The Playwright configuration uses `/usr/bin/chromium` when installed; on another machine install Playwright Chromium with `npx playwright install chromium` and its documented OS dependencies. Do not disable browser policies to make tests pass.
+
+## Review and implementation
+
+- [Visual review and evidence](docs/VISUAL_REVIEW.md)
+- [Architecture, security, schema and cost proposal](docs/ARCHITECTURE_PROPOSAL.md)
+- [Original V2 kickoff](docs/handoff/CODEX_KICKOFF_V2.md)
+- Original screenshots: `docs/handoff/reference_images/`
+- Current responsive captures: `artifacts/screenshots/`
+
+The three provided screenshots all depict the clarification conversation despite their filenames. The interface follows their shared shell and styling; additional result and populated-item states follow the written requirements. The written refinements take precedence: sharp 2–4 px corners, thin dividers, compact panel gaps, no large colored banners, and practical phone controls.
+
+Desktop/mobile visual approval was received. Local SQLite persistence, draft ownership checks, deterministic translator search and admin import APIs are implemented. Actual Microsoft sign-in, the SQL Server adapter/engine tests, live AI, image administration and Azure deployment remain pending. Paid provisioning requires a verified quote and separate approval; DNS requires its own approval. The downloaded HTML remains the standalone demo, not the local database application.
