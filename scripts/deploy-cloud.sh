@@ -29,7 +29,7 @@ rg=$(value resourceGroup)
 app=$(value appName)
 sql_name=$(value sqlName)
 # Stop before paid creation if the runtime, region or identity prerequisites fail.
-az webapp list-runtimes --os linux --query "[?@=='NODE:24-lts']" --output tsv | python3 -c 'import sys; assert "NODE:24-lts" in sys.stdin.read(),"Azure Node 24 runtime unavailable; stop before provisioning."'
+az webapp list-runtimes --os linux --output tsv | python3 -c 'import sys; assert any(v.upper() in ("NODE|24-LTS","NODE:24-LTS") for v in sys.stdin.read().split()),"Azure Node 24 runtime unavailable; stop before provisioning."'
 az appservice list-locations --sku B1 --linux-workers-enabled --query "[?name=='East US'].name" --output tsv | python3 -c 'import sys; assert "East US" in sys.stdin.read(),"East US B1 listing unavailable."'
 # Existing group names must carry our ownership marker; never adopt an unrelated group.
 if [ "$(az group exists --name "$rg" -o tsv)" = true ]; then

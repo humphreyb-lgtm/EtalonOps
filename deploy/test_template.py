@@ -36,4 +36,15 @@ class DeploymentScope(unittest.TestCase):
         self.assertNotIn('passwordCredentials',manifest)
         self.assertNotIn('requiredResourceAccess',manifest)
 
+    def test_runtime_preflight_accepts_current_table_and_legacy_cli_formats(self):
+        import shlex
+        line=next(line for line in Path('scripts/deploy-cloud.sh').read_text().splitlines() if line.startswith('az webapp list-runtimes '))
+        command=shlex.split(line.split(' | ',1)[1])
+        for output in ['NODE:24-lts\n', 'Linux\tNode\t24.0 LTS\tNODE|24-lts\tActive\t2028-04-30\n']:
+            result=subprocess.run(command,input=output,text=True,capture_output=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+        for output in ['', 'Linux\tNode\t22.0 LTS\tNODE|22-lts\tNear\n', 'NODE|24-lts-unsupported\n']:
+            result=subprocess.run(command,input=output,text=True,capture_output=True)
+            self.assertNotEqual(result.returncode,0)
+
 if __name__=='__main__': unittest.main()
