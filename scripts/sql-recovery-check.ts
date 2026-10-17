@@ -11,7 +11,7 @@ const file = `/var/opt/mssql/data/etalonops-test-${suffix}.bak`;
 const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
 let restored = false;
 try {
-  const before = await pool.request().query('SELECT (SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.materials) AS materials,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.drafts) AS drafts,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.draft_lines) AS lines');
+  const before = await pool.request().query('SELECT (SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.materials) AS materials,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.drafts) AS drafts,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.draft_lines) AS lines,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.image_associations) AS images,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.audit_events) AS audits');
   assert.ok(before.recordset[0].materials > 0 && before.recordset[0].drafts > 0, 'Run the SQL integration suite first; an empty restore is not a recovery demonstration.');
   await pool.request().query(`BACKUP DATABASE EtalonOpsSqlTests TO DISK=${literal(file)} WITH COPY_ONLY,CHECKSUM`);
   await pool.request().query(`RESTORE VERIFYONLY FROM DISK=${literal(file)} WITH CHECKSUM`);
@@ -21,7 +21,7 @@ try {
   assert.ok(data && log);
   await pool.request().query(`RESTORE DATABASE [${restore}] FROM DISK=${literal(file)} WITH MOVE ${literal(data.LogicalName)} TO ${literal(`/var/opt/mssql/data/${restore}.mdf`)}, MOVE ${literal(log.LogicalName)} TO ${literal(`/var/opt/mssql/data/${restore}.ldf`)}, CHECKSUM`);
   restored = true;
-  const after = await pool.request().query(`SELECT (SELECT COUNT(*) FROM [${restore}].dbo.materials) AS materials,(SELECT COUNT(*) FROM [${restore}].dbo.drafts) AS drafts,(SELECT COUNT(*) FROM [${restore}].dbo.draft_lines) AS lines`);
+  const after = await pool.request().query(`SELECT (SELECT COUNT(*) FROM [${restore}].dbo.materials) AS materials,(SELECT COUNT(*) FROM [${restore}].dbo.drafts) AS drafts,(SELECT COUNT(*) FROM [${restore}].dbo.draft_lines) AS lines,(SELECT COUNT(*) FROM [${restore}].dbo.image_associations) AS images,(SELECT COUNT(*) FROM [${restore}].dbo.audit_events) AS audits`);
   assert.deepEqual(after.recordset[0], before.recordset[0]);
   await pool.request().query(`DBCC CHECKDB ([${restore}]) WITH NO_INFOMSGS`);
   console.log('SQL native backup checksum, restore, relational data counts and CHECKDB passed. Original databases retained.');

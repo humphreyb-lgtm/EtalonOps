@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { databaseMode, request, downloadCatalog, type ImportBatch, type ImportPreview } from './api';
+import { AIUsage } from './AIUsage';
+import { ImageAdmin } from './ImageAdmin';
 import { cloudMode } from './cloud-auth';
 
 export function CatalogAdmin() {
@@ -47,6 +49,6 @@ export function CatalogAdmin() {
       </section>}
       <section aria-label="Import history"><h3>Import history</h3><p className="muted">Up to 50 batches. Rollback deactivates the batch; existing draft references are preserved.</p><div className="catalog-history">{batches.map(batch => <article className="catalog-history-row" key={batch.id}><span><strong>{batch.report.rows} records · {batch.state}</strong><small>{batch.id}{batch.approvedAt && ` · ${batch.approvedAt}`}</small></span>{batch.state === 'applied' && <button className="button" disabled={busy} onClick={() => setRollback(batch)}>Review rollback</button>}</article>)}</div>
         {rollback && <div className="catalog-rollback" role="group" aria-label="Confirm catalog rollback"><p>Deactivate all records in batch {rollback.id}? Existing saved MRF lines keep their historical references.</p><div className="catalog-actions"><button className="button" disabled={busy} onClick={() => setRollback(null)}>Keep batch</button><button className="button danger" disabled={busy} onClick={() => void run(async () => { await request(`/admin/imports/${rollback.id}/rollback`, 'POST'); if (preview?.id === rollback.id) setPreview({ ...preview, state: 'rolled_back' }); setRollback(null); setNotice('Batch deactivated. Historical draft references retained.'); await refresh(); })}>Deactivate batch</button></div></div>}
-      </section>{busy && <p role="status">Working on catalog…</p>}
+      </section><ImageAdmin /><AIUsage />{busy && <p role="status">Working on catalog…</p>}
     </dialog></>;
 }

@@ -11,10 +11,11 @@ import {
   type Candidate, type Draft, type Line, type Unit,
 } from './domain';
 
+import { ProductPhoto } from './ProductPhoto';
 import { CatalogAdmin } from './CatalogAdmin';
 import { lookupContext, fallbackDescription } from './lookup';
 import { cloudMode, cloudDisplayName, cloudSignOut } from './cloud-auth';
-import { databaseMode, localIdentity, readDatabaseDraft, saveDatabaseDraft, databaseSearch, clearLocalSession } from './api';
+import { databaseMode, localIdentity, readDatabaseDraft, saveDatabaseDraft, databaseSearch, clearLocalSession, request, type AIStatus, type AIClarification } from './api';
 
 type Stage = 'idle' | 'verified' | 'clarify';
 type Message = { id: string; author: 'user' | 'assistant'; text: string };
@@ -44,12 +45,12 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
   </nav>;
 }
 
-function ProductImage({ category, small = false }: { category: Candidate['category']; small?: boolean }) {
-  return <div className={`product-image ${small ? 'small' : ''}`} aria-label="No approved product image">
+function ProductImage({ category, small = false, candidate }: { category: Candidate['category']; small?: boolean; candidate?: Candidate }) {
+  return <ProductPhoto materialId={candidate && candidate.source!=='ai_fixture' ? candidate.id:undefined} description={`Approved product image for ${candidate?.description??category}`} fallback={<div className={`product-image ${small ? 'small' : ''}`} aria-label="No approved product image">
     <Package size={small ? 19 : 25} strokeWidth={1.25} aria-hidden="true" />
     {!small && <span>No image</span>}
     <span className="sr-only">{category}; image unavailable in demo</span>
-  </div>;
+  </div>} />;
 }
 
 function SectionHeading({ title, children, aside }: { title: string; children?: ReactNode; aside?: ReactNode }) {
@@ -81,6 +82,11 @@ export default function App() {
   const [choice, setChoice] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [message, setMessage] = useState('');
+  const [aiEnabled,setAIEnabled] = useState(false);
+  const [aiBusy,setAIBusy] = useState(false);
+  const [aiError,setAIError] = useState('');
+  const [aiWording,setAIWording] = useState('');
+  const lookupSession = useRef(crypto.randomUUID());
   const [customDescription, setCustomDescription] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Candidate[]>([]);
   const [added, setAdded] = useState<string[]>([]);
@@ -140,6 +146,7 @@ export default function App() {
   useEffect(() => {
     if (!databaseMode) return;
     let cancelled = false;
+    request<AIStatus>('/lookup/status').then(status=>{if(!cancelled)setAIEnabled(status.enabled);}).catch(()=>{});
     readDatabaseDraft('riverside').then(saved => {
       if (!cancelled) { setDraft(saved ?? freshDraft('riverside')); setAnnouncement(cloudMode ? (saved ? 'Draft restored from Azure SQL.' : 'Azure SQL ready. AI discovery is disabled.') : saved ? 'Draft restored from the local database.' : 'Local database ready. Fixture catalog; test session only.'); }
     }).catch(error => { if (!cancelled) setStorageError(error instanceof Error ? error.message : 'Local database unavailable.'); })
@@ -154,7 +161,7 @@ export default function App() {
 
   function resetEntry() {
     setStage('idle'); setMatches([]); setSuggestions([]); setChoice('');
-    setMessages([]); setMessage(''); setCustomDescription(null); setAdded([]); setEntryError('');
+    setMessages([]); setMessage(''); setCustomDescription(null); setAIError(''); setAIWording(''); lookupSession.current=crypto.randomUUID(); setAdded([]); setEntryError('');
   }
 
   async function search(event?: FormEvent, override?: string) {
@@ -212,14 +219,25 @@ export default function App() {
     setMessages(current => [...current, { id: crypto.randomUUID(), author: 'assistant', text: lookupContext(searchedDescription || description, current, id).reply }]);
   }
 
-  function sendMessage(event: FormEvent) {
+  async function sendMessage(event: FormEvent) {
     event.preventDefault();
     const text = message.trim();
-    if (!text) return;
+    if (!text || aiBusy) return;
     const next: Message[] = [...messages, { id: crypto.randomUUID(), author: 'user', text }];
     const result = lookupContext(searchedDescription || description, next, choice);
     if (!cloudMode && /black|device|electrical box|6.?32/i.test([searchedDescription, ...next.filter(m => m.author === 'user').map(m => m.text)].join(' '))) setSuggestions(discoveryFixtures);
-    setMessages([...next, { id: crypto.randomUUID(), author: 'assistant', text: result.reply }]);
+    let response = result.reply;
+    setAIError('');
+    if (aiEnabled && databaseMode) {
+      if (!unit) { setEntryError('Choose your quantity unit before using live AI.'); unitRef.current?.focus(); return; }
+      setAIBusy(true);setMessages(next);
+      try {
+        const value=await request<AIClarification>('/lookup/clarify','POST',{projectId,sessionId:lookupSession.current,turnId:crypto.randomUUID(),description:searchedDescription||description,quantity,requestedUnit:unit,choice,turns:next.map(({author,text})=>({author,text}))});
+        response=`${value.summary} ${value.reply}`;setAIWording(value.description);
+      } catch(error) { setAIError(error instanceof Error?error.message:'AI unavailable. Your details are retained.'); }
+      finally { setAIBusy(false); }
+    }
+    setMessages([...next, { id: crypto.randomUUID(), author: 'assistant', text: response }]);
     setMessage('');
     setAnnouncement('Clarification details retained.');
     chatRef.current?.focus();
@@ -289,7 +307,7 @@ export default function App() {
     <div className="results-table" role="table" aria-label={isAI ? 'Mock AI material suggestions' : 'Demo catalog matches'}>
       <div className="result-head" role="row"><span role="columnheader">Image</span><span role="columnheader">Material description</span><span role="columnheader">Product UOM</span><span role="columnheader">Specifications</span><span role="columnheader">Action</span></div>
       {candidates.map(candidate => <div className={`result-row ${added.includes(candidate.id) ? 'is-added' : ''}`} role="row" key={candidate.id}>
-        <div role="cell" className="result-image"><ProductImage category={candidate.category} /></div>
+        <div role="cell" className="result-image"><ProductImage category={candidate.category} candidate={candidate} /></div>
         <div role="cell" className="result-description"><strong>{candidate.description}</strong><SourceTag source={candidate.source} />{isAI && <span className="muted source-disclosure">Illustrative fixture · no live source</span>}</div>
         <div role="cell" className="result-uom"><span className="mobile-label">Product UOM</span><span className="unit-badge">{candidate.productUnit}</span></div>
         <div role="cell" className="specs"><span className="mobile-label">Specifications</span>{candidate.specs.join(' · ')}</div>
@@ -304,19 +322,19 @@ export default function App() {
   if (!active) return <main className="resume-page"><Brand /><section className="resume-panel"><span className="eyebrow">LOCAL PROOF OF CONCEPT</span><h1>Your work, ready when you are.</h1><p>You’ve left the demo. {databaseMode ? 'Saved drafts remain in the local database for this test account.' : 'Saved drafts remain in this browser; unsaved changes are not retained.'}</p><button className="button primary" onClick={resumeDemo}>Resume demo <ArrowRight size={16} aria-hidden="true" /></button><p className="fine-print">This is a local demo session, not Microsoft sign-in. {databaseMode ? 'Data is stored in your local development database.' : 'No data is sent to a server.'}</p></section></main>;
 
   return <>
-    {databaseBusy && <div className="database-progress" role="status">{cloudMode ? 'Connecting to Azure SQL…' : 'Connecting to local database…'}</div>}
+    {(databaseBusy||aiBusy) && <div className="database-progress" role="status">{aiBusy ? 'Interpreting your material request…' : cloudMode ? 'Connecting to Azure SQL…' : 'Connecting to local database…'}</div>}
     <a className="skip-link" href="#main">Skip to MRF Builder</a>
     <aside className="desktop-sidebar"><Brand /><Navigation /></aside>
     <header className="topbar">
       <button className="icon-button menu-button" aria-label="Open navigation" onClick={() => menuRef.current?.showModal()}><Menu size={23} aria-hidden="true" /></button>
-      <div className="project-picker"><label htmlFor="project-select" className="sr-only">Project</label><div className="project-select-wrap"><select id="project-select" value={projectId} onChange={event => { if (dirty) setPendingProject(event.target.value); else activateProject(event.target.value); }}>{projects.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div><span>Project #{project.number} <span className="project-mock">· Demo</span></span></div>
+      <div className="project-picker"><label htmlFor="project-select" className="sr-only">Project</label><div className="project-select-wrap"><select id="project-select" value={projectId} disabled={aiBusy} onChange={event => { if (dirty) setPendingProject(event.target.value); else activateProject(event.target.value); }}>{projects.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div><span>Project #{project.number} <span className="project-mock">· Demo</span></span></div>
       <form className="global-search" onSubmit={event => { event.preventDefault(); if (globalSearch.trim()) { setDescription(globalSearch.trim()); resetEntry(); descriptionRef.current?.focus(); setAnnouncement('Description filled. Enter a quantity, then Find Matches.'); } }}><Search size={17} aria-hidden="true" /><input aria-label="Search demo materials" placeholder="Search demo materials…" value={globalSearch} onChange={event => setGlobalSearch(event.target.value)} /><button className="sr-only" type="submit">Use search as description</button></form>
       <div className="profile"><button className="avatar" aria-label={cloudMode ? 'Account menu' : 'Demo session menu'} aria-expanded={profileOpen} onClick={() => setProfileOpen(current => !current)}>DM</button>{profileOpen && <div className="profile-menu"><strong>{cloudMode ? cloudDisplayName() : databaseMode ? localIdentity : 'Demo foreman'}</strong><span>{cloudMode ? 'Microsoft work account' : 'Local session · no sign-in'}</span><button className="button text-button" onClick={leaveDemo}><LogOut size={15} aria-hidden="true" />{cloudMode ? 'Sign out' : 'Leave demo'}</button></div>}</div>
     </header>
 
-    <main id="main" className="workspace" tabIndex={-1} inert={databaseBusy || undefined} aria-busy={databaseBusy}>
+    <main id="main" className="workspace" tabIndex={-1} inert={(databaseBusy||aiBusy) || undefined} aria-busy={databaseBusy||aiBusy}>
       <div className="page-heading"><h1>MRF Builder</h1><CatalogAdmin /><span className="demo-badge">{cloudMode ? 'Cloud pilot' : 'Local preview'}</span></div>
-      <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{cloudMode ? 'Microsoft sign-in · Azure SQL · AI discovery disabled · example projects.' : databaseMode ? 'Local database demo · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
+      <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{cloudMode ? (aiEnabled ? 'Microsoft sign-in · Azure SQL · AI clarification enabled · external search disabled · example projects.' : 'Microsoft sign-in · Azure SQL · AI discovery disabled · example projects.') : databaseMode ? 'Local database demo · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
       <section className="panel draft-header" aria-label="MRF header">
         <div className="foreman"><span className="header-icon"><span className="person-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="7" r="3.2" /><path d="M4.5 20v-2a7.5 7.5 0 0 1 15 0v2z" /></svg></span></span><div><span className="field-caption">Foreman</span><strong>{cloudMode ? cloudDisplayName() : databaseMode ? localIdentity : 'Demo foreman'}</strong></div></div>
         <div className="header-date"><label htmlFor="delivery-date" className="field-caption">MRF Delivery Date</label><input id="delivery-date" type="date" required value={draft.deliveryDate} onChange={event => { if (event.target.value) changeDraft(current => ({ ...current, deliveryDate: event.target.value })); }} /><span className="sr-only">Default for items using the MRF date</span></div>
@@ -342,8 +360,9 @@ export default function App() {
         <section className="panel clarification-panel" aria-label="Material clarification">
           <SectionHeading title="Are you looking for…?">Choose the closest option, or tell the assistant what you need in your own words.</SectionHeading>
           <fieldset className="clarification-options"><legend className="sr-only">Clarify your material</legend>{clarificationOptions.map(option => <label className={`clarification-option ${choice === option.id ? 'selected' : ''}`} key={option.id}><input type="radio" name="clarification" value={option.id} checked={choice === option.id} onChange={() => chooseOption(option.id)} /><span className="choice-image">{option.id === 'other' ? <Ellipsis size={23} aria-hidden="true" /> : <ProductImage category="screw" small />}</span><span><strong>{option.title}</strong><span className="choice-detail">{option.detail}</span></span></label>)}</fieldset>
-          {choice ? <div className="conversation"><div className="conversation-label"><Sparkles size={14} aria-hidden="true" />{cloudMode ? 'Material clarification' : 'Demo assistant'}<span>{cloudMode ? 'AI discovery disabled' : 'Scripted responses'}</span></div><div className="transcript" ref={transcriptRef} role="log" aria-label="Clarification conversation" aria-live="polite">{messages.map(m => <div className={`message ${m.author}`} key={m.id}><span className={`message-avatar ${m.author === 'assistant' ? 'ai-avatar' : ''}`} aria-hidden="true">{m.author === 'assistant' ? <Sparkles size={20} /> : 'DM'}</span><div className="message-bubble"><span className="sr-only">{m.author === 'assistant' ? 'Demo assistant' : 'You'}: </span>{m.text}</div></div>)}</div><form className="chat-form" onSubmit={sendMessage}><MessageSquare size={19} className="chat-icon" aria-hidden="true" /><label className="sr-only" htmlFor="chat-input">Tell the assistant what you are looking for</label><textarea id="chat-input" ref={chatRef} value={message} maxLength={2000} placeholder="Describe what you need…" rows={1} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendMessage(event); } }} /><button className="icon-button send-button" type="submit" disabled={!message.trim()} aria-label="Send message"><Send size={19} aria-hidden="true" /></button></form></div>
+          {choice ? <div className="conversation"><div className="conversation-label"><Sparkles size={14} aria-hidden="true" />{aiEnabled ? 'AI material clarification' : cloudMode ? 'Material clarification' : 'Demo assistant'}<span>{aiEnabled ? 'Unverified interpretation · no web search' : cloudMode ? 'AI discovery disabled' : 'Scripted responses'}</span></div><div className="transcript" ref={transcriptRef} role="log" aria-label="Clarification conversation" aria-live="polite">{messages.map(m => <div className={`message ${m.author}`} key={m.id}><span className={`message-avatar ${m.author === 'assistant' ? 'ai-avatar' : ''}`} aria-hidden="true">{m.author === 'assistant' ? <Sparkles size={20} /> : 'DM'}</span><div className="message-bubble"><span className="sr-only">{m.author === 'assistant' ? 'Demo assistant' : 'You'}: </span>{m.text}</div></div>)}</div><form className="chat-form" onSubmit={sendMessage}><MessageSquare size={19} className="chat-icon" aria-hidden="true" /><label className="sr-only" htmlFor="chat-input">Tell the assistant what you are looking for</label><textarea id="chat-input" disabled={aiBusy} ref={chatRef} value={message} maxLength={2000} placeholder="Describe what you need…" rows={1} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendMessage(event); } }} /><button className="icon-button send-button" type="submit" disabled={!message.trim()||aiBusy} aria-label="Send message"><Send size={19} aria-hidden="true" /></button></form></div>
             : <p className="clarify-hint"><MessageSquare size={15} aria-hidden="true" />Select “Other / none of these” to start a conversation.</p>}
+          {aiBusy && <p role="status">Interpreting your request…</p>}{aiError && <p className="error-message" role="alert">{aiError}</p>}{aiWording && <div className="clarification-summary"><strong>AI wording · unverified</strong><p>{aiWording}</p><button className="button" onClick={()=>setCustomDescription(aiWording)}>Use AI wording for my description</button><span className="muted">Review this wording first. Original input stays separate; this does not create a catalog match.</span></div>}
           {messages.some(m => m.author === 'user') && <div className="clarification-summary"><label htmlFor="clarified-description">Description to add</label><textarea id="clarified-description" value={customDescription ?? fallbackDescription(description, messages)} onChange={event => setCustomDescription(event.target.value)} rows={3} />{customDescription !== null && <button className="button text-button" onClick={() => setCustomDescription(null)}>Use conversation wording</button>}<span className="muted">Your original entry and these clarification details stay separate from verified catalog facts. You can edit the line after adding it.</span></div>}
           <div className="panel-footer fallback-footer"><span className="muted">Can’t find the right item? Keep your own wording.</span><button className="button" type="button" disabled={added.includes('description')} onClick={() => addLine(null)}>{added.includes('description') ? <Check size={15} aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}{added.includes('description') ? 'Description added' : 'Use My Description'}</button></div>
         </section>

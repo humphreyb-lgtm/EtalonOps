@@ -1,5 +1,7 @@
 # Lookup context and reviewed catalog administration
 
+Historical milestone: subsequent image review, stricter shorthand matching and guarded model clarification are documented in [Images and AI](IMAGES_AND_AI_MILESTONE.md). Live AI remains disabled.
+
 ## Implemented while Azure quota is pending
 
 The owner accepted direct Azure model calls backed by EtalonOps' reviewed catalog and application-owned context, rather than adding a separate agent service. The earlier Bing grounding price is an illustrative agent-tool meter, not a verified external-search API for this direct-call design. Do not add an agent service just to reuse that estimate; verify a compatible search service and its full cost/terms before enabling it. Saved catalog aliases already participate in ranked matching. Searches, conversations, item selection and description fallback do not create verified translations. Controlled initial dataset imports remain an explicit admin action; ongoing reconciliation remains outside this POC.

@@ -442,3 +442,15 @@ dialog::backdrop { background: #14203c55; }
   .catalog-history-row { align-items: flex-start; flex-direction: column; }
   .catalog-records { max-height: 240px; }
 }
+
+.approved-product-photo { width: 76px; height: 76px; object-fit: contain; background: #fff; border: 1px solid #e1e5ea; border-radius: 3px; }
+.item-table .approved-product-photo { width: 38px; height: 38px; }
+.image-admin { border-top: 1px solid #dce1e7; margin-top: 18px; padding-top: 10px; }
+.image-material-results { display: grid; gap: 6px; margin: 8px 0; }
+.image-material-choice { text-align: left; white-space: normal; }
+.image-admin input:not([type=checkbox]), .image-admin textarea { min-width: 0; max-width: 100%; border: 1px solid #cbd2d9; border-radius: 3px; padding: 8px; font: inherit; }
+.image-review-record { display: grid; grid-template-columns: 100px minmax(0,1fr); gap: 10px; padding: 12px 0; border-bottom: 1px solid #dce1e7; }
+.image-review-photo .approved-product-photo { width: 100%; height: 100px; }
+.image-review-record dl { display: grid; gap: 4px; font-size: 12px; }
+.image-review-record dd { margin: 0 0 4px; overflow-wrap: anywhere; }
+@media(max-width:600px){ .image-review-record { grid-template-columns:1fr; } .image-review-photo { max-width:140px; } .image-admin input:not([type=checkbox]) { min-height:44px; } }

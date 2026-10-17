@@ -1,6 +1,6 @@
 # Verified retail rates and next Azure spending gate
 
-Prepared October 17, 2026. **The owner approved the approximately $25/month base pilot and the illustrated AI usage estimate on October 17, 2026 (roughly $30/month combined planning total). No Azure resource has been provisioned by this project yet.** This replaces the unverified planning prices in the original proposal; architecture/security approval and frontend visual approval do not authorize billing.
+Prepared October 17, 2026. **The owner approved the approximately $25/month base pilot and the illustrated AI usage estimate on October 17, 2026 (roughly $30/month combined planning total). The owner created the pilot resource group/identity; paid hosting remains blocked by B1 quota.** This replaces the unverified planning prices in the original proposal; architecture/security approval and frontend visual approval do not authorize billing.
 
 Rates were retrieved from the [official Azure Retail Prices API](https://prices.azure.com/api/retail/prices). The [saved meter evidence](pricing/retail-rates-2026-10-17.json) contains exact SKU/meter IDs, units, tiers and effective dates. These are USD public retail rates, not subscription-specific quotes. Tenant availability, quotas, currency, taxes and discounts require secure Azure access and final verification before creation.
 
@@ -36,7 +36,9 @@ For illustration only: 200 discovery sessions/month × 2 model turns × 3,000 in
 
 1. Secure Microsoft sign-in to inspect the intended tenant/subscription, allowed region/SKUs and existing bindings. Do not ask for passwords, tokens or MFA codes in chat. Azure CLI installation itself creates no Azure resources.
 2. Present the final available resource names, subscription-specific costs and role scope, then verify the approved scope before creation. The current proposed base target is $25/month; approval comes from the owner's explicit chat instruction, not this document or the earlier $0 frontend approval.
-3. Quote and approve AI enablement separately once its full service chain is understood. Preserve manual-description fallback if disabled.
+3. Verify the direct model deployment, actual rates and scoped role before activation within the approved expense estimate. A new service chain or higher estimate requires an updated quote/approval. External search remains unselected and disabled. Preserve manual-description fallback.
 4. Request separate approval for any later `dev.etalonops.com` DNS changes after the secure Azure preview passes acceptance tests. Preserve all existing apex/mail records.
 
 Published access to Microsoft pricing/docs/artifacts is working. The next network prerequisites are `login.microsoftonline.com` (Microsoft sign-in), `management.azure.com` (Azure account/resource APIs), and `graph.microsoft.com` (Entra application configuration). These network destinations grant no Azure role by themselves. They are required before the secure provider connection; the agent will not use them to create paid resources without approval.
+
+The direct model clarification client now has persistent request/session caps and remains off in deployment. See [implementation and activation gates](IMAGES_AND_AI_MILESTONE.md). Model clarification does not itself search the web for a part. The illustrated Bing agent-tool rate is not a direct search API quote.

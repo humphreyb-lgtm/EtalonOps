@@ -148,3 +148,30 @@ test('SQL-backed HTTP API denies forged owners and non-admin imports and permits
     assert.equal((await fetch(`${base}/api/drafts/${draft.id}`, { headers })).status, 200);
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
 });
+
+test('SQL image review enforces tenant/admin boundaries and serializes replacement approvals',async()=>{
+  const {admin,user}=identities();await seed(admin);const material=(await store.search(user,'1 inch pvc'))[0];
+  const evidence={sourceUrl:'https://manufacturer.example/test',rightsBasis:'Fictional internal security-test fixture only.'};
+  await assert.rejects(()=>store.submitImage(user,material.id,'a'.repeat(64),evidence),/Administrator/);
+  const one=await store.submitImage(admin,material.id,'a'.repeat(64),evidence),two=await store.submitImage(admin,material.id,'b'.repeat(64),evidence);
+  assert.equal(await store.approvedImage(user,material.id),null);
+  const results=await Promise.allSettled([store.reviewImage(admin,material.id,one.id,'approved'),store.reviewImage(admin,material.id,two.id,'approved')]);
+  assert.equal(results.filter(result=>result.status==='fulfilled').length,2);
+  const records=await store.listImages(admin,material.id);assert.equal(records.filter(image=>image.status==='approved').length,1);
+  const rejected=records.find(image=>image.status==='rejected')!;
+  await assert.rejects(()=>store.submitImage(admin,material.id,rejected.contentHash,evidence),/rejected/);
+  await assert.rejects(()=>store.approvedImage({...user,tenant:'foreign'},material.id),/not found/);
+});
+
+test('SQL persistent AI reservations are atomic, tenant scoped and not reset by a new connection',async()=>{
+  const {admin,user,other}=identities();await store.member(user,'riverside');await store.member(other,'riverside');
+  const session=randomUUID();
+  const results=await Promise.allSettled(Array.from({length:4},()=>store.reserveAI(user,'riverside',session,randomUUID())));
+  assert.equal(results.filter(result=>result.status==='fulfilled').length,2);
+  assert.equal((await store.aiUsage(admin)).requests,2);
+  await assert.rejects(()=>store.reserveAI(other,'riverside',session,randomUUID()),/not found/);
+  await assert.rejects(async()=>store.aiUsage(user),/Administrator/);
+  assert.equal((await store.aiUsage({...admin,tenant:'foreign'})).requests,0);
+  const reconnected=await new sql.ConnectionPool(localSqlConfig(false,'EtalonOpsSqlTests')).connect();
+  try{assert.equal((await new SqlStore(reconnected).aiUsage(admin)).requests,2);}finally{await reconnected.close();}
+});

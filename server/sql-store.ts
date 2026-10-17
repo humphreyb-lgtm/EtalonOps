@@ -4,6 +4,8 @@ import { stringify } from 'csv-stringify/sync';
 import { ApiError, csvColumns, type DraftBody, type ImportRow, type Principal } from './contracts';
 import { parseCatalog, type Report } from './catalog';
 import { normalize, score } from './search';
+import { checkAIReservation, aiUsage, aiPeriod, type AIReservation } from './ai-policy';
+import { imageLimits, type ImageRecord, type ImageEvidence } from './image-contracts';
 import type { Repository } from './repository';
 
 type Row = Record<string, any>; // Driver records are validated at request/import boundaries.
@@ -44,8 +46,8 @@ export class SqlStore implements Repository {
   async requireProject(p: Principal, project: string) {
     if (!(await this.q('SELECT 1 FROM dbo.memberships WHERE tenant=@p0 AND owner=@p1 AND project=@p2', p.tenant, p.oid, project)).recordset.length) throw new ApiError(404, 'Project not found.');
   }
-  async audit(p: Principal, action: string, target: string) {
-    await this.q('INSERT dbo.audit_events(id,tenant,actor,action,target,at) VALUES(@p0,@p1,@p2,@p3,@p4,@p5)', randomUUID(), p.tenant, p.oid, action, target, now());
+  async audit(p: Principal, action: string, target: string, at = now()) {
+    await this.q('INSERT dbo.audit_events(id,tenant,actor,action,target,at) VALUES(@p0,@p1,@p2,@p3,@p4,@p5)', randomUUID(), p.tenant, p.oid, action, target, at);
   }
   async mapDraft(row: Row) {
     const result = await this.q('SELECT * FROM dbo.draft_lines WHERE draft_id=@p0 ORDER BY position', row.id);
@@ -101,10 +103,10 @@ export class SqlStore implements Repository {
   }
   async search(p: Principal, query: string) {
     const materials = (await this.q('SELECT * FROM dbo.materials WHERE tenant=@p0 AND active=1', p.tenant)).recordset;
-    const aliases = (await this.q('SELECT a.* FROM dbo.aliases a JOIN dbo.materials m ON m.id=a.material_id WHERE m.tenant=@p0 AND m.active=1', p.tenant)).recordset;
     return materials.map(material => {
-      const rank = Math.max(...[material.description, ...aliases.filter(a => a.material_id === material.id).map(a => a.normalized)].map(phrase => score(query, phrase)));
       const details = JSON.parse(material.details);
+      const rawAliases: string[] = JSON.parse(details.row.aliases_json);
+      const rank = Math.max(...[String(material.description), ...rawAliases].map(phrase => score(query, phrase)));
       return { id: String(material.id).toLowerCase(), description: material.description, productUnit: material.product_uom, specs: details.specs, category: details.category,
         source: material.dataset_kind === 'fixture' ? 'verified_fixture' : 'verified', score: rank, reason: rank === 100 ? 'Exact normalized alias' : 'All requested terms matched',
         provenance: { sourceUrl: details.row.source_url, verificationBasis: details.row.verification_basis, datasetKind: material.dataset_kind } };
@@ -167,6 +169,64 @@ export class SqlStore implements Repository {
       await tx.q("UPDATE dbo.import_batches SET state='rolled_back' WHERE id=@p0", id);
       await tx.audit(p, 'import.rolled_back', id);
       return { state: 'rolled_back', historyPreserved: true };
+    });
+  }
+  async aiReservations(p: Principal, period = aiPeriod()): Promise<AIReservation[]> {
+    return (await this.q("SELECT actor,target,at FROM dbo.audit_events WITH(UPDLOCK,HOLDLOCK) WHERE tenant=@p0 AND action='ai.reserved' AND target LIKE @p1",p.tenant,`${period}/%`)).recordset.map(row=>({actor:row.actor,target:row.target,at:new Date(row.at).toISOString()}));
+  }
+  async reserveAI(p: Principal,project: string,session: string,turn: string) {
+    return this.transaction(async tx=>{await tx.requireProject(p,project);const date=new Date();const target=checkAIReservation(await tx.aiReservations(p,aiPeriod(date)),p,session,turn,date);await tx.audit(p,'ai.reserved',target,date.toISOString());return target;});
+  }
+  async aiUsage(p: Principal){this.requireAdmin(p);const date=new Date();return aiUsage(await this.aiReservations(p,aiPeriod(date)),date);}
+  async imageMaterial(p: Principal,id: string,activeOnly=false) {
+    if (!isGuid(id)) throw new ApiError(404,'Material not found.');
+    const row=(await this.q('SELECT id,active FROM dbo.materials WHERE tenant=@p0 AND id=@p1',p.tenant,id)).recordset[0];
+    if (!row || (activeOnly && !row.active)) throw new ApiError(404,'Material not found.');
+  }
+  private mapImage(row: Row): ImageRecord { return {id:String(row.id).toLowerCase(),materialId:String(row.material_id).toLowerCase(),contentHash:row.content_hash,sourceUrl:row.source_url,rightsBasis:row.rights_basis,status:row.status,reviewer:row.reviewer ?? null,reviewedAt:row.reviewed_at ? new Date(row.reviewed_at).toISOString():null}; }
+  async listImages(p: Principal,id: string) {
+    this.requireAdmin(p);await this.imageMaterial(p,id);
+    return (await this.q('SELECT * FROM dbo.image_associations WHERE tenant=@p0 AND material_id=@p1 ORDER BY reviewed_at DESC,id',p.tenant,id)).recordset.map(row=>this.mapImage(row));
+  }
+  async approvedImage(p: Principal,id: string): Promise<ImageRecord|null> {
+    await this.imageMaterial(p,id);
+    const row=(await this.q("SELECT * FROM dbo.image_associations WHERE tenant=@p0 AND material_id=@p1 AND status='approved'",p.tenant,id)).recordset[0];
+    return row ? this.mapImage(row):null;
+  }
+  async submitImage(p: Principal,id: string,hash: string,evidence: ImageEvidence) {
+    this.requireAdmin(p);
+    return this.transaction(async tx=>{
+      await tx.imageMaterial(p,id,true);
+      const prior=(await tx.q('SELECT * FROM dbo.image_associations WITH(UPDLOCK,HOLDLOCK) WHERE tenant=@p0 AND material_id=@p1 AND content_hash=@p2',p.tenant,id,hash)).recordset[0];
+      if (prior) { if (prior.status==='rejected') throw new ApiError(409,'This image was rejected for this product; choose a different image.'); return tx.mapImage(prior); }
+      const count=(await tx.q('SELECT COUNT(*) AS count FROM dbo.image_associations WITH(UPDLOCK,HOLDLOCK) WHERE tenant=@p0',p.tenant)).recordset[0];
+      if(Number(count.count)>=imageLimits.maxAssociations) throw new ApiError(429,'The pilot limit of 500 retained image associations has been reached.');
+      const imageId=randomUUID();
+      await tx.q("INSERT dbo.image_associations(id,tenant,material_id,content_hash,source_url,rights_basis,status) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,'pending')",imageId,p.tenant,id,hash,evidence.sourceUrl,evidence.rightsBasis);
+      await tx.audit(p,'image.uploaded',imageId);
+      return (await tx.listImages(p,id)).find(image=>image.id===imageId)!;
+    });
+  }
+  async reviewImage(p: Principal,id: string,imageId: string,status: 'approved'|'rejected') {
+    this.requireAdmin(p);
+    if (!isGuid(imageId)) throw new ApiError(404,'Image association not found.');
+    return this.transaction(async tx=>{
+      await tx.imageMaterial(p,id);
+      // Lock the parent so concurrent approvals cannot leave two active pictures.
+      await tx.q('SELECT id FROM dbo.materials WITH(UPDLOCK,HOLDLOCK) WHERE id=@p0 AND tenant=@p1',id,p.tenant);
+      const row=(await tx.q('SELECT * FROM dbo.image_associations WHERE tenant=@p0 AND material_id=@p1 AND id=@p2',p.tenant,id,imageId)).recordset[0];
+      if (!row) throw new ApiError(404,'Image association not found.');
+      if (row.status===status) return tx.mapImage(row);
+      if (row.status==='rejected' && status==='approved') throw new ApiError(409,'Rejected associations cannot be silently reapproved. Upload a different reviewed image.');
+      if (status==='approved') {
+        await tx.imageMaterial(p,id,true);
+        const replaced=(await tx.q("SELECT id FROM dbo.image_associations WHERE tenant=@p0 AND material_id=@p1 AND status='approved'",p.tenant,id)).recordset;
+        await tx.q("UPDATE dbo.image_associations SET status='rejected',reviewer=@p0,reviewed_at=@p1 WHERE tenant=@p2 AND material_id=@p3 AND status='approved'",p.oid,now(),p.tenant,id);
+        for (const old of replaced) await tx.audit(p,'image.replaced',String(old.id));
+      }
+      await tx.q('UPDATE dbo.image_associations SET status=@p0,reviewer=@p1,reviewed_at=@p2 WHERE tenant=@p3 AND material_id=@p4 AND id=@p5',status,p.oid,now(),p.tenant,id,imageId);
+      await tx.audit(p,`image.${status}`,imageId);
+      return (await tx.listImages(p,id)).find(image=>image.id===imageId)!;
     });
   }
   async listImports(p: Principal) {

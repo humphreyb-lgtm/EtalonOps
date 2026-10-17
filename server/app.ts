@@ -4,10 +4,14 @@ import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { createAuth, type AuthOptions } from './auth';
 import { ApiError, draftBody, type Principal } from './contracts';
+import { aiRoutes } from './ai-routes';
+import type { AIProvider } from './ai-provider';
+import { imageRoutes } from './image-routes';
+import type { ImageAssets } from './image-assets';
 import { parseCatalog } from './catalog';
 import type { Repository } from './repository';
 
-export function createApp(store: Repository, authOptions: AuthOptions) {
+export function createApp(store: Repository, authOptions: AuthOptions, services: { images?: ImageAssets; ai?: AIProvider } = {}) {
   const app = express(), auth = createAuth(authOptions), local = authOptions.mode === 'local';
   app.disable('x-powered-by');
   app.use(helmet());
@@ -40,9 +44,11 @@ export function createApp(store: Repository, authOptions: AuthOptions) {
     } catch (error) { next(error); }
   });
   const principal = (res: express.Response): Principal => res.locals.principal;
+  imageRoutes(app,store,services.images);
+  aiRoutes(app,store,services.ai);
   app.get('/api/me', async (_req, res) => res.json({ ...principal(res), mode: authOptions.mode }));
   app.get('/api/materials', async (req, res) => {
-    const query = z.string().trim().min(1).max(200).parse(req.query.q);
+    const query = z.string().trim().min(1).max(2000).parse(req.query.q);
     res.json({ matches: await store.search(principal(res), query) });
   });
   app.get('/api/projects/:project/draft', async (req, res) => res.json({ draft: await store.getProjectDraft(principal(res), req.params.project) }));

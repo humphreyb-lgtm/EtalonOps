@@ -1,6 +1,6 @@
 # EtalonOps — MRF Builder
 
-MRF Builder proof of concept based on the approved V2 handoff. **Frontend visuals approved; local SQL Server and SQLite implementations tested.** No Azure resources or DNS records have been changed. See [SQL Server setup/validation](docs/SQL_SERVER_MILESTONE.md), [import tools](docs/DATABASE_MILESTONE.md), and [verified retail pricing](docs/COST_UPDATE.md).
+MRF Builder proof of concept based on the approved V2 handoff. **Frontend visuals approved; local SQL Server and SQLite implementations tested.** The owner created the pilot identity/resource group in Cloud Shell; paid hosting is blocked by B1 quota. No DNS records were changed. See [SQL Server setup/validation](docs/SQL_SERVER_MILESTONE.md), [import tools](docs/DATABASE_MILESTONE.md), and [verified retail pricing](docs/COST_UPDATE.md).
 
 ## Try the preview
 
@@ -48,7 +48,7 @@ npm audit --cache /workspace/.cache/npm
 
 The three provided screenshots all depict the clarification conversation despite their filenames. The interface follows their shared shell and styling; additional result and populated-item states follow the written requirements. The written refinements take precedence: sharp 2–4 px corners, thin dividers, compact panel gaps, no large colored banners, and practical phone controls.
 
-Desktop/mobile visual approval was received. Both local SQL Server and SQLite persistence, draft ownership checks, deterministic translator search and admin import APIs are implemented and tested. Actual Microsoft sign-in, live AI, image administration and Azure deployment remain pending. Paid provisioning requires a subscription-specific quote and separate approval; DNS requires its own approval. The downloaded HTML remains the standalone demo, not the database application.
+Desktop/mobile visual approval was received. Both local SQL Server and SQLite persistence, draft ownership checks, deterministic translator search and admin import APIs are implemented and tested. Image administration and a guarded direct Azure model client are now implemented; see the [image and AI milestone](docs/IMAGES_AND_AI_MILESTONE.md). Real Microsoft sign-in, live managed-identity integrations and Azure hosting acceptance remain pending. Pilot spending is approved within the scope below; DNS requires separate approval. The downloaded HTML remains the standalone demo, not the database application.
 
 ## Approved Azure pilot deployment
 
@@ -56,4 +56,4 @@ The owner approved the approximately $25/month base pilot and illustrated AI usa
 
 The cloud launcher (`npm start`) requires explicit Entra configuration and Azure SQL managed identity. It never enables mock sign-in or imports fixtures. The local launcher remains `npm run api` with the documented local configuration. Source/build tests do not establish a live Azure deployment or real Microsoft sign-in.
 
-The [lookup/context and catalog administration milestone](docs/LOOKUP_AND_CATALOG_MILESTONE.md) adds context-aware clarification, editable fallback wording, explicit admin CSV review, export and rollback. It is tested with both repositories; it does not enable live AI or implement image approval. Azure B1 quota support request `2610170040001486` remains the cloud hosting blocker.
+The [lookup/context and catalog administration milestone](docs/LOOKUP_AND_CATALOG_MILESTONE.md) adds context-aware clarification, editable fallback wording, explicit admin CSV review, export and rollback. It is tested with both repositories. The [next milestone](docs/IMAGES_AND_AI_MILESTONE.md) adds image review and optional model clarification, with live AI still disabled. Azure B1 quota support request `2610170040001486` remains the cloud hosting blocker.

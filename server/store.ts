@@ -4,6 +4,8 @@ import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { stringify } from 'csv-stringify/sync';
 import { ApiError, csvColumns, type DraftBody, type ImportRow, type Principal } from './contracts';
+import { checkAIReservation, aiUsage, aiPeriod, type AIReservation } from './ai-policy';
+import { imageLimits, type ImageRecord, type ImageEvidence } from './image-contracts';
 import { normalize, score } from './search';
 
 type Row = Record<string, SQLInputValue>;
@@ -28,8 +30,8 @@ export class Store {
     this.db.exec('BEGIN IMMEDIATE');
     try { const result = work(); this.db.exec('COMMIT'); return result; } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
-  audit(p: Principal, action: string, target: string) {
-    this.db.prepare('INSERT INTO audit_events VALUES(?,?,?,?,?,?)').run(randomUUID(), p.tenant, p.oid, action, target, now());
+  audit(p: Principal, action: string, target: string, at = now()) {
+    this.db.prepare('INSERT INTO audit_events VALUES(?,?,?,?,?,?)').run(randomUUID(), p.tenant, p.oid, action, target, at);
   }
   requireAdmin(p: Principal) { if (!p.roles.includes('Admin')) throw new ApiError(403, 'Administrator role required.'); }
   requireProject(p: Principal, project: string) {
@@ -90,11 +92,10 @@ export class Store {
   }
   search(p: Principal, query: string) {
     const materials = this.db.prepare('SELECT * FROM materials WHERE tenant=? AND active=1').all(p.tenant);
-    const aliases = this.db.prepare('SELECT a.* FROM aliases a JOIN materials m ON m.id=a.material_id WHERE m.tenant=? AND m.active=1').all(p.tenant);
     return materials.map(material => {
-      const phrases = [String(material.description), ...aliases.filter(a => a.material_id === material.id).map(a => String(a.normalized))];
-      const rank = Math.max(...phrases.map(phrase => score(query, phrase)));
       const details = JSON.parse(String(material.details));
+      const rawAliases: string[] = JSON.parse(details.row.aliases_json);
+      const rank = Math.max(...[String(material.description), ...rawAliases].map(phrase => score(query, phrase)));
       return { id: material.id, description: material.description, productUnit: material.product_uom, specs: details.specs, category: details.category,
         source: material.dataset_kind === 'fixture' ? 'verified_fixture' : 'verified', score: rank, reason: rank === 100 ? 'Exact normalized alias' : 'All requested terms matched',
         provenance: { sourceUrl: details.row.source_url, verificationBasis: details.row.verification_basis, datasetKind: material.dataset_kind } };
@@ -154,6 +155,60 @@ export class Store {
       this.db.prepare("UPDATE import_batches SET state='rolled_back' WHERE id=?").run(id);
       this.audit(p, 'import.rolled_back', id);
       return { state: 'rolled_back', historyPreserved: true };
+    });
+  }
+  aiReservations(p: Principal, period = aiPeriod()): AIReservation[] {
+    return this.db.prepare("SELECT actor,target,at FROM audit_events WHERE tenant=? AND action='ai.reserved' AND target LIKE ?").all(p.tenant,`${period}/%`).map(row=>({actor:String(row.actor),target:String(row.target),at:String(row.at)}));
+  }
+  reserveAI(p: Principal,project: string,session: string,turn: string) {
+    return this.transaction(()=>{this.requireProject(p,project);const date=new Date();const target=checkAIReservation(this.aiReservations(p,aiPeriod(date)),p,session,turn,date);this.audit(p,'ai.reserved',target,date.toISOString());return target;});
+  }
+  aiUsage(p: Principal){this.requireAdmin(p);const date=new Date();return aiUsage(this.aiReservations(p,aiPeriod(date)),date);}
+  imageMaterial(p: Principal, id: string, activeOnly = false) {
+    const row = this.db.prepare('SELECT id,active FROM materials WHERE tenant=? AND id=?').get(p.tenant,id);
+    if (!row || (activeOnly && !row.active)) throw new ApiError(404,'Material not found.');
+  }
+  private mapImage(row: Row): ImageRecord { return { id:String(row.id),materialId:String(row.material_id),contentHash:String(row.content_hash),sourceUrl:String(row.source_url),rightsBasis:String(row.rights_basis),status:String(row.status) as ImageRecord['status'],reviewer:row.reviewer ? String(row.reviewer):null,reviewedAt:row.reviewed_at ? String(row.reviewed_at):null }; }
+  listImages(p: Principal, id: string) {
+    this.requireAdmin(p);this.imageMaterial(p,id);
+    return this.db.prepare('SELECT * FROM image_associations WHERE tenant=? AND material_id=? ORDER BY reviewed_at DESC,id').all(p.tenant,id).map(row=>this.mapImage(row));
+  }
+  approvedImage(p: Principal, id: string): ImageRecord | null {
+    this.imageMaterial(p,id);
+    const row=this.db.prepare("SELECT * FROM image_associations WHERE tenant=? AND material_id=? AND status='approved'").get(p.tenant,id);
+    return row ? this.mapImage(row):null;
+  }
+  submitImage(p: Principal,id: string,hash: string,evidence: ImageEvidence) {
+    this.requireAdmin(p);
+    return this.transaction(()=>{
+      this.imageMaterial(p,id,true);
+      const prior=this.db.prepare('SELECT * FROM image_associations WHERE tenant=? AND material_id=? AND content_hash=?').get(p.tenant,id,hash);
+      if (prior) { if (prior.status==='rejected') throw new ApiError(409,'This image was rejected for this product; choose a different image.'); return this.mapImage(prior); }
+      const count=this.db.prepare('SELECT COUNT(*) AS count FROM image_associations WHERE tenant=?').get(p.tenant)!;
+      if(Number(count.count)>=imageLimits.maxAssociations) throw new ApiError(429,'The pilot limit of 500 retained image associations has been reached.');
+      const imageId=randomUUID();
+      this.db.prepare("INSERT INTO image_associations(id,tenant,material_id,content_hash,source_url,rights_basis,status) VALUES(?,?,?,?,?,?,'pending')").run(imageId,p.tenant,id,hash,evidence.sourceUrl,evidence.rightsBasis);
+      this.audit(p,'image.uploaded',imageId);
+      return this.listImages(p,id).find(image=>image.id===imageId)!;
+    });
+  }
+  reviewImage(p: Principal,id: string,imageId: string,status: 'approved'|'rejected') {
+    this.requireAdmin(p);
+    return this.transaction(()=>{
+      this.imageMaterial(p,id);
+      const row=this.db.prepare('SELECT * FROM image_associations WHERE tenant=? AND material_id=? AND id=?').get(p.tenant,id,imageId);
+      if (!row) throw new ApiError(404,'Image association not found.');
+      if (row.status===status) return this.mapImage(row);
+      if (row.status==='rejected' && status==='approved') throw new ApiError(409,'Rejected associations cannot be silently reapproved. Upload a different reviewed image.');
+      if (status==='approved') {
+        this.imageMaterial(p,id,true);
+        const replaced=this.db.prepare("SELECT id FROM image_associations WHERE tenant=? AND material_id=? AND status='approved'").all(p.tenant,id);
+        this.db.prepare("UPDATE image_associations SET status='rejected',reviewer=?,reviewed_at=? WHERE tenant=? AND material_id=? AND status='approved'").run(p.oid,now(),p.tenant,id);
+        for (const old of replaced) this.audit(p,'image.replaced',String(old.id));
+      }
+      this.db.prepare('UPDATE image_associations SET status=?,reviewer=?,reviewed_at=? WHERE tenant=? AND material_id=? AND id=?').run(status,p.oid,now(),p.tenant,id,imageId);
+      this.audit(p,`image.${status}`,imageId);
+      return this.listImages(p,id).find(image=>image.id===imageId)!;
     });
   }
   listImports(p: Principal) {

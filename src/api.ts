@@ -41,3 +41,19 @@ export async function downloadCatalog() {
   const link = document.createElement('a'); link.href = url; link.download = 'etalonops-catalog.csv'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+export type ImageRecord = { id: string; materialId: string; contentHash: string; sourceUrl: string; rightsBasis: string; status: 'pending'|'approved'|'rejected'; reviewer: string|null; reviewedAt: string|null };
+export async function imageBlob(path: string) {
+  const response=await fetch(`/api${path}`,{headers:{Authorization:`Bearer ${await accessToken()}`}});
+  if(!response.ok)throw new Error('Product image unavailable.');
+  return response.blob();
+}
+export async function uploadProductImage(id: string,file: File,sourceUrl: string,rightsBasis: string) {
+  const encodedSource=encodeURIComponent(sourceUrl),encodedRights=encodeURIComponent(rightsBasis);
+  if(encodedSource.length+encodedRights.length>8000)throw new Error('Shorten the source evidence URL or usage-rights description before uploading.');
+  const response=await fetch(`/api/admin/materials/${id}/images`,{method:'POST',headers:{Authorization:`Bearer ${await accessToken()}`,'Content-Type':file.type||'application/octet-stream','x-image-source-url':encodedSource,'x-image-rights-basis':encodedRights},body:file});
+  const value=await response.json();if(!response.ok)throw new Error(value.error??'Image upload failed.');return value as {image:ImageRecord};
+}
+
+export type AIStatus={enabled:boolean;discoveryAvailable:boolean;limits:{monthlySessions:number;monthlyRequests:number;sessionRequests:number;userDailyRequests:number}};
+export type AIClarification={summary:string;description:string;reply:string;question:string|null;source:'ai';discoveryAvailable:false};

@@ -58,7 +58,7 @@ export function lookupContext(description: string, turns: LookupTurn[], choice =
   const reply = question
     ? `${summary ? `Retained: ${summary}. ` : ''}${question} You can say “not sure” to leave it unspecified.`
     : `Your details are retained${summary ? `: ${summary}` : ''}. ${unspecified.size ? 'Unspecified details will stay unspecified. ' : ''}Live product discovery is not connected. Use My Description to keep your request without inventing a product match.`;
-  return { facts, question, reply };
+  return { facts, question, reply, unspecified: [...unspecified] };
 }
 export function fallbackDescription(description: string, turns: LookupTurn[]) {
   const details = turns.filter(t => t.author === 'user').map(t => t.text.trim()).filter(Boolean);

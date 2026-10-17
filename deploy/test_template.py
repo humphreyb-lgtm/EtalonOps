@@ -36,6 +36,7 @@ class DeploymentScope(unittest.TestCase):
         self.assertTrue(app['properties']['httpsOnly'])
         settings={x['name']:x['value'] for x in app['properties']['siteConfig']['appSettings']}
         self.assertEqual(settings['ETALONOPS_AI_ENABLED'],'false')
+        self.assertEqual(settings['ETALONOPS_STORAGE_ACCOUNT'],'etalonopstest')
         self.assertNotIn('password',json.dumps(template).lower())
         blob=by_type['Microsoft.Storage/storageAccounts']['properties']
         self.assertFalse(blob['allowSharedKeyAccess'])

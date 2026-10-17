@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cloudConfig } from './cloud-config';
 
-const valid = { ETALONOPS_AUTH_MODE: 'entra', ETALONOPS_TENANT_ID: '11111111-1111-4111-8111-111111111111', ETALONOPS_CLIENT_ID: '22222222-2222-4222-8222-222222222222', ETALONOPS_SQL_HOST: 'etalonops-example.database.windows.net', ETALONOPS_AI_ENABLED: 'false' };
+const valid = { ETALONOPS_STORAGE_ACCOUNT: 'etalonopstest', ETALONOPS_AUTH_MODE: 'entra', ETALONOPS_TENANT_ID: '11111111-1111-4111-8111-111111111111', ETALONOPS_CLIENT_ID: '22222222-2222-4222-8222-222222222222', ETALONOPS_SQL_HOST: 'etalonops-example.database.windows.net', ETALONOPS_AI_ENABLED: 'false' };
 test('cloud runtime fails closed without explicit Entra, Azure SQL and disabled-AI configuration', () => {
   for (const name of Object.keys(valid)) {
     const env: NodeJS.ProcessEnv = { ...valid }; delete env[name];

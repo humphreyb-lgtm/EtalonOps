@@ -16,15 +16,25 @@ function oneEditApart(a: string, b: string): boolean {
   }
   return edits + (a.length - i) + (b.length - j) <= 1;
 }
+function terms(value: string) {
+  return normalize(value.normalize('NFKC').replace(/[⁄∕]/g,'/')).replace(/\bsch\.?\s*(\d+)\b/g,'schedule $1')
+    .replace(/\bemt\b/g,'electrical metallic tubing').replace(/\bgalv\b/g,'galvanized')
+    .replace(/\bblk\b/g,'black').replace(/\bwht\b/g,'white')
+    .replace(/\bself[ -]?tappers?\b/g,'self tapping screws');
+}
 export function score(query: string, phrase: string): number {
-  const q = normalize(query), p = normalize(phrase);
-  if (!q || !p) return 0;
-  if (q === p) return 100;
-  // Numeric sizes/threads are constraints, never fuzzy product identifiers.
-  const numbers = q.match(/\b\d+(?:[./-]\d+)?\b/g) ?? [];
-  const productNumbers: string[] = p.match(/\b\d+(?:[./-]\d+)?\b/g) ?? [];
-  if (numbers.some(n => !productNumbers.includes(n))) return 0;
-  const tokens = q.split(' '), words = p.split(' ');
-  const hits = tokens.filter(token => words.some(word => token === word || (token.length >= 5 && word.length >= 5 && oneEditApart(token, word)))).length;
-  return hits === tokens.length ? 85 : 0;
+  const cleanQuery=query.replace(/^(?:i need|i am looking for|looking for|please get me)\s+(?:(?:some|a|an)\s+)?/i,'').replace(/\s+please[.!]?$/i,'');
+  const q=terms(cleanQuery),p=terms(phrase);
+  if(!q||!p)return 0;
+  // A reviewed #8 alias is not interchangeable with an 8-inch dimension.
+  const tagged=cleanQuery.match(/#\d+(?![\d-])/g)??[];
+  if(tagged.some(tag=>!new RegExp(`${tag}(?![\\d-])`,'i').test(phrase)))return 0;
+  const numbers=q.match(/\d+(?:[./-]\d+)*/g)??[];
+  const productNumbers: string[]=p.match(/\d+(?:[./-]\d+)*/g)??[];
+  if(numbers.some(number=>!productNumbers.includes(number)))return 0;
+  if(normalize(cleanQuery)===normalize(phrase))return 100;
+  if(q===p)return 90;
+  const tokens=q.split(' '),words=p.split(' ');
+  const hits=tokens.filter(token=>words.some(word=>token===word||(/^[a-z]{5,}$/.test(token)&&/^[a-z]{5,}$/.test(word)&&oneEditApart(token,word)))).length;
+  return hits===tokens.length?85:0;
 }
