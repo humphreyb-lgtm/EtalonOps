@@ -2,13 +2,12 @@ import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { parse } from 'csv-parse/sync';
 import { stringify } from 'csv-stringify/sync';
-import { ApiError, csvColumns, importRow, type DraftBody, type ImportRow, type Principal } from './contracts';
+import { ApiError, csvColumns, type DraftBody, type ImportRow, type Principal } from './contracts';
 import { normalize, score } from './search';
 
 type Row = Record<string, SQLInputValue>;
-type Report = { rows: number; errors: { row: number; message: string }[]; kind: string };
+import { parseCatalog, type Report } from './catalog';
 const hash = (data: string) => createHash('sha256').update(data).digest('hex');
 const now = () => new Date().toISOString();
 export class Store {
@@ -23,6 +22,8 @@ export class Store {
     const applied = this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=1').get();
     if (applied?.checksum !== hash(migration)) throw new Error('Applied migration checksum changed. Create a new migration instead.');
   }
+  engine = 'SQLite local development';
+  health() { this.db.prepare('SELECT 1').get(); }
   transaction<T>(work: () => T): T {
     this.db.exec('BEGIN IMMEDIATE');
     try { const result = work(); this.db.exec('COMMIT'); return result; } catch (error) { this.db.exec('ROLLBACK'); throw error; }
@@ -99,48 +100,12 @@ export class Store {
         provenance: { sourceUrl: details.row.source_url, verificationBasis: details.row.verification_basis, datasetKind: material.dataset_kind } };
     }).filter(item => item.score >= 85).sort((a, b) => b.score - a.score || String(a.description).localeCompare(String(b.description))).slice(0, 10);
   }
-  parseImport(file: string) {
-    const rows: ImportRow[] = [], errors: Report['errors'] = [];
-    let records: Record<string, string>[];
-    try {
-      records = parse(file, { bom: true, columns: header => {
-        if (header.length !== csvColumns.length || new Set(header).size !== header.length || csvColumns.some(name => !header.includes(name))) throw new Error('CSV headers must exactly match the v1 contract.');
-        return header;
-      }, skip_empty_lines: true, max_record_size: 25000 });
-    } catch { return { rows, report: { rows: 0, kind: '', errors: [{ row: 1, message: 'Malformed CSV or invalid header.' }] } }; }
-    if (!records.length || records.length > 1000) errors.push({ row: 1, message: 'Import must contain 1–1000 records.' });
-    const keys = new Set<string>(), aliasOwners = new Map<string, string>();
-    records.forEach((record, i) => {
-      try {
-        // Reversible spreadsheet escaping on export; accept only our convention.
-        for (const key of Object.keys(record)) if (/^'[\t\r\n =+@\-']/.test(record[key])) record[key] = record[key].slice(1);
-        const row = importRow.parse(record);
-        if (keys.has(row.external_key)) throw new Error('Duplicate external_key.');
-        keys.add(row.external_key);
-        const list = JSON.parse(row.aliases_json), specs = JSON.parse(row.specifications_json), conversion = JSON.parse(row.conversion_basis_json);
-        if (!Array.isArray(list) || !list.length || list.length > 50 || !list.every(a => typeof a === 'string' && a.trim() && a.length <= 200)) throw new Error('Aliases must be a nonempty JSON string array.');
-        if (!Array.isArray(specs) || specs.length > 30 || !specs.every(s => typeof s === 'string' && s.length <= 500)) throw new Error('Specifications must be a JSON string array.');
-        // Conversions require a future reviewed structured contract. Never infer them.
-        if (conversion !== null) throw new Error('CSV v1 supports null conversion basis only; no conversions are inferred.');
-        if (row.dataset_kind === 'reviewed' && !/^https:\/\//.test(row.source_url)) throw new Error('Reviewed records require an HTTPS evidence URL.');
-        if (row.source_url && new URL(row.source_url).protocol !== 'https:') throw new Error('Source URL must be HTTPS.');
-        for (const alias of list) {
-          if (!normalize(alias)) throw new Error('Aliases must contain searchable text.');
-          const key = `${normalize(alias)}|${row.requested_uom}`;
-          if (aliasOwners.has(key) && aliasOwners.get(key) !== row.external_key) throw new Error('Ambiguous alias within this file.');
-          aliasOwners.set(key, row.external_key);
-        }
-        rows.push(row);
-      } catch (error) { errors.push({ row: i + 2, message: error instanceof Error && !('issues' in error) ? error.message : 'Invalid fields or unit.' }); }
-    });
-    const kinds = new Set(rows.map(row => row.dataset_kind));
-    if (kinds.size > 1) errors.push({ row: 1, message: 'Do not mix fixtures and reviewed records in one batch.' });
-    return { rows, report: { rows: records.length, errors, kind: rows[0]?.dataset_kind ?? '' } };
-  }
+  parseImport(file: string) { return parseCatalog(file); }
+
   conflicts(p: Principal, rows: ImportRow[]) {
     const errors: Report['errors'] = [];
     rows.forEach((row, i) => {
-      if (this.db.prepare('SELECT 1 FROM materials WHERE tenant=? AND external_key=?').get(p.tenant, row.external_key)) errors.push({ row: i + 2, message: 'Existing external key: updates require a separate reviewed correction.' });
+      if (this.db.prepare('SELECT 1 FROM materials WHERE tenant=? AND external_key=? COLLATE NOCASE').get(p.tenant, row.external_key)) errors.push({ row: i + 2, message: 'Existing external key: updates require a separate reviewed correction.' });
       for (const alias of JSON.parse(row.aliases_json)) if (this.db.prepare('SELECT 1 FROM aliases a JOIN materials m ON a.material_id=m.id WHERE m.tenant=? AND a.normalized=? AND a.requested_uom=? AND m.active=1').get(p.tenant, normalize(alias), row.requested_uom)) errors.push({ row: i + 2, message: 'Alias conflicts with an active material.' });
     });
     return errors;

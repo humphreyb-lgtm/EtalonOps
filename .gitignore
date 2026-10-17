@@ -9,3 +9,4 @@ test-results/
 .DS_Store
 .runtime/
 artifacts/*.zip
+__pycache__/

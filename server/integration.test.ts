@@ -75,6 +75,7 @@ test('CSV rejects duplicates, malformed units/JSON, guessed conversions and unsa
     assert.ok(reportFor({ ...rows[0], dataset_kind: 'reviewed', source_url: '' }).errors.length);
     assert.ok(reportFor({ ...rows[0], source_url: 'javascript:alert(1)' }).errors.length);
     assert.ok(store.parseImport(stringify([rows[0], rows[0]], { header: true })).report.errors.some(e => e.message.includes('Duplicate')));
+    assert.ok(store.parseImport(stringify([rows[0], { ...rows[0], external_key: rows[0].external_key.toUpperCase() }], { header: true })).report.errors.some(e => e.message.includes('Duplicate')));
     const csv = stringify([{ ...rows[0], manufacturer: '=1+1' }], { header: true });
     const preview = store.previewImport(admin, csv);
     store.applyImport(admin, String(preview.id), 'I reviewed this batch', true);

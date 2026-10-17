@@ -14,7 +14,11 @@
     "api": "tsx server/main.ts",
     "test:server": "tsx --test server/*.test.ts",
     "catalog": "tsx scripts/catalog.ts",
-    "db:backup": "tsx scripts/backup.ts"
+    "db:backup": "tsx scripts/backup.ts",
+    "sql:prepare": "python scripts/sql-local.py && tsx scripts/sql-init.ts && tsx scripts/sql-init.ts --tests",
+    "test:sql": "tsx --test server/sql.integration.ts",
+    "test:browser:sql": "ETALONOPS_TEST_DB_ENGINE=sqlserver playwright test",
+    "sql:recovery-check": "tsx scripts/sql-recovery-check.ts"
   },
   "engines": {
     "node": ">=24.0.0"
@@ -27,6 +31,7 @@
     "helmet": "^8.3.0",
     "jose": "^6.2.12",
     "lucide-react": "^0.468.0",
+    "mssql": "^12.7.9",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "zod": "^4.6.7"
@@ -35,6 +40,7 @@
     "@axe-core/playwright": "^4.10.2",
     "@playwright/test": "^1.56.0",
     "@types/express": "^5.0.6",
+    "@types/mssql": "^12.3.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

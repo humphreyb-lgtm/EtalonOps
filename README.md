@@ -1,6 +1,6 @@
 # EtalonOps — MRF Builder
 
-MRF Builder proof of concept based on the approved V2 handoff. **Frontend visuals approved; local database/API implementation available.** No Azure resources or DNS records have been changed. See [local persistence, import tools and validation limits](docs/DATABASE_MILESTONE.md).
+MRF Builder proof of concept based on the approved V2 handoff. **Frontend visuals approved; local SQL Server and SQLite implementations tested.** No Azure resources or DNS records have been changed. See [SQL Server setup/validation](docs/SQL_SERVER_MILESTONE.md), [import tools](docs/DATABASE_MILESTONE.md), and [verified retail pricing](docs/COST_UPDATE.md).
 
 ## Try the preview
 
@@ -48,4 +48,4 @@ npm audit --cache /workspace/.cache/npm
 
 The three provided screenshots all depict the clarification conversation despite their filenames. The interface follows their shared shell and styling; additional result and populated-item states follow the written requirements. The written refinements take precedence: sharp 2–4 px corners, thin dividers, compact panel gaps, no large colored banners, and practical phone controls.
 
-Desktop/mobile visual approval was received. Local SQLite persistence, draft ownership checks, deterministic translator search and admin import APIs are implemented. Actual Microsoft sign-in, the SQL Server adapter/engine tests, live AI, image administration and Azure deployment remain pending. Paid provisioning requires a verified quote and separate approval; DNS requires its own approval. The downloaded HTML remains the standalone demo, not the local database application.
+Desktop/mobile visual approval was received. Both local SQL Server and SQLite persistence, draft ownership checks, deterministic translator search and admin import APIs are implemented and tested. Actual Microsoft sign-in, live AI, image administration and Azure deployment remain pending. Paid provisioning requires a subscription-specific quote and separate approval; DNS requires its own approval. The downloaded HTML remains the standalone demo, not the database application.

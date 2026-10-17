@@ -1,7 +1,6 @@
--- Proposed Azure SQL / SQL Server migration. NOT engine-validated in this cloud
--- environment: the official SQL Server image download is blocked by egress policy.
--- This is not a runnable Azure deployment or a tested SQL Server repository adapter.
--- Apply only through an approved migration identity after review and engine tests.
+-- SQL Server / Azure SQL schema. Engine-validation evidence is recorded in docs.
+-- Local engine tests do not establish an Azure deployment or managed identity.
+-- Run through a migration identity; the runtime application cannot execute DDL.
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
 IF OBJECT_ID('dbo.schema_migrations') IS NULL
@@ -18,7 +17,7 @@ CREATE TABLE dbo.memberships(
 CREATE TABLE dbo.import_batches(
   id uniqueidentifier PRIMARY KEY, tenant nvarchar(64) NOT NULL, hash char(64) NOT NULL,
   state varchar(16) NOT NULL CHECK(state IN ('preview','applied','rolled_back')),
-  file nvarchar(max) NOT NULL, report nvarchar(max) NOT NULL CHECK(ISJSON(report)=1),
+  [file] nvarchar(max) NOT NULL, report nvarchar(max) NOT NULL CHECK(ISJSON(report)=1),
   reviewer nvarchar(64), approved_at datetime2, CONSTRAINT UQ_batch_hash UNIQUE(tenant,hash)
 );
 CREATE TABLE dbo.materials(

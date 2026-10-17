@@ -319,7 +319,7 @@ export default function App() {
 
     <main id="main" className="workspace" tabIndex={-1} inert={databaseBusy || undefined} aria-busy={databaseBusy}>
       <div className="page-heading"><h1>MRF Builder</h1><span className="demo-badge">Local preview</span></div>
-      <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{databaseMode ? 'Local database demo · SQLite · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
+      <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{databaseMode ? 'Local database demo · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
       <section className="panel draft-header" aria-label="MRF header">
         <div className="foreman"><span className="header-icon"><span className="person-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="7" r="3.2" /><path d="M4.5 20v-2a7.5 7.5 0 0 1 15 0v2z" /></svg></span></span><div><span className="field-caption">Foreman</span><strong>{databaseMode ? localIdentity : 'Demo foreman'}</strong></div></div>
         <div className="header-date"><label htmlFor="delivery-date" className="field-caption">MRF Delivery Date</label><input id="delivery-date" type="date" required value={draft.deliveryDate} onChange={event => { if (event.target.value) changeDraft(current => ({ ...current, deliveryDate: event.target.value })); }} /><span className="sr-only">Default for items using the MRF date</span></div>

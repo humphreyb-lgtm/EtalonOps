@@ -1,5 +1,7 @@
 # Local database and translator milestone
 
+**Update:** the publication/access blocker below was subsequently resolved. SQL Server schema, repository, TLS, permissions, browser integration and recovery have now been validated locally; see [SQL Server milestone](SQL_SERVER_MILESTONE.md). The SQLite results and original blocker details below are retained as milestone history.
+
 The owner approved the desktop/mobile screenshots and authorized implementation of persistence and the translator. The approved layout is retained. Azure provisioning, financial commitments and DNS remain unapproved.
 
 ## What runs now

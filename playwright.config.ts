@@ -1,5 +1,6 @@
 import { defineConfig } from '@playwright/test';
 import { existsSync } from 'node:fs';
+const engine = process.env.ETALONOPS_TEST_DB_ENGINE === 'sqlserver' ? 'sqlserver' : 'sqlite';
 
 export default defineConfig({
   testDir: './tests',
@@ -18,7 +19,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: [{
-    command: 'ETALONOPS_AUTH_MODE=local ETALONOPS_PORT=3002 ETALONOPS_DB_PATH=.runtime/playwright.sqlite npm run api',
+    command: `ETALONOPS_AUTH_MODE=local ETALONOPS_DB_ENGINE=${engine} ETALONOPS_SQL_DATABASE=EtalonOpsSqlTests ETALONOPS_PORT=3002 ETALONOPS_DB_PATH=.runtime/playwright.sqlite npm run api`,
     url: 'http://127.0.0.1:3002/api/health',
     reuseExistingServer: false,
     timeout: 30_000,

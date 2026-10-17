@@ -2,6 +2,8 @@
 
 Status: architecture/security direction and the local frontend milestone approved in chat. Paid Azure provisioning and DNS remain unapproved. Prepared October 17, 2026.
 
+**Current update:** [verified pricing](COST_UPDATE.md) supersedes the original unverified allowances below. [SQL Server validation](SQL_SERVER_MILESTONE.md) records the now-tested local Microsoft database adapter; actual Azure/Entra deployment remains pending.
+
 This document records the original architecture proposal. The local frontend has since been implemented; see VISUAL_REVIEW.md for current evidence. No application has been deployed to Azure, no billable resources have been provisioned, and no DNS has been changed. Backend and cloud capabilities below remain proposed.
 
 ## Evidence and scope
