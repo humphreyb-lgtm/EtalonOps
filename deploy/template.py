@@ -10,7 +10,7 @@ def add(resource_type, api, name, properties=None, **extra):
     if properties is not None:
         r['properties'] = properties
     resources.append(r)
-    return f"[resourceId('{resource_type}', '{name}')]"
+    return "[resourceId(" + ", ".join(repr(v) for v in [resource_type, *name.split("/")]) + ")]"
 loc = 'eastus'
 logs = add('Microsoft.OperationalInsights/workspaces', '2023-09-01', state['logsName'], {'sku': {'name': 'PerGB2018'}, 'retentionInDays': 30, 'workspaceCapping': {'dailyQuotaGb': 0.1}, 'features': {'enableLogAccessUsingOnlyResourcePermissions': True}}, location=loc)
 insights = add('Microsoft.Insights/components', '2020-02-02', state['insightsName'], {'Application_Type': 'web', 'WorkspaceResourceId': logs}, location=loc, kind='web', dependsOn=[logs])

@@ -15,6 +15,18 @@ class DeploymentScope(unittest.TestCase):
         resources=template['resources']
         by_type={r['type']:r for r in resources}
         self.assertEqual(len(resources),13)
+        # Azure requires one name argument per resource-type segment, including
+        # nested SQL databases and Blob services used by dependency expressions.
+        import ast
+        for resource in resources:
+            for expression in resource.get('dependsOn',[]):
+                args=ast.literal_eval('['+expression.removeprefix('[resourceId(').removesuffix(')]')+']')
+                self.assertEqual(len(args)-1,len(args[0].split('/'))-1,expression)
+                self.assertTrue(all('/' not in name for name in args[1:]),expression)
+        retention=by_type['Microsoft.Sql/servers/databases/backupShortTermRetentionPolicies']
+        self.assertEqual(retention['dependsOn'],["[resourceId('Microsoft.Sql/servers/databases', 'test-sql', 'EtalonOps')]"])
+        container=by_type['Microsoft.Storage/storageAccounts/blobServices/containers']
+        self.assertEqual(container['dependsOn'],["[resourceId('Microsoft.Storage/storageAccounts/blobServices', 'etalonopstest', 'default')]"])
         self.assertEqual(by_type['Microsoft.Web/serverfarms']['sku']['name'],'B1')
         self.assertEqual(by_type['Microsoft.Web/serverfarms']['sku']['capacity'],1)
         self.assertEqual(by_type['Microsoft.Sql/servers/databases']['sku']['name'],'Basic')
