@@ -1,3 +1,5 @@
+import type {ProductResearchProvider} from './azure-research';
+import type {ResearchSource} from './research-source';
 import express from 'express';
 import helmet from 'helmet';
 import { readFileSync } from 'node:fs';
@@ -7,7 +9,7 @@ import type { AIProvider } from './ai-provider';
 import type { ImageAssets } from './image-assets';
 import type { Repository } from './repository';
 
-export function createCloudApp(store: Repository, config: { tenant: string; clientId: string }, hostname: string, services: { images?: ImageAssets; ai?: AIProvider } = {}) {
+export function createCloudApp(store: Repository, config: { tenant: string; clientId: string }, hostname: string, services: { images?: ImageAssets; ai?: AIProvider; research?:ProductResearchProvider; researchSourceLoader?:(url:string)=>Promise<ResearchSource> } = {}) {
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1); // App Service's single front-end hop; rate limit still uses authenticated API guards.

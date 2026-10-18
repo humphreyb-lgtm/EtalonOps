@@ -40,7 +40,7 @@ export function* researchAction(p:Principal,data:unknown,apply=false):Operation<
 /** Persist chosen research as unpublished records; this does not invoke AI or publish facts. */
 export function* stageResearch(p:Principal,data:unknown):Operation<any>{
  if(!p.roles.includes('Admin'))throw new ApiError(403,'Administrator role required.');
- const input=z.object({results:researchResults,searchPhrase:z.string().trim().max(500).default('')}).strict().parse(data);
+ const input=z.object({results:researchResults,searchPhrase:z.string().trim().max(500).default(''),images:z.array(z.object({manufacturer:z.string(),partNumber:z.string(),sourceUrl:z.url()})).max(5).default([])}).strict().parse(data);
  const preview=yield* researchAction(p,{results:input.results});
  const items:InboxItem[]=[],materials=new Set<string>(),phrases=new Set<string>();
  const append=(kind:InboxItem['kind'],fields:Record<string,string>)=>items.push({id:randomUUID(),kind,sheet:'AI research '+kind,row:items.length+2,fields:{kind,...fields},state:'unpublished'});
@@ -56,5 +56,6 @@ export function* stageResearch(p:Principal,data:unknown):Operation<any>{
    append('translation',{materialKey,phrase,origin:'ai_generated',sourceUrl:item.sourceUrl});
   }
  });
+ for(const image of input.images){const index=input.results.items.findIndex(item=>item.manufacturer===image.manufacturer&&item.partNumber===image.partNumber);if(index<0)throw new ApiError(400,'Image does not belong to a selected product.');append('image',{materialKey:preview.summaries[index].materialKey,manufacturer:image.manufacturer,partNumber:image.partNumber,sourceUrl:image.sourceUrl,rightsBasis:'Owner-managed image usage; imported from selected manufacturer-page AI research.'});}
  return yield* inboxAction(p,'inbox-stage',{filename:'Product research — '+(input.results.scope.trim()||'selected products').slice(0,160),research:{scope:input.results.scope,coverageNotes:input.results.coverageNotes,searchPhrase:input.searchPhrase},items});
 }

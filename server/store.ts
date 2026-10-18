@@ -1,3 +1,5 @@
+import {selectResearchedProduct} from './research-selection';
+import {researchLedger} from './research-ledger';
 import { listSavedDrafts } from './draft-list';
 import type { DraftFilters } from '../src/draft-filters';
 import { submissions,submissionLabel } from './submissions';
@@ -124,6 +126,8 @@ export class Store {
   submissions(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(submissions(p,action,data)));}
   admit(p:Principal,localBootstrap=false){return this.transaction(()=>this.catalogRun(admitUser(p,localBootstrap)));}
   users(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(userAccess(p,action,data)));}
+  selectResearch(p:Principal,data:unknown){return this.transaction(()=>this.catalogRun(selectResearchedProduct(p,data)));}
+  paidResearch(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(researchLedger(p,action,data)));}
   catalogCommand(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(catalogAction(p,action,data)));}
   search(p:Principal,query:string,projectId?:string){return this.catalogRun(searchCatalog(p,query,projectId));}
   parseImport(file: string) { return parseCatalog(file); }

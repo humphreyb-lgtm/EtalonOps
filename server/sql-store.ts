@@ -1,3 +1,5 @@
+import {selectResearchedProduct} from './research-selection';
+import {researchLedger} from './research-ledger';
 import { listSavedDrafts } from './draft-list';
 import type { DraftFilters } from '../src/draft-filters';
 import { submissions,submissionLabel } from './submissions';
@@ -125,6 +127,8 @@ export class SqlStore implements Repository {
   async submissions(p:Principal,action:string,data:unknown){return this.transaction(async tx=>{const id=(data as {draftId?:unknown})?.draftId;if((action==='review'||action==='submit')&&typeof id==='string')await tx.getDraft(p,id);return tx.catalogRun(submissions(p,action,data));});}
   async admit(p:Principal,localBootstrap=false){return this.transaction(tx=>tx.catalogRun(admitUser(p,localBootstrap)));}
   async users(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(userAccess(p,action,data)));}
+  async selectResearch(p:Principal,data:unknown){return this.transaction(tx=>tx.catalogRun(selectResearchedProduct(p,data)));}
+  async paidResearch(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(researchLedger(p,action,data)));}
   async catalogCommand(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(catalogAction(p,action,data)));}
   async search(p:Principal,query:string,projectId?:string){return this.catalogRun(searchCatalog(p,query,projectId));}
   async conflicts(p: Principal, rows: ImportRow[]) {

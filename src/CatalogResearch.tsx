@@ -1,3 +1,4 @@
+import {LiveResearch} from './LiveResearch';
 import {formatInchText} from './measurements';
 import {useState} from 'react';
 import {request} from './api';
@@ -14,8 +15,9 @@ export function CatalogResearch(){
  function results():ResearchResults{return researchResults.parse({scope,coverageNotes:coverage,items:rows.filter(row=>row.selected).map(({id:_id,selected:_selected,...item})=>item)});}
  async function run(fn:()=>Promise<void>){setBusy(true);setError('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'Unable to complete the catalog operation.');}finally{setBusy(false);}}
  const selected=rows.filter(row=>row.selected).length;
- return <section aria-label="Product research review" aria-busy={busy}><h3>Product research and review</h3><p>Research one part or a manufacturer product family, then select and edit the products to add. All additions remain provisional. Images are handled separately.</p>
- <p role="status">Live AI research is disabled. No manufacturer websites or paid AI services are contacted. You can review research prepared elsewhere now.</p>
+ return <section aria-label="Product research review" aria-busy={busy}><h3>Product research and review</h3><p>Research one part or a manufacturer product family, then select and edit the products to add. All additions remain provisional. Live results can include source images; the prepared JSON workflow handles images separately.</p>
+ <LiveResearch/>
+ <p role="status">The prepared-research workflow below does not invoke AI. Load research prepared elsewhere, or use the live panel above when configured.</p>
  <fieldset disabled={busy} className="catalog-fields"><legend>Research request</legend><label>Manufacturer, part number, product link or family request<textarea value={scope} maxLength={2000} onChange={e=>{setScope(e.target.value);invalidate();}} placeholder="Find CANTEX Schedule 40 PVC conduit, including sizes, lengths and end connections."/></label><button className="button" disabled title="Requires approval of a research provider and any usage charges">Research manufacturer products</button><button className="button" disabled={!scope.trim()} onClick={()=>download('EtalonOps-product-research-instructions.txt',researchBrief(scope))}>Download research instructions</button>
  <label>Load prepared research JSON<input type="file" accept=".json,application/json" onChange={e=>{const file=e.target.files?.[0];if(file)void run(async()=>{if(file.size>800000)throw Error('Use a research file smaller than 800 KB.');const value=researchDraftResults.parse(JSON.parse(await file.text()));setRows(value.items.map(item=>({...item,id:crypto.randomUUID(),selected:false})));setScope(value.scope);setCoverage(value.coverageNotes);invalidate();setNotice(`Loaded ${value.items.length} candidates. Select only the products you want to add.`);});e.target.value='';}}/></label>
  <label>Original search phrase (optional)<input value={searchPhrase} maxLength={500} onChange={e=>setSearchPhrase(e.target.value)} placeholder="The phrase that led you to these selected products"/></label>

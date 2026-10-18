@@ -1,3 +1,4 @@
+import {LiveResearch} from './LiveResearch';
 import {formatInchText,formatSpecification} from './measurements';
 import { draftFilterError,type DraftFilters } from './draft-filters';
 import { AdminWorkspace } from './AdminWorkspace';
@@ -97,6 +98,7 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [message, setMessage] = useState('');
   const [aiEnabled,setAIEnabled] = useState(false);
+  const [researchEnabled,setResearchEnabled]=useState(false);
   const [aiBusy,setAIBusy] = useState(false);
   const [aiError,setAIError] = useState('');
   const [aiWording,setAIWording] = useState('');
@@ -160,9 +162,10 @@ export default function App() {
   useEffect(() => {
     if (!databaseMode) return;
     let cancelled = false;
+    request<{enabled:boolean}>('/research/status').then(status=>{if(!cancelled)setResearchEnabled(status.enabled);}).catch(()=>{});
     request<AIStatus>('/lookup/status').then(status=>{if(!cancelled)setAIEnabled(status.enabled);}).catch(()=>{});
     readDatabaseDraft(projectId,new URLSearchParams(window.location.search).get('draft')??undefined).then(saved => {
-      if (!cancelled) { if(saved&&saved.projectId!==projectId)throw new Error('This draft belongs to another project. Choose its project before opening it.');setDraft(saved ?? freshDraft(projectId));if(saved)setDraftAddress(projectId,saved.id); setAnnouncement(cloudMode ? (saved ? 'Draft restored from Azure SQL.' : 'Azure SQL ready. AI discovery is disabled.') : saved ? 'Draft restored from the local database.' : 'Local database ready. Fixture catalog; test session only.'); }
+      if (!cancelled) { if(saved&&saved.projectId!==projectId)throw new Error('This draft belongs to another project. Choose its project before opening it.');setDraft(saved ?? freshDraft(projectId));if(saved)setDraftAddress(projectId,saved.id); setAnnouncement(cloudMode ? (saved ? 'Draft restored from Azure SQL.' : 'Azure SQL ready. Catalog and configured research tools are available.') : saved ? 'Draft restored from the local database.' : 'Local database ready. Fixture catalog; test session only.'); }
     }).catch(error => { if (!cancelled) setStorageError(error instanceof Error ? error.message : 'Local database unavailable.'); })
       .finally(() => { if (!cancelled) setDatabaseBusy(false); });
     return () => { cancelled = true; };
@@ -204,14 +207,14 @@ export default function App() {
     return true;
   }
 
-  function addLine(candidate: Candidate | null) {
+  function addLine(candidate: Candidate | null,selectedPurchase?:{productId:string;noSubstitutions:boolean}) {
     if (candidate && added.includes(candidate.id)) return;
     if (!candidate && added.includes('description')) return;
     if (!requireEntry()) return;
     const ownDescription = customDescription ?? fallbackDescription(description, messages);
     if (!candidate && (!ownDescription.trim() || ownDescription.length > 2000)) { setEntryError('Your description must contain 1–2000 characters. Edit Description to add before continuing.'); return; }
-    const product=candidate?.products?.find(p=>p.id===(productChoices[candidate.id]??candidate.products?.[0]?.id))??candidate?.products?.[0];
-    const exact=exactFor(candidate?.id??'description'),manual=manualProducts[candidate?.id??'description'];
+    const product=candidate?.products?.find(p=>p.id===(selectedPurchase?.productId??productChoices[candidate.id]??candidate.products?.[0]?.id))??candidate?.products?.[0];
+    const exact=selectedPurchase?.noSubstitutions??exactFor(candidate?.id??'description'),manual=manualProducts[candidate?.id??'description'];
     const manufacturer=product?.manufacturer??manual?.manufacturer.trim()??'',partNumber=product?.partNumber??manual?.partNumber.trim()??'';
     if((exact&&(!manufacturer||!partNumber))||Boolean(manufacturer)!==Boolean(partNumber)){setEntryError('No Substitutions requires an exact manufacturer and part number. Choose a manufacturer product or enter both fields.');return;}
     const line: Line = {
@@ -399,7 +402,7 @@ export default function App() {
 
     <main id="main" className="workspace" tabIndex={-1} inert={(databaseBusy||aiBusy) || undefined} aria-busy={databaseBusy||aiBusy}>
       <div className="page-heading"><h1>MRF Builder</h1><AdminWorkspace /><CatalogAdmin /><UserAdmin /><span className="demo-badge">{cloudMode ? 'Cloud pilot' : 'Local preview'}</span></div>
-      <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{cloudMode ? (aiEnabled ? 'Microsoft sign-in · Azure SQL · AI clarification enabled · external search disabled · example projects.' : 'Microsoft sign-in · Azure SQL · AI discovery disabled · example projects.') : databaseMode ? 'Local database demo · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
+      <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{cloudMode ? (researchEnabled ? 'Microsoft sign-in · Azure SQL · AI manufacturer-page research · example projects.' : aiEnabled ? 'Microsoft sign-in · Azure SQL · AI clarification enabled · external search disabled · example projects.' : 'Microsoft sign-in · Azure SQL · AI discovery disabled · example projects.') : databaseMode ? 'Local database demo · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
       <section className="panel draft-tools" aria-label="Draft identification"><label htmlFor="mrf-name">MRF name<input id="mrf-name" readOnly={Boolean(draft.submitted)} required maxLength={120} value={draft.name??'Saved MRF'} placeholder="e.g. Level 2 Rough-In" onChange={event=>changeDraft(current=>({...current,name:event.target.value}))}/></label><div className="catalog-actions"><button className="button" onClick={()=>chooseDraft({kind:'new'})}>New MRF</button><button className="button" onClick={()=>void showDrafts()}>My Drafts</button></div></section>
       {draftListOpen&&draftList&&<section className="panel saved-drafts" aria-label="My Drafts"><div className="section-heading"><h2>My Drafts</h2><button className="button" onClick={()=>setDraftListOpen(false)}>Close draft list</button></div><form className="draft-filters" onSubmit={event=>{event.preventDefault();void showDrafts(1,draftSearch);}}><label>Find saved MRF by name<input maxLength={120} value={draftSearch.text??''} onChange={e=>setDraftSearch(current=>({...current,text:e.target.value}))}/></label><label>Delivery from<input type="date" value={draftSearch.deliveryFrom??''} onChange={e=>setDraftSearch(current=>({...current,deliveryFrom:e.target.value}))}/></label><label>Delivery through<input type="date" value={draftSearch.deliveryTo??''} onChange={e=>setDraftSearch(current=>({...current,deliveryTo:e.target.value}))}/></label><div className="catalog-actions"><button className="button" disabled={databaseBusy}>Filter drafts</button><button className="button" type="button" disabled={databaseBusy} onClick={()=>{setDraftSearch({});void showDrafts(1,{});}}>Clear draft filters</button></div></form>{draftListError&&<p role="alert">{draftListError}</p>}<p>{project.name} · {draftList.total} saved drafts{Object.keys(appliedDraftFilters).length?' matching applied filters':''}</p>{draftList.records.length===0&&<p>No saved drafts match. Clear the filters or save a new MRF for this project.</p>}{draftList.records.map(item=><article key={item.id}><h3>{item.name}</h3><p>{item.itemCount} items · Delivery {formatDate(item.deliveryDate)} · Last saved {new Date(item.savedAt).toLocaleString()}</p><button className="button" onClick={()=>chooseDraft({kind:'open',id:item.id})}>Continue {item.name}</button></article>)}<div className="catalog-actions"><button className="button" disabled={draftList.page<=1} onClick={()=>void showDrafts(draftList.page-1)}>Previous drafts</button><span>Page {draftList.page} of {draftList.pages}</span><button className="button" disabled={draftList.page>=draftList.pages} onClick={()=>void showDrafts(draftList.page+1)}>Next drafts</button></div></section>}
       <section className="panel draft-header" aria-label="MRF header">
@@ -420,7 +423,7 @@ export default function App() {
         {entryError && <p className="entry-error" id="entry-error" role="alert"><AlertCircle size={15} aria-hidden="true" />{entryError}</p>}
       </section>
 
-      {stage === 'idle' && <section className="panel getting-started"><span className="empty-icon"><Search size={23} strokeWidth={1.5} aria-hidden="true" /></span><div><h2>Start with the material you need.</h2><p>{cloudMode ? 'Enter a quantity and description to search your catalog. AI discovery is currently disabled.' : 'Enter a quantity and description. We’ll check the demo catalog first, then help clarify if there’s no match.'}</p><div className="try-search"><span>{cloudMode ? 'Example searches:' : 'Try a demo:'}</span><button onClick={() => { setQuantity('1000'); setDescription('1" PVC'); setUnit(''); resetEntry(); descriptionRef.current?.focus(); }}>1" PVC</button><span aria-hidden="true">·</span><button onClick={() => { setQuantity('200'); setDescription('self tappers'); setUnit('EA'); resetEntry(); descriptionRef.current?.focus(); }}>self tappers</button></div></div></section>}
+      {stage === 'idle' && <section className="panel getting-started"><span className="empty-icon"><Search size={23} strokeWidth={1.5} aria-hidden="true" /></span><div><h2>Start with the material you need.</h2><p>{cloudMode ? (researchEnabled?'Enter a quantity and description to search your catalog. If no match is found, provide a manufacturer page for AI research.':'Enter a quantity and description to search your catalog. AI discovery is currently disabled.') : 'Enter a quantity and description. We’ll check the demo catalog first, then help clarify if there’s no match.'}</p><div className="try-search"><span>{cloudMode ? 'Example searches:' : 'Try a demo:'}</span><button onClick={() => { setQuantity('1000'); setDescription('1" PVC'); setUnit(''); resetEntry(); descriptionRef.current?.focus(); }}>1" PVC</button><span aria-hidden="true">·</span><button onClick={() => { setQuantity('200'); setDescription('self tappers'); setUnit('EA'); resetEntry(); descriptionRef.current?.focus(); }}>self tappers</button></div></div></section>}
 
       {stage === 'verified' && <section className="panel results-panel" aria-label="Translation results"><SectionHeading title="Translation matches" aside={<span className="count-badge">{matches.length} matches</span>}>{databaseMode ? 'Local database matches for “' + searchedDescription + '”. Fixture records are labeled.' : 'Demo verified-match layout for “' + searchedDescription + '”. These are fictional catalog fixtures.'}</SectionHeading>{resultTable(matches)}<div className="panel-footer"><button className="button text-button" onClick={clarify}>None of these is what I want <ArrowRight size={15} aria-hidden="true" /></button><span className="muted">Add a match directly from its row.</span></div></section>}
 
@@ -435,6 +438,7 @@ export default function App() {
           {messages.some(m => m.author === 'user') && <div className="clarification-summary"><label htmlFor="clarified-description">Description to add</label><textarea id="clarified-description" value={customDescription ?? fallbackDescription(description, messages)} onChange={event => setCustomDescription(event.target.value)} rows={3} />{customDescription !== null && <button className="button text-button" onClick={() => setCustomDescription(null)}>Use conversation wording</button>}<span className="muted">Your original entry and these clarification details stay separate from verified catalog facts. You can edit the line after adding it.</span></div>}
           {entryPurchasing(null)}<div className="panel-footer fallback-footer"><span className="muted">Can’t find the right item? Keep your own wording.</span><button className="button" type="button" disabled={added.includes('description')} onClick={() => addLine(null)}>{added.includes('description') ? <Check size={15} aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}{added.includes('description') ? 'Description added' : 'Use My Description'}</button></div>
         </section>
+        {databaseMode&&stage==='clarify'&&<LiveResearch key={projectId+searchedDescription} scope={searchedDescription||description} searchPhrase={searchedDescription||description} projectId={projectId} initialExact={!allowChanges} canAdd={Boolean(unit)&&positiveQuantity(quantity)} onSelect={value=>addLine(value.candidate,{productId:value.productId,noSubstitutions:value.noSubstitutions})}/>}
         {suggestions.length > 0 && <section className="panel results-panel" aria-label="AI suggestions"><SectionHeading title="Suggested materials" aside={<span className="source-tag provisional"><Sparkles size={12} aria-hidden="true" />Mock discovery</span>}>Illustrative candidates only. Live product discovery, sources, and approved photos are not connected.</SectionHeading>{resultTable(suggestions, true)}</section>}
       </>}
 

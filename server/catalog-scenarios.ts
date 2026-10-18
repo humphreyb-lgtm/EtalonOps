@@ -12,6 +12,31 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'successful AI usage settles once and releases the unused reservation while failed calls remain held',run:async store=>{
+ const {admin}=people(),requestId=randomUUID(),id=randomUUID();await store.paidResearch(admin,'reserve',{requestId});assert.equal((await store.paidResearch(admin,'usage',{})).reservedUsd,0.15);
+ const save={id,requestId,actualCostMicroUsd:5000,digest:id.replaceAll('-','').repeat(2),payload:JSON.stringify({cacheKey:'a'.repeat(64),results:{scope:'Synthetic',coverageNotes:'Test only.',items:[]}})};
+ await store.paidResearch(admin,'save',save);let usage=await store.paidResearch(admin,'usage',{});assert.equal(usage.reservedUsd,0.005);assert.equal(usage.heldUsd,0);assert.equal(usage.estimatedSuccessfulUsd,0.005);
+ await assert.rejects(async()=>store.paidResearch(admin,'save',save),/already settled/);await store.paidResearch(admin,'reserve',{requestId:randomUUID()});usage=await store.paidResearch(admin,'usage',{});assert.equal(usage.reservedUsd,0.155);assert.equal(usage.heldUsd,0.15);
+}},
+
+{name:'AI dollar reservations stop at thirty dollars under concurrency and are tenant-scoped',run:async store=>{
+ const {admin,user,foreign}=people(),period=new Date().toISOString().slice(0,7);
+ await assert.rejects(async()=>store.paidResearch(user,'usage',{}),/administrators/);
+ for(let n=0;n<199;n++)await store.audit(admin,'ai.research.reserved',`${period}/${randomUUID()}/150000`);
+ const outcomes=await Promise.allSettled(Array.from({length:4},async()=>store.paidResearch(admin,'reserve',{requestId:randomUUID()})));assert.equal(outcomes.filter(result=>result.status==='fulfilled').length,1);
+ const usage=await store.paidResearch(admin,'usage',{});assert.equal(usage.reservedUsd,30);assert.equal(usage.requests,200);assert.equal((await store.paidResearch(foreign,'usage',{})).requests,0);
+ await assert.rejects(async()=>store.paidResearch(admin,'reserve',{requestId:randomUUID()}),/allowance/);
+}},
+{name:'AI product selection learns source-backed records, images and phrases atomically and reuses generic identity',run:async store=>{
+ const {admin,user}=people();await store.member(admin,'riverside');const key='ai-learn-'+randomUUID();const item={externalKey:key,category:'general',productUnit:'EA',attributes:{type:'Fictional learned item',specification:key},manufacturer:'Fictional Learned Maker',partNumber:key,title:'Fictional AI learning test',sourceUrl:'https://example.invalid/learn',verificationBasis:'Synthetic learning test only; no actual evidence.',phrases:['phrase '+key],imageUrl:'https://example.invalid/learn.png'};
+ const input={eventId:randomUUID(),projectId:'riverside',phrase:'my search '+key,item};
+ await assert.rejects(async()=>store.selectResearch(user,input),/Administrator/);
+ await assert.rejects(async()=>store.selectResearch(admin,{...input,projectId:'northside'}),/Project not found/);assert.equal((await store.search(user,key)).length,0);
+ const first=await store.selectResearch(admin,input),again=await store.selectResearch(admin,input);assert.equal(first.candidate.id,again.candidate.id);assert.equal(first.candidate.verification,'provisional');assert.equal((await store.search(user,input.phrase)).length,1);assert.equal((await store.search(user,item.phrases[0])).length,1);
+ const second=await store.selectResearch(admin,{...input,eventId:randomUUID(),item:{...item,externalKey:key+'-other',manufacturer:'Another Fictional Maker',partNumber:key+'-other'}});assert.equal(first.candidate.id,second.candidate.id);assert.equal(second.candidate.products.length,2);
+ const images=await store.catalogCommand(admin,'external-image',{materialId:first.candidate.id,productId:first.productId});assert.equal(images.url,item.imageUrl);
+}},
+
 {name:'selected research persists unpublished materials, products, source phrases and coverage until reviewed publication',run:async store=>{
  const {admin,user,foreign}=people();const key='selected-research-'+randomUUID();
  const item={externalKey:key,category:'general',productUnit:'EA',attributes:{type:'Synthetic research item',specification:key},manufacturer:'Fictional Staging Maker',partNumber:key,title:'Synthetic research product',sourceUrl:'https://example.invalid/staged-research',verificationBasis:'Synthetic source used for testing only.',phrases:['Synthetic '+key]};
