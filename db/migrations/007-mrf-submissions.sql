@@ -1,0 +1,4 @@
+CREATE TABLE mrf_submissions(id TEXT PRIMARY KEY,tenant TEXT NOT NULL,owner TEXT NOT NULL,project TEXT NOT NULL,draft_id TEXT NOT NULL UNIQUE REFERENCES drafts(id),draft_version INTEGER NOT NULL,mrf_number INTEGER NOT NULL,revision INTEGER NOT NULL,previous_id TEXT REFERENCES mrf_submissions(id),request_id TEXT NOT NULL,preview_hash TEXT NOT NULL,snapshot TEXT NOT NULL CHECK(json_valid(snapshot)),warnings TEXT NOT NULL CHECK(json_valid(warnings)),submitted_at TEXT NOT NULL,UNIQUE(tenant,request_id),UNIQUE(tenant,mrf_number,revision));
+CREATE INDEX submission_owner_list ON mrf_submissions(tenant,owner,project,submitted_at,id);
+ALTER TABLE drafts ADD COLUMN revision_of TEXT REFERENCES mrf_submissions(id);
+CREATE UNIQUE INDEX draft_revision_source ON drafts(tenant,owner,revision_of) WHERE revision_of IS NOT NULL;

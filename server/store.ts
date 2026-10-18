@@ -1,3 +1,4 @@
+import { submissions,submissionLabel } from './submissions';
 import { admitUser,userAccess } from './user-access';
 import { historicalSnapshot } from './catalog-history';
 import { catalogAction, searchCatalog, validatePurchase, productForMaterial, type Operation } from './catalog-v2';
@@ -26,7 +27,7 @@ export class Store {
     if (!exists) this.transaction(() => { this.db.exec(migration); this.db.prepare('INSERT INTO schema_migrations(version,checksum) VALUES(1,?)').run(hash(migration)); });
     const applied = this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=1').get();
     if (applied?.checksum !== hash(migration)) throw new Error('Applied migration checksum changed. Create a new migration instead.');
-    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql']] as const){
+    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql'],[7,'007-mrf-submissions.sql']] as const){
       const next=readFileSync(new URL(`../db/migrations/${file}`,import.meta.url),'utf8');
       const prior=this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=?').get(version);
       if(prior&&prior.checksum!==hash(next))throw new Error('Applied catalog migration checksum changed.');
@@ -58,29 +59,31 @@ export class Store {
     return this.mapDraft(row);
   }
   listDrafts(p:Principal,project:string,page=1){
-    this.requireProject(p,project);const total=Number(this.db.prepare('SELECT COUNT(*) AS total FROM drafts WHERE tenant=? AND owner=? AND project=?').get(p.tenant,p.oid,project)!.total);
+    this.requireProject(p,project);const total=Number(this.db.prepare('SELECT COUNT(*) AS total FROM drafts WHERE tenant=? AND owner=? AND project=? AND NOT EXISTS(SELECT 1 FROM mrf_submissions s WHERE s.draft_id=drafts.id)').get(p.tenant,p.oid,project)!.total);
     const pages=Math.max(1,Math.ceil(total/25));page=Math.min(page,pages);
-    const records=this.db.prepare('SELECT d.id,d.name,d.project,d.delivery_date,d.updated_at,d.version,(SELECT COUNT(*) FROM draft_lines l WHERE l.draft_id=d.id) AS item_count FROM drafts d WHERE d.tenant=? AND d.owner=? AND d.project=? ORDER BY d.updated_at DESC,d.id DESC LIMIT 25 OFFSET ?').all(p.tenant,p.oid,project,(page-1)*25);
+    const records=this.db.prepare('SELECT d.id,d.name,d.project,d.delivery_date,d.updated_at,d.version,(SELECT COUNT(*) FROM draft_lines l WHERE l.draft_id=d.id) AS item_count FROM drafts d WHERE d.tenant=? AND d.owner=? AND d.project=? AND NOT EXISTS(SELECT 1 FROM mrf_submissions s WHERE s.draft_id=d.id) ORDER BY d.updated_at DESC,d.id DESC LIMIT 25 OFFSET ?').all(p.tenant,p.oid,project,(page-1)*25);
     return {records:records.map(r=>({id:r.id,name:r.name,projectId:r.project,deliveryDate:r.delivery_date,savedAt:r.updated_at,itemCount:Number(r.item_count),version:Number(r.version)})),total,page,pages};
   }
   getProjectDraft(p: Principal, project: string) {
     this.requireProject(p, project);
-    const row = this.db.prepare('SELECT * FROM drafts WHERE project=? AND tenant=? AND owner=? ORDER BY updated_at DESC,id DESC LIMIT 1').get(project, p.tenant, p.oid);
+    const row = this.db.prepare('SELECT * FROM drafts WHERE project=? AND tenant=? AND owner=? AND NOT EXISTS(SELECT 1 FROM mrf_submissions s WHERE s.draft_id=drafts.id) ORDER BY updated_at DESC,id DESC LIMIT 1').get(project, p.tenant, p.oid);
     return row ? this.mapDraft(row) : null;
   }
   mapDraft(row: Row) {
+    const submission=this.db.prepare('SELECT id,mrf_number,revision,submitted_at FROM mrf_submissions WHERE draft_id=? AND tenant=? AND owner=?').get(row.id,row.tenant,row.owner);
     const lines = this.db.prepare('SELECT * FROM draft_lines WHERE draft_id=? ORDER BY position').all(row.id).map(line => ({
       id: line.id, quantity: line.quantity, requestedUnit: line.requested_uom, description: line.description,
       rawInput: JSON.parse(String(line.raw_input)), candidate: line.candidate ? JSON.parse(String(line.candidate)) : null,
       purchasing: line.purchasing ? JSON.parse(String(line.purchasing)) : undefined, source: line.source, deliveryMode: line.delivery_mode, overrideDate: line.override_date,
     }));
-    return { id: row.id, projectId: row.project, name: row.name, deliveryDate: row.delivery_date, version: row.version, savedAt: row.updated_at, lines };
+    return { ...(submission?{submitted:{id:String(submission.id),number:submissionLabel(Number(submission.mrf_number),Number(submission.revision)),revision:Number(submission.revision),submittedAt:String(submission.submitted_at)}}:{}),revisionOf:row.revision_of??null,id: row.id, projectId: row.project, name: row.name, deliveryDate: row.delivery_date, version: row.version, savedAt: row.updated_at, lines };
   }
   saveDraft(p: Principal, body: DraftBody, id?: string) {
     this.requireProject(p, body.projectId);
     return this.transaction(() => {
       const existing = id ? this.getDraft(p, id) : null;
       if ((existing && existing.version !== body.version) || (!existing && body.version !== 0)) throw new ApiError(409, 'This draft changed elsewhere. Reload before saving; your on-screen items are preserved.');
+      if(existing?.submitted)throw new ApiError(409,'Submitted MRFs cannot be changed. Create a revision from the submitted record.');
       if (existing && existing.projectId !== body.projectId) throw new ApiError(409, 'A draft cannot be moved between projects.');
       const draftId = String(existing?.id ?? randomUUID());
       if (existing) this.db.prepare('UPDATE drafts SET delivery_date=?,version=version+1,updated_at=?,name=? WHERE id=? AND tenant=? AND owner=?').run(body.deliveryDate, now(), body.name??existing?.name??'Untitled MRF', draftId, p.tenant, p.oid);
@@ -121,6 +124,7 @@ export class Store {
     }
     return step.value;
   }
+  submissions(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(submissions(p,action,data)));}
   admit(p:Principal,localBootstrap=false){return this.transaction(()=>this.catalogRun(admitUser(p,localBootstrap)));}
   users(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(userAccess(p,action,data)));}
   catalogCommand(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(catalogAction(p,action,data)));}

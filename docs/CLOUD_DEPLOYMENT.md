@@ -49,3 +49,5 @@ Forward migration 004 adds append-only catalog correction history. Existing-pilo
 Forward migration 005 supports multiple named drafts while retaining existing draft identifiers and lines. Use [update v5](PILOT_UPDATE_V5.md) for the current existing-pilot update and [the completion plan](MRF_COMPLETION_PLAN.md) for remaining scope. The health response identifies release `named-drafts-v5`; live session restoration still requires acceptance.
 
 Current existing-pilot release: [update v6](PILOT_UPDATE_V6.md), adding application-user/project access controls and retained access history via migration 006. Its health release marker is `user-access-v6`. Microsoft role assignment remains external; paid AI remains disabled.
+
+Current existing-pilot release: [update v7](PILOT_UPDATE_V7.md), adding immutable submitted MRFs and revisions via migration 007. Its health marker is `mrf-submission-v7`. Purchasing handoff is a manual CSV/print export; no vendor order or paid integration is activated.

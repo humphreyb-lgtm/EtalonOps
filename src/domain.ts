@@ -28,6 +28,8 @@ export type Line = {
   overrideDate: string | null;
 };
 export type Draft = {
+  submitted?:{id:string;number:string;revision:number;submittedAt:string};
+  revisionOf?:string|null;
   name?: string;
   id?: string;
   version?: number;

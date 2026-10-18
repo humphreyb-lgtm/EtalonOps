@@ -1,3 +1,4 @@
+import { SubmissionCenter } from './SubmissionCenter';
 import { UserAdmin } from './UserAdmin';
 import { saveBrowserDraft,listBrowserDrafts } from './draft-storage';
 import { PurchasingFields } from './PurchasingFields';
@@ -162,6 +163,7 @@ export default function App() {
   }, []);
 
   function changeDraft(update: (current: Draft) => Draft) {
+    if(draft.submitted){setStorageError('Submitted MRFs are locked. Create a revision for changes.');return;}
     setCompliance([]);
     setDraft(update);
     setDirty(true);
@@ -271,22 +273,30 @@ export default function App() {
     finally{setDatabaseBusy(false);}
   }
   function chooseDraft(action:{kind:'new'}|{kind:'open';id:string}){if(dirty)setPendingDraft(action);else void navigateDraft(action);}
-  async function saveDraft(): Promise<boolean> {
+  async function saveDraft(): Promise<Draft|null> {
     try {
-      if(!draft.name?.trim()){setStorageError('Enter an MRF name before saving.');return false;}
+      if(draft.submitted){setStorageError('Submitted MRFs are locked. Create a revision for changes.');return null;}
+      if(!draft.name?.trim()){setStorageError('Enter an MRF name before saving.');return null;}
       if (databaseMode) setDatabaseBusy(true);
       const saved = databaseMode ? await saveDatabaseDraft({...draft,name:draft.name.trim()}) : saveBrowserDraft(draft);
       setDraftAddress(projectId,saved.id);
       setDraft(saved); setDirty(false); setStorageError('');
       setAnnouncement(cloudMode ? 'Draft saved in Azure SQL.' : databaseMode ? 'Draft saved in the local development database for this test account.' : 'Draft saved in this browser. You can leave the demo and resume it here.');
-      return true;
+      return saved;
     } catch (error) {
       setStorageError(databaseMode ? (error instanceof Error ? error.message : 'Database save failed. Your items are still here.') : 'Your browser could not save this draft. Your items are still here. Free up browser storage or allow site storage, then try again.');
       setAnnouncement('Draft was not saved. Your items are still on screen.');
-      return false;
+      return null;
     } finally { setDatabaseBusy(false); }
   }
 
+  async function prepareSubmission():Promise<Draft|null>{
+    if(!draft.lines.length){setStorageError('Add at least one material before submitting.');return null;}
+    setDatabaseBusy(true);
+    try{const saved=(dirty||!draft.id)?await saveDraft():await readDatabaseDraft(projectId,draft.id);if(saved)setDraft(saved);return saved;}
+    finally{setDatabaseBusy(false);}
+  }
+  async function submissionSaved(id:string){const saved=await readDatabaseDraft(projectId,id);if(saved){setDraft(saved);setDirty(false);setAnnouncement(`MRF submitted as ${saved.submitted?.number}. No order was placed.`);}}
   async function activateProject(id: string) {
     try {
       if (databaseMode) setDatabaseBusy(true);
@@ -368,15 +378,17 @@ export default function App() {
     <main id="main" className="workspace" tabIndex={-1} inert={(databaseBusy||aiBusy) || undefined} aria-busy={databaseBusy||aiBusy}>
       <div className="page-heading"><h1>MRF Builder</h1><CatalogAdmin /><UserAdmin /><span className="demo-badge">{cloudMode ? 'Cloud pilot' : 'Local preview'}</span></div>
       <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{cloudMode ? (aiEnabled ? 'Microsoft sign-in · Azure SQL · AI clarification enabled · external search disabled · example projects.' : 'Microsoft sign-in · Azure SQL · AI discovery disabled · example projects.') : databaseMode ? 'Local database demo · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
-      <section className="panel draft-tools" aria-label="Draft identification"><label htmlFor="mrf-name">MRF name<input id="mrf-name" required maxLength={120} value={draft.name??'Saved MRF'} placeholder="e.g. Level 2 Rough-In" onChange={event=>changeDraft(current=>({...current,name:event.target.value}))}/></label><div className="catalog-actions"><button className="button" onClick={()=>chooseDraft({kind:'new'})}>New MRF</button><button className="button" onClick={()=>void showDrafts()}>My Drafts</button></div></section>
+      <section className="panel draft-tools" aria-label="Draft identification"><label htmlFor="mrf-name">MRF name<input id="mrf-name" readOnly={Boolean(draft.submitted)} required maxLength={120} value={draft.name??'Saved MRF'} placeholder="e.g. Level 2 Rough-In" onChange={event=>changeDraft(current=>({...current,name:event.target.value}))}/></label><div className="catalog-actions"><button className="button" onClick={()=>chooseDraft({kind:'new'})}>New MRF</button><button className="button" onClick={()=>void showDrafts()}>My Drafts</button></div></section>
       {draftListOpen&&draftList&&<section className="panel saved-drafts" aria-label="My Drafts"><div className="section-heading"><h2>My Drafts</h2><button className="button" onClick={()=>setDraftListOpen(false)}>Close draft list</button></div><p>{project.name} · {draftList.total} saved drafts</p>{draftList.records.length===0&&<p>No saved drafts for this project yet.</p>}{draftList.records.map(item=><article key={item.id}><h3>{item.name}</h3><p>{item.itemCount} items · Delivery {formatDate(item.deliveryDate)} · Last saved {new Date(item.savedAt).toLocaleString()}</p><button className="button" onClick={()=>chooseDraft({kind:'open',id:item.id})}>Continue {item.name}</button></article>)}<div className="catalog-actions"><button className="button" disabled={draftList.page<=1} onClick={()=>void showDrafts(draftList.page-1)}>Previous drafts</button><span>Page {draftList.page} of {draftList.pages}</span><button className="button" disabled={draftList.page>=draftList.pages} onClick={()=>void showDrafts(draftList.page+1)}>Next drafts</button></div></section>}
       <section className="panel draft-header" aria-label="MRF header">
         <div className="foreman"><span className="header-icon"><span className="person-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="7" r="3.2" /><path d="M4.5 20v-2a7.5 7.5 0 0 1 15 0v2z" /></svg></span></span><div><span className="field-caption">Foreman</span><strong>{cloudMode ? cloudDisplayName() : databaseMode ? localIdentity : 'Demo foreman'}</strong></div></div>
-        <div className="header-date"><label htmlFor="delivery-date" className="field-caption">MRF Delivery Date</label><input id="delivery-date" type="date" required value={draft.deliveryDate} onChange={event => { if (event.target.value) changeDraft(current => ({ ...current, deliveryDate: event.target.value })); }} /><span className="sr-only">Default for items using the MRF date</span></div>
-        <div className="save-area">{databaseMode&&<button className="button" onClick={()=>void request<{issues:{lineId:string;message:string}[];ready:boolean}>('/catalog/validate-lines','POST',{projectId,lines:draft.lines}).then(result=>{setCompliance(result.issues.map(issue=>`Item ${draft.lines.findIndex(line=>line.id===issue.lineId)+1}: ${issue.message}`));setAnnouncement(result.ready?'Manufacturer and job restriction checks passed. No order was submitted.':'Some items need correction before purchasing. Your draft is preserved.');}).catch(error=>setEntryError(error.message))}>Check purchasing requirements</button>}<button className="button save-button" onClick={saveDraft}><Save size={16} aria-hidden="true" />Save as Draft</button><span className={`save-status ${dirty ? 'unsaved' : ''}`}>{dirty ? 'Unsaved changes' : draft.savedAt ? (cloudMode ? 'Saved in Azure SQL' : databaseMode ? 'Saved in local database' : 'Saved in this browser') : 'Not saved yet'}</span></div>
+        <div className="header-date"><label htmlFor="delivery-date" className="field-caption">MRF Delivery Date</label><input id="delivery-date" type="date" readOnly={Boolean(draft.submitted)} required value={draft.deliveryDate} onChange={event => { if (event.target.value) changeDraft(current => ({ ...current, deliveryDate: event.target.value })); }} /><span className="sr-only">Default for items using the MRF date</span></div>
+        <div className="save-area">{databaseMode&&<button className="button" onClick={()=>void request<{issues:{lineId:string;message:string}[];ready:boolean}>('/catalog/validate-lines','POST',{projectId,lines:draft.lines}).then(result=>{setCompliance(result.issues.map(issue=>`Item ${draft.lines.findIndex(line=>line.id===issue.lineId)+1}: ${issue.message}`));setAnnouncement(result.ready?'Manufacturer and job restriction checks passed. No order was submitted.':'Some items need correction before purchasing. Your draft is preserved.');}).catch(error=>setEntryError(error.message))}>Check purchasing requirements</button>}<button className="button save-button" disabled={Boolean(draft.submitted)} onClick={saveDraft}><Save size={16} aria-hidden="true" />Save as Draft</button><span className={`save-status ${dirty ? 'unsaved' : ''}`}>{dirty ? 'Unsaved changes' : draft.savedAt ? (cloudMode ? 'Saved in Azure SQL' : databaseMode ? 'Saved in local database' : 'Saved in this browser') : 'Not saved yet'}</span></div>
       </section>
+      <SubmissionCenter projectId={projectId} draft={draft} prepare={prepareSubmission} onSubmitted={submissionSaved} onOpenDraft={id=>chooseDraft({kind:'open',id})}/>
       {storageError && <div className="error-message" role="alert"><AlertCircle size={17} aria-hidden="true" /><span>{storageError}</span></div>}
 
+      <div inert={draft.submitted?true:undefined}>
       <section className="panel entry-panel" aria-label="Add a material">
         <form onSubmit={event => search(event)} className="entry-form" noValidate>
           <div className="quantity-group"><div className="field"><label htmlFor="quantity">Quantity</label><input id="quantity" inputMode="decimal" autoComplete="off" placeholder="e.g. 200" value={quantity} maxLength={14} onChange={event => { setQuantity(event.target.value); setEntryError(''); }} aria-invalid={entryError.startsWith('Enter a quantity') || undefined} aria-describedby={entryError ? 'entry-error' : undefined} /></div><div className="field unit-field"><label htmlFor="quantity-unit">Unit</label><select id="quantity-unit" ref={unitRef} value={unit} onChange={event => { setUnit(event.target.value as Unit); setEntryError(''); }} aria-invalid={entryError.startsWith('Choose your') || undefined} aria-describedby={entryError ? 'entry-error' : undefined}><option value="">Choose…</option>{units.map(u => <option value={u} key={u}>{u}</option>)}</select></div></div>
@@ -411,7 +423,8 @@ export default function App() {
         </tbody></table></div>
         {draft.lines.length > 0 && <div className="list-footer"><span><Info size={14} aria-hidden="true" />Items use the MRF date unless you choose an override.</span><button className="button text-button" onClick={() => { setDescription(''); setQuantity(''); setUnit(''); resetEntry(); descriptionRef.current?.focus(); }}><Plus size={15} aria-hidden="true" />Next material</button></div>}
       </section>
-      <footer className="workspace-footer"><span>EtalonOps · MRF Builder POC</span><span>No request has been submitted. Purchasing is outside this preview.</span></footer>
+      </div>
+      <footer className="workspace-footer"><span>EtalonOps · MRF Builder POC</span><span>{draft.submitted?`${draft.submitted.number} submitted. No purchase order placed.`:'This MRF is a draft. Saving does not submit or place an order.'}</span></footer>
       {compliance.length>0&&<div role="alert" className="entry-error">{compliance.map((issue,i)=><p key={i}>{issue}</p>)}</div>}<div className={`status-bar ${announcement ? 'has-message' : ''}`} role="status" aria-live="polite" aria-atomic="true">{announcement && <><Check size={15} aria-hidden="true" /><span>{announcement}</span><button className="icon-button" aria-label="Dismiss notification" onClick={() => setAnnouncement('')}><X size={15} aria-hidden="true" /></button></>}</div>
     </main>
 

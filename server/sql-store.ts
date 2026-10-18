@@ -1,3 +1,4 @@
+import { submissions,submissionLabel } from './submissions';
 import { admitUser,userAccess } from './user-access';
 import type { Store } from './store';
 import { historicalSnapshot } from './catalog-history';
@@ -54,11 +55,12 @@ export class SqlStore implements Repository {
     await this.q('INSERT dbo.audit_events(id,tenant,actor,action,target,at) VALUES(@p0,@p1,@p2,@p3,@p4,@p5)', randomUUID(), p.tenant, p.oid, action, target, at);
   }
   async mapDraft(row: Row) {
+    const submission=(await this.q('SELECT id,mrf_number,revision,submitted_at FROM dbo.mrf_submissions WHERE draft_id=@p0 AND tenant=@p1 AND owner=@p2',row.id,row.tenant,row.owner)).recordset[0];
     const result = await this.q('SELECT * FROM dbo.draft_lines WHERE draft_id=@p0 ORDER BY position', row.id);
     const lines = result.recordset.map(line => ({ id: String(line.id).toLowerCase(), quantity: String(line.quantity), requestedUnit: line.requested_uom, description: line.description,
       rawInput: JSON.parse(line.raw_input), candidate: line.candidate ? JSON.parse(line.candidate) : null, source: line.source, purchasing:line.purchasing?JSON.parse(line.purchasing):undefined,
       deliveryMode: line.delivery_mode, overrideDate: dateOnly(line.override_date) }));
-    return { id: String(row.id).toLowerCase(), projectId: row.project, name: row.name, deliveryDate: String(dateOnly(row.delivery_date)), version: Number(row.version), savedAt: new Date(row.updated_at).toISOString(), lines };
+    return { ...(submission?{submitted:{id:String(submission.id).toLowerCase(),number:submissionLabel(Number(submission.mrf_number),Number(submission.revision)),revision:Number(submission.revision),submittedAt:String(submission.submitted_at)}}:{}),revisionOf:row.revision_of?String(row.revision_of).toLowerCase():null,id: String(row.id).toLowerCase(), projectId: row.project, name: row.name, deliveryDate: String(dateOnly(row.delivery_date)), version: Number(row.version), savedAt: new Date(row.updated_at).toISOString(), lines };
   }
   async getDraft(p: Principal, id: string): Promise<Awaited<ReturnType<SqlStore['mapDraft']>>> {
     if (!this.session) return this.transaction(tx => tx.getDraft(p, id), sql.ISOLATION_LEVEL.READ_COMMITTED);
@@ -70,15 +72,15 @@ export class SqlStore implements Repository {
   }
   async listDrafts(p:Principal,project:string,page=1):Promise<ReturnType<Store['listDrafts']>>{
     if(!this.session)return this.transaction(tx=>tx.listDrafts(p,project,page),sql.ISOLATION_LEVEL.READ_COMMITTED);
-    await this.requireProject(p,project);const total=Number((await this.q('SELECT COUNT(*) AS total FROM dbo.drafts WHERE tenant=@p0 AND owner=@p1 AND project=@p2',p.tenant,p.oid,project)).recordset[0].total);
+    await this.requireProject(p,project);const total=Number((await this.q('SELECT COUNT(*) AS total FROM dbo.drafts WHERE tenant=@p0 AND owner=@p1 AND project=@p2 AND NOT EXISTS(SELECT 1 FROM dbo.mrf_submissions s WHERE s.draft_id=drafts.id)',p.tenant,p.oid,project)).recordset[0].total);
     const pages=Math.max(1,Math.ceil(total/25));page=Math.min(page,pages);
-    const rows=(await this.q('SELECT d.id,d.name,d.project,d.delivery_date,d.updated_at,d.version,(SELECT COUNT(*) FROM dbo.draft_lines l WHERE l.draft_id=d.id) AS item_count FROM dbo.drafts d WHERE d.tenant=@p0 AND d.owner=@p1 AND d.project=@p2 ORDER BY d.updated_at DESC,d.id DESC OFFSET @p3 ROWS FETCH NEXT 25 ROWS ONLY',p.tenant,p.oid,project,(page-1)*25)).recordset;
+    const rows=(await this.q('SELECT d.id,d.name,d.project,d.delivery_date,d.updated_at,d.version,(SELECT COUNT(*) FROM dbo.draft_lines l WHERE l.draft_id=d.id) AS item_count FROM dbo.drafts d WHERE d.tenant=@p0 AND d.owner=@p1 AND d.project=@p2 AND NOT EXISTS(SELECT 1 FROM dbo.mrf_submissions s WHERE s.draft_id=d.id) ORDER BY d.updated_at DESC,d.id DESC OFFSET @p3 ROWS FETCH NEXT 25 ROWS ONLY',p.tenant,p.oid,project,(page-1)*25)).recordset;
     return {records:rows.map(r=>({id:String(r.id).toLowerCase(),name:r.name,projectId:r.project,deliveryDate:dateOnly(r.delivery_date),savedAt:r.updated_at instanceof Date?r.updated_at.toISOString():r.updated_at,itemCount:Number(r.item_count),version:Number(r.version)})),total,page,pages};
   }
   async getProjectDraft(p: Principal, project: string): Promise<Awaited<ReturnType<SqlStore['mapDraft']>> | null> {
     if (!this.session) return this.transaction(tx => tx.getProjectDraft(p, project), sql.ISOLATION_LEVEL.READ_COMMITTED);
     await this.requireProject(p, project);
-    const row = (await this.q('SELECT TOP(1) * FROM dbo.drafts WITH(UPDLOCK,HOLDLOCK) WHERE project=@p0 AND tenant=@p1 AND owner=@p2 ORDER BY updated_at DESC,id DESC', project, p.tenant, p.oid)).recordset[0];
+    const row = (await this.q('SELECT TOP(1) * FROM dbo.drafts WITH(UPDLOCK,HOLDLOCK) WHERE project=@p0 AND tenant=@p1 AND owner=@p2 AND NOT EXISTS(SELECT 1 FROM dbo.mrf_submissions s WHERE s.draft_id=drafts.id) ORDER BY updated_at DESC,id DESC', project, p.tenant, p.oid)).recordset[0];
     return row ? this.mapDraft(row) : null;
   }
   async saveDraft(p: Principal, body: DraftBody, id?: string) {
@@ -86,6 +88,7 @@ export class SqlStore implements Repository {
     return this.transaction(async tx => {
       const existing = id ? await tx.getDraft(p, id) : null;
       if ((existing && existing.version !== body.version) || (!existing && body.version !== 0)) throw new ApiError(409, 'This draft changed elsewhere. Reload before saving; your on-screen items are preserved.');
+      if(existing?.submitted)throw new ApiError(409,'Submitted MRFs cannot be changed. Create a revision from the submitted record.');
       if (existing && existing.projectId !== body.projectId) throw new ApiError(409, 'A draft cannot be moved between projects.');
       const draftId = String(existing?.id ?? randomUUID());
       if (existing) await tx.q('UPDATE dbo.drafts SET delivery_date=@p0,version=version+1,updated_at=@p1,name=@p5 WHERE id=@p2 AND tenant=@p3 AND owner=@p4', body.deliveryDate, now(), draftId, p.tenant, p.oid, body.name??existing?.name??'Untitled MRF');
@@ -120,6 +123,7 @@ export class SqlStore implements Repository {
     while(!step.done){const rows=(await this.q(step.value.text,...step.value.values)).recordset;step=operation.next(rows);}
     return step.value;
   }
+  async submissions(p:Principal,action:string,data:unknown){return this.transaction(async tx=>{const id=(data as {draftId?:unknown})?.draftId;if((action==='review'||action==='submit')&&typeof id==='string')await tx.getDraft(p,id);return tx.catalogRun(submissions(p,action,data));});}
   async admit(p:Principal,localBootstrap=false){return this.transaction(tx=>tx.catalogRun(admitUser(p,localBootstrap)));}
   async users(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(userAccess(p,action,data)));}
   async catalogCommand(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(catalogAction(p,action,data)));}

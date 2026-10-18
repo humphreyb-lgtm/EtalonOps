@@ -26,6 +26,8 @@ Saving an existing draft uses its identifier and expected version. Conflicting e
 
 ## Sign-in reload issue
 
-The previous Microsoft session restoration fix is included, and no persistent credential workaround is introduced. Check `https://etalonops-954bb4a3.azurewebsites.net/api/health` after deployment: `release` must be `user-access-v6`. This distinguishes deployed code from an older running version.
+The previous Microsoft session restoration fix is included, and no persistent credential workaround is introduced. Check `https://etalonops-954bb4a3.azurewebsites.net/api/health` after deployment: `release` must be `mrf-submission-v7`. This distinguishes deployed code from an older running version.
 
 Sign in once in the same browser tab and reload the saved draft. The session cache should restore the account and revalidate API access. Test this live; local mock sessions and the offline file cannot prove Microsoft session behavior. If the current release still requests a new login, retain the displayed error and check account/organizational session policies and browser storage restrictions. Do not paste tokens or credentials into troubleshooting messages.
+
+The database-backed pilot now also supports final review, submission, submitted-record retrieval and linked revisions in update v7; see MRF_SUBMISSION.md. Those features are not simulated as real submissions in the standalone browser-only preview.

@@ -42,7 +42,7 @@ try {
   await admin.request().query('IF OBJECT_ID(\'dbo.migration_checksums\') IS NULL CREATE TABLE dbo.migration_checksums(version int PRIMARY KEY,checksum char(64) NOT NULL)');
   await admin.request().input('checksum', sql.VarChar(64), checksum).query('IF NOT EXISTS(SELECT 1 FROM dbo.migration_checksums WHERE version=1) INSERT dbo.migration_checksums VALUES(1,@checksum)');
   await admin.request().query("IF USER_ID('etalonops_local_app') IS NULL CREATE USER etalonops_local_app FOR LOGIN etalonops_local_app");
-  for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql']] as const){
+  for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql'],[7,'007-mrf-submissions.sql']] as const){
     const migration=readFileSync(`db/${file}`,'utf8'), checksum=createHash('sha256').update(migration).digest('hex');
     const prior=(await admin.request().input('version',sql.Int,version).query('SELECT checksum FROM dbo.migration_checksums WHERE version=@version')).recordset[0];
     if(prior&&prior.checksum!==checksum)throw new Error('Applied catalog migration checksum changed.');
@@ -51,7 +51,7 @@ try {
   }
   for (const table of ['memberships', 'import_batches', 'materials', 'aliases', 'drafts', 'draft_lines', 'image_associations', 'catalog_profiles', 'manufacturers', 'manufacturer_products', 'translations', 'selection_events', 'job_restrictions', 'catalog_batches', 'image_references']) await admin.request().query(`GRANT SELECT,INSERT,UPDATE,DELETE ON dbo.${table} TO etalonops_local_app`);
   await admin.request().query('GRANT SELECT,INSERT ON dbo.audit_events TO etalonops_local_app; GRANT SELECT ON dbo.schema_migrations TO etalonops_local_app;');
-  await admin.request().query('GRANT SELECT,INSERT ON dbo.catalog_revisions TO etalonops_local_app; GRANT SELECT,INSERT ON dbo.user_access_changes TO etalonops_local_app; GRANT SELECT,INSERT,UPDATE ON dbo.application_users TO etalonops_local_app; REVOKE DELETE ON dbo.application_users FROM etalonops_local_app');
+  await admin.request().query('GRANT SELECT,INSERT ON dbo.catalog_revisions TO etalonops_local_app; GRANT SELECT,INSERT ON dbo.mrf_submissions TO etalonops_local_app; GRANT SELECT,INSERT ON dbo.user_access_changes TO etalonops_local_app; GRANT SELECT,INSERT,UPDATE ON dbo.application_users TO etalonops_local_app; REVOKE DELETE ON dbo.application_users FROM etalonops_local_app');
   const version = await admin.request().query("SELECT CAST(SERVERPROPERTY('ProductVersion') AS varchar(50)) AS version");
   console.log(`SQL Server ${version.recordset[0].version}: migration verified; separate restricted application login prepared.`);
 } finally { await admin.close(); }
