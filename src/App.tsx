@@ -1,3 +1,4 @@
+import { saveBrowserDraft,listBrowserDrafts } from './draft-storage';
 import { PurchasingFields } from './PurchasingFields';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
@@ -8,7 +9,7 @@ import {
 } from 'lucide-react';
 import {
   clarificationOptions, discoveryFixtures, formatDate, freshDraft, loadDraft,
-  positiveQuantity, projects, searchFixtures, storageKey, units,
+  positiveQuantity, projects, searchFixtures, units,
   type Candidate, type Draft, type Line, type Unit,
 } from './domain';
 
@@ -16,7 +17,7 @@ import { ProductPhoto } from './ProductPhoto';
 import { CatalogAdmin } from './CatalogAdmin';
 import { lookupContext, fallbackDescription } from './lookup';
 import { cloudMode, cloudDisplayName, cloudSignOut } from './cloud-auth';
-import { databaseMode, localIdentity, readDatabaseDraft, saveDatabaseDraft, databaseSearch, clearLocalSession, request, type AIStatus, type AIClarification } from './api';
+import { databaseMode, localIdentity, readDatabaseDraft, saveDatabaseDraft, databaseSearch, clearLocalSession, request, listDatabaseDrafts, type DraftPage, type AIStatus, type AIClarification } from './api';
 
 type Stage = 'idle' | 'verified' | 'clarify';
 type Message = { id: string; author: 'user' | 'assistant'; text: string };
@@ -64,10 +65,12 @@ function SourceTag({ source,verification }: { source: Line['source'];verificatio
 }
 
 export default function App() {
+  const [draftList,setDraftList]=useState<DraftPage|null>(null),[draftListOpen,setDraftListOpen]=useState(false);
+  const [pendingDraft,setPendingDraft]=useState<{kind:'new'}|{kind:'open';id:string}|null>(null);
   const [compliance,setCompliance]=useState<string[]>([]);
   const [productChoices,setProductChoices]=useState<Record<string,string>>({});
   const [projectId, setProjectId] = useState(() => new URLSearchParams(window.location.search).get('project') === 'northside' ? 'northside' : 'riverside');
-  const [initial] = useState<{ draft: Draft; error?: string; restored?: boolean }>(() => databaseMode ? { draft: freshDraft(projectId) } : loadDraft(projectId));
+  const [initial] = useState<{ draft: Draft; error?: string; restored?: boolean }>(() => databaseMode ? { draft: freshDraft(projectId) } : loadDraft(projectId,new URLSearchParams(window.location.search).get('draft')??undefined));
   const [draft, setDraft] = useState<Draft>(initial.draft);
   const [databaseBusy, setDatabaseBusy] = useState(databaseMode);
   const [dirty, setDirty] = useState(false);
@@ -126,8 +129,8 @@ export default function App() {
   }, [editing]);
 
   useEffect(() => {
-    if ((removing || pendingProject || pendingLeave) && !confirmRef.current?.open) confirmRef.current?.showModal();
-  }, [removing, pendingProject, pendingLeave]);
+    if ((removing || pendingProject || pendingLeave || pendingDraft) && !confirmRef.current?.open) confirmRef.current?.showModal();
+  }, [removing, pendingProject, pendingLeave, pendingDraft]);
 
   useEffect(() => {
     if (choice) chatRef.current?.focus({ preventScroll: true });
@@ -150,8 +153,8 @@ export default function App() {
     if (!databaseMode) return;
     let cancelled = false;
     request<AIStatus>('/lookup/status').then(status=>{if(!cancelled)setAIEnabled(status.enabled);}).catch(()=>{});
-    readDatabaseDraft(projectId).then(saved => {
-      if (!cancelled) { setDraft(saved ?? freshDraft(projectId)); setAnnouncement(cloudMode ? (saved ? 'Draft restored from Azure SQL.' : 'Azure SQL ready. AI discovery is disabled.') : saved ? 'Draft restored from the local database.' : 'Local database ready. Fixture catalog; test session only.'); }
+    readDatabaseDraft(projectId,new URLSearchParams(window.location.search).get('draft')??undefined).then(saved => {
+      if (!cancelled) { if(saved&&saved.projectId!==projectId)throw new Error('This draft belongs to another project. Choose its project before opening it.');setDraft(saved ?? freshDraft(projectId));if(saved)setDraftAddress(projectId,saved.id); setAnnouncement(cloudMode ? (saved ? 'Draft restored from Azure SQL.' : 'Azure SQL ready. AI discovery is disabled.') : saved ? 'Draft restored from the local database.' : 'Local database ready. Fixture catalog; test session only.'); }
     }).catch(error => { if (!cancelled) setStorageError(error instanceof Error ? error.message : 'Local database unavailable.'); })
       .finally(() => { if (!cancelled) setDatabaseBusy(false); });
     return () => { cancelled = true; };
@@ -250,11 +253,29 @@ export default function App() {
     chatRef.current?.focus();
   }
 
+  function setDraftAddress(project:string,id?:string){const url=new URL(window.location.href);url.searchParams.set('project',project);if(id)url.searchParams.set('draft',id);else url.searchParams.delete('draft');window.history.replaceState(null,'',url);}
+  async function showDrafts(page=1){
+    try{setDatabaseBusy(true);const list=databaseMode?await listDatabaseDrafts(projectId,page):listBrowserDrafts(projectId,page);setDraftList(list);setDraftListOpen(true);}
+    catch(error){setStorageError(error instanceof Error?error.message:'Could not load saved drafts.');}
+    finally{setDatabaseBusy(false);}
+  }
+  async function navigateDraft(action:{kind:'new'}|{kind:'open';id:string}){
+    try{setDatabaseBusy(true);let next:Draft;
+      if(action.kind==='new')next=freshDraft(projectId);
+      else if(databaseMode){const saved=await readDatabaseDraft(projectId,action.id);if(!saved||saved.projectId!==projectId)throw new Error('Draft not found in this project.');next=saved;}
+      else{const loaded=loadDraft(projectId,action.id==='legacy'?undefined:action.id);if(loaded.error||!loaded.restored)throw new Error(loaded.error??'Draft not found.');next=loaded.draft;}
+      setDraft(next);setDraftAddress(projectId,next.id);setDirty(false);setStorageError('');setCompliance([]);resetEntry();setQuantity('');setUnit('');setDescription('');setDraftListOpen(false);
+      setAnnouncement(action.kind==='new'?'New MRF ready. Give it a name before saving.':`Opened ${next.name??'saved MRF'}.`);
+    }catch(error){setStorageError(error instanceof Error?error.message:'Could not open the MRF. Your current items are preserved.');}
+    finally{setDatabaseBusy(false);}
+  }
+  function chooseDraft(action:{kind:'new'}|{kind:'open';id:string}){if(dirty)setPendingDraft(action);else void navigateDraft(action);}
   async function saveDraft(): Promise<boolean> {
     try {
+      if(!draft.name?.trim()){setStorageError('Enter an MRF name before saving.');return false;}
       if (databaseMode) setDatabaseBusy(true);
-      const saved = databaseMode ? await saveDatabaseDraft(draft) : { ...draft, savedAt: new Date().toISOString() };
-      if (!databaseMode) localStorage.setItem(storageKey(projectId), JSON.stringify(saved));
+      const saved = databaseMode ? await saveDatabaseDraft({...draft,name:draft.name.trim()}) : saveBrowserDraft(draft);
+      setDraftAddress(projectId,saved.id);
       setDraft(saved); setDirty(false); setStorageError('');
       setAnnouncement(cloudMode ? 'Draft saved in Azure SQL.' : databaseMode ? 'Draft saved in the local development database for this test account.' : 'Draft saved in this browser. You can leave the demo and resume it here.');
       return true;
@@ -269,7 +290,7 @@ export default function App() {
     try {
       if (databaseMode) setDatabaseBusy(true);
       const loaded = databaseMode ? { draft: await readDatabaseDraft(id) ?? freshDraft(id), error: '', restored: true } : loadDraft(id);
-      const url = new URL(window.location.href); url.searchParams.set('project', id); window.history.replaceState(null, '', url);
+      setDraftAddress(id,loaded.draft.id);setDraftListOpen(false);setCompliance([]);
       setProjectId(id); setDraft(loaded.draft); setStorageError(loaded.error ?? ''); setDirty(false);
       resetEntry(); setQuantity(''); setDescription(''); setUnit('');
       setAnnouncement(cloudMode ? 'Azure SQL draft loaded for this project.' : databaseMode ? 'Local database draft loaded for this test account.' : loaded.restored ? 'Saved local draft restored for this project.' : 'A new local draft is ready for this project.');
@@ -278,11 +299,12 @@ export default function App() {
   }
 
   function closeConfirmation() {
-    confirmRef.current?.close(); setRemoving(null); setPendingProject(null); setPendingLeave(false);
+    confirmRef.current?.close(); setRemoving(null); setPendingProject(null); setPendingLeave(false);setPendingDraft(null);
   }
 
   async function finishNavigation(save: boolean) {
     if (save && !await saveDraft()) return;
+    if (pendingDraft) await navigateDraft(pendingDraft);
     if (pendingProject) await activateProject(pendingProject);
     if (pendingLeave) { setActive(false); clearLocalSession(); if (cloudMode) void cloudSignOut(); setProfileOpen(false); setDirty(false); }
     closeConfirmation();
@@ -294,7 +316,7 @@ export default function App() {
   }
 
   function resumeDemo() {
-    activateProject(projectId); setActive(true);
+    void navigateDraft(draft.id?{kind:'open',id:draft.id}:{kind:'new'});setActive(true);
   }
 
   function updateLine(id: string, update: Partial<Line>) {
@@ -345,6 +367,8 @@ export default function App() {
     <main id="main" className="workspace" tabIndex={-1} inert={(databaseBusy||aiBusy) || undefined} aria-busy={databaseBusy||aiBusy}>
       <div className="page-heading"><h1>MRF Builder</h1><CatalogAdmin /><span className="demo-badge">{cloudMode ? 'Cloud pilot' : 'Local preview'}</span></div>
       <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{cloudMode ? (aiEnabled ? 'Microsoft sign-in · Azure SQL · AI clarification enabled · external search disabled · example projects.' : 'Microsoft sign-in · Azure SQL · AI discovery disabled · example projects.') : databaseMode ? 'Local database demo · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
+      <section className="panel draft-tools" aria-label="Draft identification"><label htmlFor="mrf-name">MRF name<input id="mrf-name" required maxLength={120} value={draft.name??'Saved MRF'} placeholder="e.g. Level 2 Rough-In" onChange={event=>changeDraft(current=>({...current,name:event.target.value}))}/></label><div className="catalog-actions"><button className="button" onClick={()=>chooseDraft({kind:'new'})}>New MRF</button><button className="button" onClick={()=>void showDrafts()}>My Drafts</button></div></section>
+      {draftListOpen&&draftList&&<section className="panel saved-drafts" aria-label="My Drafts"><div className="section-heading"><h2>My Drafts</h2><button className="button" onClick={()=>setDraftListOpen(false)}>Close draft list</button></div><p>{project.name} · {draftList.total} saved drafts</p>{draftList.records.length===0&&<p>No saved drafts for this project yet.</p>}{draftList.records.map(item=><article key={item.id}><h3>{item.name}</h3><p>{item.itemCount} items · Delivery {formatDate(item.deliveryDate)} · Last saved {new Date(item.savedAt).toLocaleString()}</p><button className="button" onClick={()=>chooseDraft({kind:'open',id:item.id})}>Continue {item.name}</button></article>)}<div className="catalog-actions"><button className="button" disabled={draftList.page<=1} onClick={()=>void showDrafts(draftList.page-1)}>Previous drafts</button><span>Page {draftList.page} of {draftList.pages}</span><button className="button" disabled={draftList.page>=draftList.pages} onClick={()=>void showDrafts(draftList.page+1)}>Next drafts</button></div></section>}
       <section className="panel draft-header" aria-label="MRF header">
         <div className="foreman"><span className="header-icon"><span className="person-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="7" r="3.2" /><path d="M4.5 20v-2a7.5 7.5 0 0 1 15 0v2z" /></svg></span></span><div><span className="field-caption">Foreman</span><strong>{cloudMode ? cloudDisplayName() : databaseMode ? localIdentity : 'Demo foreman'}</strong></div></div>
         <div className="header-date"><label htmlFor="delivery-date" className="field-caption">MRF Delivery Date</label><input id="delivery-date" type="date" required value={draft.deliveryDate} onChange={event => { if (event.target.value) changeDraft(current => ({ ...current, deliveryDate: event.target.value })); }} /><span className="sr-only">Default for items using the MRF date</span></div>
@@ -392,6 +416,6 @@ export default function App() {
 
     <dialog className="mobile-menu" ref={menuRef} aria-label="Navigation"><div className="mobile-menu-heading"><Brand /><button className="icon-button" aria-label="Close navigation" onClick={() => menuRef.current?.close()}><X size={22} aria-hidden="true" /></button></div><Navigation onNavigate={() => menuRef.current?.close()} /></dialog>
     <dialog className="modal edit-modal" ref={editRef} aria-labelledby="edit-title" onClose={() => { setEditing(null); editTriggerRef.current?.focus({ preventScroll: true }); }}>{editing && <form onSubmit={saveEdit} noValidate><div className="modal-heading"><div><span className="eyebrow">MRF ITEM</span><h2 id="edit-title">Edit material</h2></div><button className="icon-button" type="button" aria-label="Close edit" onClick={() => editRef.current?.close()}><X size={20} aria-hidden="true" /></button></div><div className="field"><label htmlFor="edit-description">Material description</label><textarea id="edit-description" value={editing.description} maxLength={2000} rows={3} onChange={event => setEditing({ ...editing, description: event.target.value })} /></div><div className="edit-quantity"><div className="field"><label htmlFor="edit-quantity">Quantity</label><input id="edit-quantity" inputMode="decimal" maxLength={14} value={editing.quantity} onChange={event => setEditing({ ...editing, quantity: event.target.value })} /></div><div className="field"><label htmlFor="edit-unit">Requested unit</label><select id="edit-unit" value={editing.requestedUnit} onChange={event => setEditing({ ...editing, requestedUnit: event.target.value as Unit })}>{units.map(u => <option key={u}>{u}</option>)}</select></div></div><PurchasingFields projectId={projectId} line={editing} onChange={purchasing=>setEditing({...editing,purchasing})}/><p className="fine-print">Original input and source are preserved. Editing does not create or verify a catalog translation.</p>{editError && <p className="entry-error" role="alert">{editError}</p>}<div className="modal-actions"><button type="button" className="button" onClick={() => editRef.current?.close()}>Cancel</button><button className="button primary" type="submit">Save item changes</button></div></form>}</dialog>
-    <dialog className="modal confirm-modal" ref={confirmRef} aria-labelledby="confirm-title" onCancel={closeConfirmation}><div className="modal-heading"><h2 id="confirm-title">{removing ? 'Remove this item?' : 'Save your draft first?'}</h2><button className="icon-button" aria-label="Close confirmation" onClick={closeConfirmation}><X size={20} aria-hidden="true" /></button></div>{removing ? <><p>{removing.description}</p><p className="muted">Only this MRF line will be removed.</p><div className="modal-actions"><button className="button" onClick={closeConfirmation}>Keep item</button><button className="button danger" onClick={() => { changeDraft(current => ({ ...current, lines: current.lines.filter(line => line.id !== removing.id) })); setAdded([]); setAnnouncement('Item removed. Save your draft to keep this change.'); closeConfirmation(); }}>Remove item</button></div></> : <><p>You have unsaved changes. Save them in this browser before {pendingProject ? 'switching projects' : 'leaving the demo'}.</p><div className="modal-actions navigation-actions"><button className="button" onClick={closeConfirmation}><ArrowLeft size={15} aria-hidden="true" />Stay here</button><button className="button text-button" onClick={() => finishNavigation(false)}>Discard changes</button><button className="button primary" onClick={() => finishNavigation(true)}>Save and continue</button></div></>}</dialog>
+    <dialog className="modal confirm-modal" ref={confirmRef} aria-labelledby="confirm-title" onCancel={closeConfirmation}><div className="modal-heading"><h2 id="confirm-title">{removing ? 'Remove this item?' : 'Save your draft first?'}</h2><button className="icon-button" aria-label="Close confirmation" onClick={closeConfirmation}><X size={20} aria-hidden="true" /></button></div>{removing ? <><p>{removing.description}</p><p className="muted">Only this MRF line will be removed.</p><div className="modal-actions"><button className="button" onClick={closeConfirmation}>Keep item</button><button className="button danger" onClick={() => { changeDraft(current => ({ ...current, lines: current.lines.filter(line => line.id !== removing.id) })); setAdded([]); setAnnouncement('Item removed. Save your draft to keep this change.'); closeConfirmation(); }}>Remove item</button></div></> : <><p>You have unsaved changes. Save them before {pendingDraft?'opening another MRF':pendingProject ? 'switching projects' : 'leaving'}. Your other saved drafts will remain available.</p><div className="modal-actions navigation-actions"><button className="button" onClick={closeConfirmation}><ArrowLeft size={15} aria-hidden="true" />Stay here</button><button className="button text-button" onClick={() => finishNavigation(false)}>Discard changes</button><button className="button primary" onClick={() => finishNavigation(true)}>Save and continue</button></div></>}</dialog>
   </>;
 }

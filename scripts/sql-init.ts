@@ -42,7 +42,7 @@ try {
   await admin.request().query('IF OBJECT_ID(\'dbo.migration_checksums\') IS NULL CREATE TABLE dbo.migration_checksums(version int PRIMARY KEY,checksum char(64) NOT NULL)');
   await admin.request().input('checksum', sql.VarChar(64), checksum).query('IF NOT EXISTS(SELECT 1 FROM dbo.migration_checksums WHERE version=1) INSERT dbo.migration_checksums VALUES(1,@checksum)');
   await admin.request().query("IF USER_ID('etalonops_local_app') IS NULL CREATE USER etalonops_local_app FOR LOGIN etalonops_local_app");
-  for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql']] as const){
+  for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql']] as const){
     const migration=readFileSync(`db/${file}`,'utf8'), checksum=createHash('sha256').update(migration).digest('hex');
     const prior=(await admin.request().input('version',sql.Int,version).query('SELECT checksum FROM dbo.migration_checksums WHERE version=@version')).recordset[0];
     if(prior&&prior.checksum!==checksum)throw new Error('Applied catalog migration checksum changed.');

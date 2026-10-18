@@ -28,6 +28,7 @@ export type Line = {
   overrideDate: string | null;
 };
 export type Draft = {
+  name?: string;
   id?: string;
   version?: number;
   schemaVersion: 1;
@@ -85,7 +86,7 @@ export function formatDate(value: string): string {
 }
 
 export function freshDraft(projectId: string): Draft {
-  return { schemaVersion: 1, projectId, ownerId: 'local-demo-foreman', deliveryDate: localDate(), lines: [], savedAt: null };
+  return { name:'New MRF', schemaVersion: 1, projectId, ownerId: 'local-demo-foreman', deliveryDate: localDate(), lines: [], savedAt: null };
 }
 
 export const storageKey = (projectId: string) => `etalonops:demo:v1:${projectId}`;
@@ -100,9 +101,9 @@ function isUnit(value: unknown): value is Unit {
   return typeof value === 'string' && units.includes(value as Unit);
 }
 
-export function loadDraft(projectId: string): { draft: Draft; error?: string; restored?: boolean } {
+export function loadDraft(projectId: string, id?:string): { draft: Draft; error?: string; restored?: boolean } {
   try {
-    const saved = localStorage.getItem(storageKey(projectId));
+    const saved = localStorage.getItem(id?`${storageKey(projectId)}:draft:${id}`:storageKey(projectId));
     if (!saved) return { draft: freshDraft(projectId) };
     const value = JSON.parse(saved);
     const candidateValid = (candidate: unknown) => {
@@ -126,7 +127,8 @@ export function loadDraft(projectId: string): { draft: Draft; error?: string; re
       || new Set(value.lines.map((line: Line) => line.id)).size !== value.lines.length) {
       throw new Error('Invalid local draft');
     }
-    return { draft: value as Draft, restored: true };
+    if(value.name!==undefined&&(typeof value.name!=='string'||!value.name.trim()||value.name.length>120))throw new Error('Invalid draft name');
+    return { draft: {...value,name:value.name??'Saved MRF'} as Draft, restored: true };
   } catch {
     return { draft: freshDraft(projectId), error: 'This browser’s saved draft could not be opened. It has not been deleted. Saving a new draft will replace it.' };
   }

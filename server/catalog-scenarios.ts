@@ -11,6 +11,23 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'multiple named drafts remain independent, owned, paged and protected against stale saves',run:async store=>{
+ const {admin,user,foreign}=people();await store.member(user,'riverside');await store.member(user,'northside');await store.member(admin,'riverside');await store.member(foreign,'riverside');
+ const item={id:randomUUID(),quantity:'2.5',requestedUnit:'EA',description:'User-entered fixture part',rawInput:{quantity:'2.5',requestedUnit:'EA',description:'User-entered fixture part'},candidate:null,source:'user_description',deliveryMode:'inherit',overrideDate:null,purchasing:{productId:null,manufacturer:'Fixture Maker',partNumber:'PART-A',noSubstitutions:true}};
+ const body=draftBody.parse({projectId:'riverside',name:'Level 2 Rough-In',deliveryDate:'2026-11-10',version:0,lines:[item]});
+ const a=await store.saveDraft(user,body),b=await store.saveDraft(user,{...body,name:'Parking Lot Lighting',deliveryDate:'2026-11-20',lines:[]});assert.notEqual(a.id,b.id);
+ let list=await store.listDrafts(user,'riverside');assert.equal(list.total,2);assert.equal(list.records.find(r=>r.id===a.id)!.itemCount,1);assert.equal(list.records.find(r=>r.id===b.id)!.name,'Parking Lot Lighting');
+ assert.equal((await store.listDrafts(admin,'riverside')).total,0);assert.equal((await store.listDrafts(foreign,'riverside')).total,0);assert.equal((await store.listDrafts(user,'northside')).total,0);
+ await assert.rejects(async()=>store.getDraft(admin,String(a.id)),/not found/);await assert.rejects(async()=>store.getDraft(foreign,String(a.id)),/not found/);
+ const renamed=await store.saveDraft(user,{...body,version:1,name:'Level 2 Rough-In — revised',deliveryDate:'2026-11-12'},String(a.id));assert.equal(renamed.version,2);assert.equal(renamed.lines[0].purchasing?.noSubstitutions,true);
+ assert.equal((await store.getDraft(user,String(b.id))).deliveryDate,'2026-11-20');assert.equal((await store.getDraft(user,String(b.id))).version,1);
+ const compatible=await store.saveDraft(user,{...body,name:undefined,version:1,lines:[]},String(b.id));assert.equal(compatible.name,'Parking Lot Lighting');
+ await assert.rejects(async()=>store.saveDraft(user,{...body,version:1},String(a.id)),/changed elsewhere/);
+ await assert.rejects(async()=>store.saveDraft(user,{...body,projectId:'northside',version:2},String(a.id)),/cannot be moved/);
+ for(let i=0;i<26;i++)await store.saveDraft(user,{...body,name:`Extra request ${i}`,lines:[]});list=await store.listDrafts(user,'riverside');assert.equal(list.records.length,25);assert.equal(list.total,28);const next=await store.listDrafts(user,'riverside',2);assert.equal(next.records.length,3);assert.equal(new Set([...list.records,...next.records].map(r=>r.id)).size,28);
+ assert.throws(()=>draftBody.parse({...body,name:'   '}));assert.throws(()=>draftBody.parse({...body,name:'x'.repeat(121)}));
+}},
+
 {name:'reviewed corrections preserve MRF snapshots and reject forged history',run:async store=>{
  const {admin,user,foreign}=people();await store.member(user,'riverside');
  const input={...bracket(),verification:'reviewed'},m=await store.catalogCommand(admin,'material',input),prod=await store.catalogCommand(admin,'product',product('bracket'));

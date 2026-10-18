@@ -138,8 +138,7 @@ test('SQL-backed HTTP API denies forged owners and non-admin imports and permits
   try {
     const token = await session('foreman-one'), other = await session('foreman-two');
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-    const prior = await store.getProjectDraft({ ...admin, oid: 'foreman-one', roles: ['Foreman'] }, 'northside');
-    const body = { projectId: 'northside', deliveryDate: '2026-11-10', version: prior?.version ?? 0, lines: [] };
+    const body = { projectId: 'northside', name:'HTTP named draft', deliveryDate: '2026-11-10', version: 0, lines: [] };
     const forged = await fetch(base + '/api/drafts', { method: 'POST', headers, body: JSON.stringify({ ...body, ownerId: 'foreman-two' }) });
     assert.equal(forged.status, 400);
     const response = await fetch(base + '/api/drafts', { method: 'POST', headers, body: JSON.stringify(body) });

@@ -28,7 +28,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   });
   app.use(rateLimit({ windowMs: 60_000, limit: 1800, handler:(_req,res)=>{res.status(429).json({error:'Too many requests. Wait a minute before retrying.'});}, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.use(express.json({ limit: '1mb' }));
-  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local }); });
+  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'named-drafts-v5' }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
     const { identity } = z.object({ identity: z.string() }).strict().parse(req.body);
     const token = await auth.issueLocal(identity);
@@ -56,6 +56,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
     res.json({ matches: await store.search(principal(res), query,z.enum(['riverside','northside']).optional().parse(req.query.projectId)) });
   });
   app.get('/api/projects/:project/draft', async (req, res) => res.json({ draft: await store.getProjectDraft(principal(res), req.params.project) }));
+  app.get('/api/projects/:project/drafts',async(req,res)=>res.json(await store.listDrafts(principal(res),z.enum(['riverside','northside']).parse(req.params.project),z.coerce.number().int().min(1).max(100000).default(1).parse(req.query.page))));
   app.get('/api/drafts/:id', async (req, res) => res.json({ draft: await store.getDraft(principal(res), req.params.id) }));
   app.post('/api/drafts', async (req, res) => {
     const body = draftBody.parse(req.body);

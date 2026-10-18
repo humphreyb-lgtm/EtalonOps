@@ -465,3 +465,13 @@ dialog::backdrop { background: #14203c55; }
 @media(max-width:600px){.purchasing-fields input,.purchasing-fields select,.result-product select { min-height:44px; }.catalog-relationships {overflow-wrap:anywhere;} }
 .product-photo-slot { display:inline-flex; max-width:100%; vertical-align:middle; }
 .image-review-photo .product-photo-slot { display:flex; width:100%; }
+
+.draft-tools { display:flex; align-items:end; justify-content:space-between; gap:16px; padding:16px 20px; margin-bottom:12px; flex-wrap:wrap; }
+.draft-tools > label { display:grid; gap:6px; flex:1 1 250px; max-width:700px; min-width:0; font-weight:550; }
+.draft-tools input { width:100%; }
+.saved-drafts { padding:20px; margin-bottom:12px; }
+.saved-drafts article { border-top:1px solid var(--border); padding:12px 0; overflow-wrap:anywhere; }
+.saved-drafts h3 { font-size:17px; margin:0 0 6px; }
+.saved-drafts p { color:var(--muted); }
+.saved-drafts .catalog-actions { flex-wrap:wrap; }
+@media(max-width:600px) { .draft-tools { padding:12px; }.draft-tools .catalog-actions { flex-wrap:wrap; }.saved-drafts { padding:12px; } }

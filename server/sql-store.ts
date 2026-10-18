@@ -1,3 +1,4 @@
+import type { Store } from './store';
 import { historicalSnapshot } from './catalog-history';
 import { catalogAction, searchCatalog, validatePurchase, productForMaterial, type Operation } from './catalog-v2';
 import sql from 'mssql';
@@ -56,7 +57,7 @@ export class SqlStore implements Repository {
     const lines = result.recordset.map(line => ({ id: String(line.id).toLowerCase(), quantity: String(line.quantity), requestedUnit: line.requested_uom, description: line.description,
       rawInput: JSON.parse(line.raw_input), candidate: line.candidate ? JSON.parse(line.candidate) : null, source: line.source, purchasing:line.purchasing?JSON.parse(line.purchasing):undefined,
       deliveryMode: line.delivery_mode, overrideDate: dateOnly(line.override_date) }));
-    return { id: String(row.id).toLowerCase(), projectId: row.project, deliveryDate: String(dateOnly(row.delivery_date)), version: Number(row.version), savedAt: new Date(row.updated_at).toISOString(), lines };
+    return { id: String(row.id).toLowerCase(), projectId: row.project, name: row.name, deliveryDate: String(dateOnly(row.delivery_date)), version: Number(row.version), savedAt: new Date(row.updated_at).toISOString(), lines };
   }
   async getDraft(p: Principal, id: string): Promise<Awaited<ReturnType<SqlStore['mapDraft']>>> {
     if (!this.session) return this.transaction(tx => tx.getDraft(p, id), sql.ISOLATION_LEVEL.READ_COMMITTED);
@@ -66,21 +67,28 @@ export class SqlStore implements Repository {
     await this.requireProject(p, row.project);
     return this.mapDraft(row);
   }
+  async listDrafts(p:Principal,project:string,page=1):Promise<ReturnType<Store['listDrafts']>>{
+    if(!this.session)return this.transaction(tx=>tx.listDrafts(p,project,page),sql.ISOLATION_LEVEL.READ_COMMITTED);
+    await this.requireProject(p,project);const total=Number((await this.q('SELECT COUNT(*) AS total FROM dbo.drafts WHERE tenant=@p0 AND owner=@p1 AND project=@p2',p.tenant,p.oid,project)).recordset[0].total);
+    const pages=Math.max(1,Math.ceil(total/25));page=Math.min(page,pages);
+    const rows=(await this.q('SELECT d.id,d.name,d.project,d.delivery_date,d.updated_at,d.version,(SELECT COUNT(*) FROM dbo.draft_lines l WHERE l.draft_id=d.id) AS item_count FROM dbo.drafts d WHERE d.tenant=@p0 AND d.owner=@p1 AND d.project=@p2 ORDER BY d.updated_at DESC,d.id DESC OFFSET @p3 ROWS FETCH NEXT 25 ROWS ONLY',p.tenant,p.oid,project,(page-1)*25)).recordset;
+    return {records:rows.map(r=>({id:String(r.id).toLowerCase(),name:r.name,projectId:r.project,deliveryDate:dateOnly(r.delivery_date),savedAt:r.updated_at instanceof Date?r.updated_at.toISOString():r.updated_at,itemCount:Number(r.item_count),version:Number(r.version)})),total,page,pages};
+  }
   async getProjectDraft(p: Principal, project: string): Promise<Awaited<ReturnType<SqlStore['mapDraft']>> | null> {
     if (!this.session) return this.transaction(tx => tx.getProjectDraft(p, project), sql.ISOLATION_LEVEL.READ_COMMITTED);
     await this.requireProject(p, project);
-    const row = (await this.q('SELECT * FROM dbo.drafts WITH(UPDLOCK,HOLDLOCK) WHERE project=@p0 AND tenant=@p1 AND owner=@p2', project, p.tenant, p.oid)).recordset[0];
+    const row = (await this.q('SELECT TOP(1) * FROM dbo.drafts WITH(UPDLOCK,HOLDLOCK) WHERE project=@p0 AND tenant=@p1 AND owner=@p2 ORDER BY updated_at DESC,id DESC', project, p.tenant, p.oid)).recordset[0];
     return row ? this.mapDraft(row) : null;
   }
   async saveDraft(p: Principal, body: DraftBody, id?: string) {
     await this.requireProject(p, body.projectId);
     return this.transaction(async tx => {
-      const existing = id ? await tx.getDraft(p, id) : await tx.getProjectDraft(p, body.projectId);
+      const existing = id ? await tx.getDraft(p, id) : null;
       if ((existing && existing.version !== body.version) || (!existing && body.version !== 0)) throw new ApiError(409, 'This draft changed elsewhere. Reload before saving; your on-screen items are preserved.');
       if (existing && existing.projectId !== body.projectId) throw new ApiError(409, 'A draft cannot be moved between projects.');
       const draftId = String(existing?.id ?? randomUUID());
-      if (existing) await tx.q('UPDATE dbo.drafts SET delivery_date=@p0,version=version+1,updated_at=@p1 WHERE id=@p2 AND tenant=@p3 AND owner=@p4', body.deliveryDate, now(), draftId, p.tenant, p.oid);
-      else await tx.q('INSERT dbo.drafts(id,tenant,owner,project,delivery_date,version,updated_at) VALUES(@p0,@p1,@p2,@p3,@p4,1,@p5)', draftId, p.tenant, p.oid, body.projectId, body.deliveryDate, now());
+      if (existing) await tx.q('UPDATE dbo.drafts SET delivery_date=@p0,version=version+1,updated_at=@p1,name=@p5 WHERE id=@p2 AND tenant=@p3 AND owner=@p4', body.deliveryDate, now(), draftId, p.tenant, p.oid, body.name??existing?.name??'Untitled MRF');
+      else await tx.q('INSERT dbo.drafts(id,tenant,owner,project,delivery_date,version,updated_at,name) VALUES(@p0,@p1,@p2,@p3,@p4,1,@p5,@p6)', draftId, p.tenant, p.oid, body.projectId, body.deliveryDate, now(), body.name??'Untitled MRF');
       const previous = new Map((await tx.q('SELECT id,material_id,purchasing,candidate,source FROM dbo.draft_lines WHERE draft_id=@p0', draftId)).recordset.map(line => [String(line.id).toLowerCase(), {materialId:String(line.material_id).toLowerCase(),purchasing:line.purchasing,candidate:line.candidate,source:line.source}]));
       await tx.q('DELETE dbo.draft_lines WHERE draft_id=@p0', draftId);
       for (const [index, line] of body.lines.entries()) {

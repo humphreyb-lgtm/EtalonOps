@@ -25,11 +25,15 @@ export class Store {
     if (!exists) this.transaction(() => { this.db.exec(migration); this.db.prepare('INSERT INTO schema_migrations(version,checksum) VALUES(1,?)').run(hash(migration)); });
     const applied = this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=1').get();
     if (applied?.checksum !== hash(migration)) throw new Error('Applied migration checksum changed. Create a new migration instead.');
-    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql']] as const){
+    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql']] as const){
       const next=readFileSync(new URL(`../db/migrations/${file}`,import.meta.url),'utf8');
       const prior=this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=?').get(version);
       if(prior&&prior.checksum!==hash(next))throw new Error('Applied catalog migration checksum changed.');
-      if(!prior)this.transaction(()=>{this.db.exec(next);this.db.prepare('INSERT INTO schema_migrations(version,checksum) VALUES(?,?)').run(version,hash(next));});
+      if(!prior){
+        if(version===5)this.db.exec('PRAGMA foreign_keys=OFF');
+        try{this.transaction(()=>{this.db.exec(next);if(this.db.prepare('PRAGMA foreign_key_check').all().length)throw new Error('Draft migration would break saved references.');this.db.prepare('INSERT INTO schema_migrations(version,checksum) VALUES(?,?)').run(version,hash(next));});}
+        finally{if(version===5)this.db.exec('PRAGMA foreign_keys=ON');}
+      }
     }
   }
   engine = 'SQLite local development';
@@ -52,9 +56,15 @@ export class Store {
     this.requireProject(p, String(row.project));
     return this.mapDraft(row);
   }
+  listDrafts(p:Principal,project:string,page=1){
+    this.requireProject(p,project);const total=Number(this.db.prepare('SELECT COUNT(*) AS total FROM drafts WHERE tenant=? AND owner=? AND project=?').get(p.tenant,p.oid,project)!.total);
+    const pages=Math.max(1,Math.ceil(total/25));page=Math.min(page,pages);
+    const records=this.db.prepare('SELECT d.id,d.name,d.project,d.delivery_date,d.updated_at,d.version,(SELECT COUNT(*) FROM draft_lines l WHERE l.draft_id=d.id) AS item_count FROM drafts d WHERE d.tenant=? AND d.owner=? AND d.project=? ORDER BY d.updated_at DESC,d.id DESC LIMIT 25 OFFSET ?').all(p.tenant,p.oid,project,(page-1)*25);
+    return {records:records.map(r=>({id:r.id,name:r.name,projectId:r.project,deliveryDate:r.delivery_date,savedAt:r.updated_at,itemCount:Number(r.item_count),version:Number(r.version)})),total,page,pages};
+  }
   getProjectDraft(p: Principal, project: string) {
     this.requireProject(p, project);
-    const row = this.db.prepare('SELECT * FROM drafts WHERE project=? AND tenant=? AND owner=?').get(project, p.tenant, p.oid);
+    const row = this.db.prepare('SELECT * FROM drafts WHERE project=? AND tenant=? AND owner=? ORDER BY updated_at DESC,id DESC LIMIT 1').get(project, p.tenant, p.oid);
     return row ? this.mapDraft(row) : null;
   }
   mapDraft(row: Row) {
@@ -63,17 +73,17 @@ export class Store {
       rawInput: JSON.parse(String(line.raw_input)), candidate: line.candidate ? JSON.parse(String(line.candidate)) : null,
       purchasing: line.purchasing ? JSON.parse(String(line.purchasing)) : undefined, source: line.source, deliveryMode: line.delivery_mode, overrideDate: line.override_date,
     }));
-    return { id: row.id, projectId: row.project, deliveryDate: row.delivery_date, version: row.version, savedAt: row.updated_at, lines };
+    return { id: row.id, projectId: row.project, name: row.name, deliveryDate: row.delivery_date, version: row.version, savedAt: row.updated_at, lines };
   }
   saveDraft(p: Principal, body: DraftBody, id?: string) {
     this.requireProject(p, body.projectId);
     return this.transaction(() => {
-      const existing = id ? this.getDraft(p, id) : this.getProjectDraft(p, body.projectId);
+      const existing = id ? this.getDraft(p, id) : null;
       if ((existing && existing.version !== body.version) || (!existing && body.version !== 0)) throw new ApiError(409, 'This draft changed elsewhere. Reload before saving; your on-screen items are preserved.');
       if (existing && existing.projectId !== body.projectId) throw new ApiError(409, 'A draft cannot be moved between projects.');
       const draftId = String(existing?.id ?? randomUUID());
-      if (existing) this.db.prepare('UPDATE drafts SET delivery_date=?,version=version+1,updated_at=? WHERE id=? AND tenant=? AND owner=?').run(body.deliveryDate, now(), draftId, p.tenant, p.oid);
-      else this.db.prepare('INSERT INTO drafts VALUES(?,?,?,?,?,1,?)').run(draftId, p.tenant, p.oid, body.projectId, body.deliveryDate, now());
+      if (existing) this.db.prepare('UPDATE drafts SET delivery_date=?,version=version+1,updated_at=?,name=? WHERE id=? AND tenant=? AND owner=?').run(body.deliveryDate, now(), body.name??existing?.name??'Untitled MRF', draftId, p.tenant, p.oid);
+      else this.db.prepare('INSERT INTO drafts(id,tenant,owner,project,delivery_date,version,updated_at,name) VALUES(?,?,?,?,?,1,?,?)').run(draftId, p.tenant, p.oid, body.projectId, body.deliveryDate, now(), body.name??'Untitled MRF');
       const priorMaterials = new Map(this.db.prepare('SELECT id,material_id,purchasing,candidate,source FROM draft_lines WHERE draft_id=?').all(draftId).map(line => [String(line.id), {materialId:line.material_id,purchasing:line.purchasing,candidate:line.candidate,source:line.source}]));
       this.db.prepare('DELETE FROM draft_lines WHERE draft_id=?').run(draftId);
       body.lines.forEach((line, index) => {

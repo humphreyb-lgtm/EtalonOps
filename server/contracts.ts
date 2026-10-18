@@ -23,7 +23,7 @@ export const line = z.object({
   if (value.candidate && value.source !== value.candidate.source) context.addIssue({ code: 'custom', message: 'Candidate/source mismatch.' });
 });
 export const draftBody = z.object({
-  projectId: z.enum(['riverside', 'northside']), deliveryDate: date,
+  projectId: z.enum(['riverside', 'northside']), name:z.string().trim().min(1).max(120).optional(), deliveryDate: date,
   lines: z.array(line).max(500), version: z.number().int().nonnegative(),
 }).strict().refine(value => new Set(value.lines.map(item => item.id)).size === value.lines.length, 'Duplicate line identifiers');
 export type DraftBody = z.infer<typeof draftBody>;

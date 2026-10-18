@@ -22,12 +22,12 @@ export async function request<T>(path: string, method = 'GET', body?: unknown): 
   return value;
 }
 export function clearLocalSession() { token = null; tokenPromise = null; }
-export async function readDatabaseDraft(projectId: string): Promise<Draft | null> {
-  const { draft } = await request<{ draft: SavedDraft | null }>(`/projects/${encodeURIComponent(projectId)}/draft`);
+export async function readDatabaseDraft(projectId: string,id?:string): Promise<Draft | null> {
+  const { draft } = await request<{ draft: SavedDraft | null }>(id?`/drafts/${encodeURIComponent(id)}`:`/projects/${encodeURIComponent(projectId)}/draft`);
   return draft ? { ...draft, schemaVersion: 1, ownerId: 'local-demo-foreman' } : null;
 }
 export async function saveDatabaseDraft(draft: Draft): Promise<Draft> {
-  const { draft: saved } = await request<{ draft: SavedDraft }>(draft.id ? `/drafts/${draft.id}` : '/drafts', draft.id ? 'PUT' : 'POST', { projectId: draft.projectId, deliveryDate: draft.deliveryDate, lines: draft.lines, version: draft.version ?? 0 });
+  const { draft: saved } = await request<{ draft: SavedDraft }>(draft.id ? `/drafts/${draft.id}` : '/drafts', draft.id ? 'PUT' : 'POST', { name:draft.name??'Untitled MRF', projectId: draft.projectId, deliveryDate: draft.deliveryDate, lines: draft.lines, version: draft.version ?? 0 });
   return { ...saved, schemaVersion: 1, ownerId: 'local-demo-foreman' };
 }
 export async function databaseSearch(query: string,projectId?:string) { return (await request<{ matches: Candidate[] }>(`/materials?q=${encodeURIComponent(query)}${projectId?`&projectId=${encodeURIComponent(projectId)}`:''}`)).matches; }
@@ -86,3 +86,7 @@ export async function uploadProductImage(id: string,file: File,sourceUrl: string
 
 export type AIStatus={enabled:boolean;discoveryAvailable:boolean;limits:{monthlySessions:number;monthlyRequests:number;sessionRequests:number;userDailyRequests:number}};
 export type AIClarification={summary:string;description:string;reply:string;question:string|null;source:'ai';discoveryAvailable:false};
+
+export type DraftSummary={id:string;name:string;projectId:string;deliveryDate:string;savedAt:string;itemCount:number;version:number};
+export type DraftPage={records:DraftSummary[];total:number;page:number;pages:number};
+export function listDatabaseDrafts(projectId:string,page=1){return request<DraftPage>(`/projects/${encodeURIComponent(projectId)}/drafts?page=${page}`);}
