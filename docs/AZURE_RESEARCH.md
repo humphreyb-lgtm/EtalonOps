@@ -55,3 +55,7 @@ Automated checks use fictional data and mocked provider/HTTP responses. They tes
 ## v17 research contract
 
 The current adapter uses the documented Azure Responses v1 endpoint with strict JSON-schema output. Dimension fields are numeric/nullable, text fields such as schedule are text/nullable, and model source/image indices resolve to retrieved references. Optional unavailable images are omitted with coverage notes. Azure rejection and validation stages now report safe diagnostic codes; no prompts, full model output or keys are dumped. A past generic v16 error did not retain its cause. See PILOT_UPDATE_V17.md for the repair update; existing activation remains in place.
+
+## v18 assisted discovery
+
+See [PILOT_UPDATE_V18.md](PILOT_UPDATE_V18.md) for the current discovery activation, billing, saved-history and incomplete-candidate workflow. The earlier manufacturer-page-only restrictions describe v16/v17. Web discovery now requires the explicit pricing-checked `--enable-web-discovery` activation. It uses the existing Azure Responses API and reports Bing and model costs separately.

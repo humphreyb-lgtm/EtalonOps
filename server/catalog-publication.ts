@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {createHash} from 'node:crypto';
-import {type Operation,createMaterial,describeMaterial} from './catalog-v2';
+import {type Operation,manufacturerIdentity,createMaterial,describeMaterial} from './catalog-v2';
 import {type Principal} from './contracts';
 import type {InboxItem} from './catalog-inbox';
 const norm=(v:string)=>v.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
@@ -23,11 +23,11 @@ export function* publicationPlan(p:Principal,id:string,version:number,items:Inbo
    else{
     const material=yield* materialFor(v.materialKey);for(const dep of material.ids)ids.add(dep);resolved.set(row.id,material.target);
     if(row.kind==='product'){
-     const prior=products.find(product=>product.normalized===norm(v.manufacturer)&&product.normalized_part===norm(v.partNumber));if(prior&&(!prior.active||String(prior.material_id).toLowerCase()!==material.target))throw Error(`Manufacturer part ${v.manufacturer} ${v.partNumber} conflicts with a different or retired catalog product.`);
-     const peers=items.filter(item=>item.kind==='product'&&item.state==='unpublished'&&norm(item.fields.manufacturer??'')===norm(v.manufacturer)&&norm(item.fields.partNumber??'')===norm(v.partNumber));
+     const prior=products.find(product=>manufacturerIdentity(product.normalized)===manufacturerIdentity(v.manufacturer)&&product.normalized_part===norm(v.partNumber));if(prior&&(!prior.active||String(prior.material_id).toLowerCase()!==material.target))throw Error(`Manufacturer part ${v.manufacturer} ${v.partNumber} conflicts with a different or retired catalog product.`);
+     const peers=items.filter(item=>item.kind==='product'&&item.state==='unpublished'&&manufacturerIdentity(item.fields.manufacturer??'')===manufacturerIdentity(v.manufacturer)&&norm(item.fields.partNumber??'')===norm(v.partNumber));
      for(const peer of peers){if(peer.id===row.id)continue;const linked=yield* materialFor(value(peer).materialKey);if(linked.target!==material.target)throw Error('One manufacturer part is assigned to different material specifications.');}
     }
-    if(row.kind==='image'&&v.manufacturer){const prior=products.find(product=>product.normalized===norm(v.manufacturer)&&product.normalized_part===norm(v.partNumber)&&product.active&&String(product.material_id).toLowerCase()===material.target);if(!prior){const product=items.find(item=>item.kind==='product'&&item.state==='unpublished'&&norm(item.fields.manufacturer??'')===norm(v.manufacturer)&&norm(item.fields.partNumber??'')===norm(v.partNumber));if(!product)throw Error(`Required manufacturer product ${v.manufacturer} ${v.partNumber} is missing or deleted.`);const dep=yield* visit(product);if(resolved.get(product.id)!==material.target)throw Error('Image manufacturer product belongs to a different material.');for(const required of dep)ids.add(required);}}
+    if(row.kind==='image'&&v.manufacturer){const prior=products.find(product=>manufacturerIdentity(product.normalized)===manufacturerIdentity(v.manufacturer)&&product.normalized_part===norm(v.partNumber)&&product.active&&String(product.material_id).toLowerCase()===material.target);if(!prior){const product=items.find(item=>item.kind==='product'&&item.state==='unpublished'&&manufacturerIdentity(item.fields.manufacturer??'')===manufacturerIdentity(v.manufacturer)&&norm(item.fields.partNumber??'')===norm(v.partNumber));if(!product)throw Error(`Required manufacturer product ${v.manufacturer} ${v.partNumber} is missing or deleted.`);const dep=yield* visit(product);if(resolved.get(product.id)!==material.target)throw Error('Image manufacturer product belongs to a different material.');for(const required of dep)ids.add(required);}}
    }
    memo.set(row.id,ids);return new Set(ids);
   }catch(e){const error=message(e);failures.set(row.id,error);throw Error(error);}

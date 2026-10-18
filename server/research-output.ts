@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {researchCandidate} from '../src/catalog-research';
+import {researchFields,researchCandidate} from '../src/catalog-research';
 import {normalize} from './search';
 import {materialInput,describeMaterial} from './catalog-v2';
 import {publicSourceUrl,type ResearchSource} from './research-source';
@@ -19,10 +19,16 @@ export function decodeResearchOutput(raw:unknown,scope:string,sources:ResearchSo
   const {sourceIndex:_source,imageIndex,attributes:_attributes,additionalDefiningAttributes:_extra,...fields}=item;
   const candidate=researchCandidate.parse({...fields,attributes,sourceUrl:source.url});
   const unique=new Map<string,string>();for(const phrase of [...candidate.phrases,`${candidate.manufacturer} ${candidate.partNumber}`,candidate.partNumber]){const key=normalize(phrase);if(!unique.has(key))unique.set(key,phrase);}candidate.phrases=[...unique.values()].slice(0,40);
-  describeMaterial(materialInput.parse({externalKey:candidate.externalKey,category:candidate.category,productUnit:candidate.productUnit,attributes:candidate.attributes,sourceUrl:candidate.sourceUrl,verificationBasis:candidate.verificationBasis,verification:'provisional',origin:'ai_discovery'}));
+  const missingFields=researchGaps(candidate);
   let imageUrl:string|undefined;
   if(imageIndex!==null){const observed=source.imageUrls[imageIndex];if(observed){try{if(publicSourceUrl(observed).origin===new URL(source.url).origin)imageUrl=observed;}catch{ /* Invalid optional image cannot invalidate a complete product. */ }}if(!imageUrl)coverageNotes+=' A missing or external-host image was omitted; product specifications were retained.';}
-  return {...candidate,...(imageUrl?{imageUrl}:{})};
+  return {...candidate,missingFields,...(imageUrl?{imageUrl}:{})};
  });
  return {scope,coverageNotes:coverageNotes.slice(0,4000),items};
+}
+
+export function researchGaps(candidate:import('../src/catalog-research').ResearchCandidate):string[]{
+ const missing=researchFields[candidate.category].filter(field=>candidate.attributes[field]===undefined||candidate.attributes[field]==='');
+ if(missing.length)return missing;
+ try{describeMaterial(materialInput.parse({externalKey:candidate.externalKey,category:candidate.category,productUnit:candidate.productUnit,attributes:candidate.attributes,sourceUrl:candidate.sourceUrl,verificationBasis:candidate.verificationBasis,verification:'provisional',origin:'ai_discovery'}));return [];}catch(error){return [error instanceof Error?error.message.slice(0,300):'Invalid defining specifications'];}
 }

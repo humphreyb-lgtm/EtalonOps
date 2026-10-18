@@ -1,3 +1,4 @@
+import {researchGaps} from './research-output';
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {randomUUID} from 'node:crypto';
@@ -5,7 +6,7 @@ import {inboxAction,type InboxItem} from './catalog-inbox';
 import {materialColumns} from './catalog-spreadsheet';
 import {researchResults} from '../src/catalog-research';
 import {ApiError,type Principal} from './contracts';
-import {type Operation,materialInput,productInput,translationInput,describeMaterial,createMaterial,addProduct,previewBulk,applyBulk,parseExtendedCsv} from './catalog-v2';
+import {type Operation,manufacturerByName,materialInput,productInput,translationInput,describeMaterial,createMaterial,addProduct,previewBulk,applyBulk,parseExtendedCsv} from './catalog-v2';
 const requestSchema=z.object({results:researchResults,previewHash:z.string().optional(),approval:z.string().optional()}).strict();
 const csv=(kind:string,rows:readonly unknown[])=>'kind,data_json\n'+rows.map(row=>`${kind},"${JSON.stringify(row).replaceAll('"','""')}"`).join('\n');
 export function* researchAction(p:Principal,data:unknown,apply=false):Operation<any>{
@@ -20,7 +21,7 @@ export function* researchAction(p:Principal,data:unknown,apply=false):Operation<
   identities.set(built.identity,materialKey);materials.set(item.externalKey.toLowerCase(),material);
   const product=productInput.parse({materialKey,manufacturer:item.manufacturer,partNumber:item.partNumber,title:item.title,sourceUrl:item.sourceUrl,verification:'provisional',origin:'ai_discovery'});
   const partKey=JSON.stringify([product.manufacturer.toLowerCase(),product.partNumber.toLowerCase()]);if(parts.has(partKey))throw new ApiError(409,'A manufacturer part appears more than once.');parts.add(partKey);
-  const prior=(yield {text:'SELECT p.id,p.material_id FROM manufacturer_products p JOIN manufacturers m ON p.manufacturer_id=m.id AND p.tenant=m.tenant WHERE p.tenant=@p0 AND m.normalized=@p1 AND p.normalized_part=@p2',values:[p.tenant,product.manufacturer.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim(),product.partNumber.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim()]})[0];
+  const maker=yield* manufacturerByName(p,product.manufacturer);const prior=maker?(yield {text:'SELECT id,material_id FROM manufacturer_products WHERE tenant=@p0 AND manufacturer_id=@p1 AND normalized_part=@p2',values:[p.tenant,maker.id,product.partNumber.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim()]})[0]:undefined;
   if(prior&&(!existing.id||String(prior.material_id).toLowerCase()!==String(existing.id).toLowerCase()))throw new ApiError(409,'Manufacturer part is linked to different specifications; use reviewed corrections.');
   if(existing.id)yield* addProduct(p,product,true);
   products.push(product);
@@ -41,7 +42,8 @@ export function* researchAction(p:Principal,data:unknown,apply=false):Operation<
 export function* stageResearch(p:Principal,data:unknown):Operation<any>{
  if(!p.roles.includes('Admin'))throw new ApiError(403,'Administrator role required.');
  const input=z.object({results:researchResults,searchPhrase:z.string().trim().max(500).default(''),images:z.array(z.object({manufacturer:z.string(),partNumber:z.string(),sourceUrl:z.url()})).max(5).default([])}).strict().parse(data);
- const preview=yield* researchAction(p,{results:input.results});
+ const complete=input.results.items.every(item=>researchGaps(item).length===0);
+ const preview=complete?yield* researchAction(p,{results:input.results}):{summaries:input.results.items.map(item=>({materialKey:item.externalKey}))};
  const items:InboxItem[]=[],materials=new Set<string>(),phrases=new Set<string>();
  const append=(kind:InboxItem['kind'],fields:Record<string,string>)=>items.push({id:randomUUID(),kind,sheet:'AI research '+kind,row:items.length+2,fields:{kind,...fields},state:'unpublished'});
  input.results.items.forEach((item,index)=>{
@@ -57,5 +59,5 @@ export function* stageResearch(p:Principal,data:unknown):Operation<any>{
   }
  });
  for(const image of input.images){const index=input.results.items.findIndex(item=>item.manufacturer===image.manufacturer&&item.partNumber===image.partNumber);if(index<0)throw new ApiError(400,'Image does not belong to a selected product.');append('image',{materialKey:preview.summaries[index].materialKey,manufacturer:image.manufacturer,partNumber:image.partNumber,sourceUrl:image.sourceUrl,rightsBasis:'Owner-managed image usage; imported from selected manufacturer-page AI research.'});}
- return yield* inboxAction(p,'inbox-stage',{filename:'Product research — '+(input.results.scope.trim()||'selected products').slice(0,160),research:{scope:input.results.scope,coverageNotes:input.results.coverageNotes,searchPhrase:input.searchPhrase},items});
+ return yield* inboxAction(p,'inbox-stage',{filename:'Product research — '+(input.results.scope.trim()||'selected products').slice(0,160),research:{scope:input.results.scope,coverageNotes:(input.results.coverageNotes+' '+input.results.items.flatMap(item=>{const gaps=researchGaps(item);return gaps.length?[item.manufacturer+' '+item.partNumber+': needs '+gaps.join(', ')]:[];}).join('; ')).trim().slice(0,4000),searchPhrase:input.searchPhrase},items});
 }

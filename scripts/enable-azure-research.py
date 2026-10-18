@@ -3,7 +3,8 @@ Run only after installing the v16 application update in authenticated Cloud Shel
 Keys are read directly from Azure into a private temporary settings file, never printed.
 """
 from datetime import datetime, timezone
-import json, os, pathlib, subprocess, tempfile, urllib.request, urllib.parse
+import json, os, pathlib, subprocess, sys, tempfile, urllib.request, urllib.parse
+web_discovery="--enable-web-discovery" in sys.argv
 
 def az(*args):
     try:
@@ -33,7 +34,7 @@ model=info['properties']['model']
 require(model['name']=='gpt-5.4-mini' and model['version']=='2026-03-17' and info['sku']['name']=='DataZoneStandard','Unexpected model, version or deployment type. No settings changed.')
 require(info['properties'].get('provisioningState')=='Succeeded','Model deployment is not ready.')
 with urllib.request.urlopen('https://etalonops-954bb4a3.azurewebsites.net/api/health',timeout=30) as response: health=json.load(response)
-require(health.get('release') in ['source-research-v16','research-contract-v17'] and health.get('engine')=='Azure SQL','Install the v16 update successfully before enabling research.')
+require(health.get('release') in ['source-research-v16','research-contract-v17','assisted-research-v18'] and health.get('engine')=='Azure SQL','Install the v16 update successfully before enabling research.')
 # Verify current public retail rates before changing the AI deployment or application.
 query=urllib.parse.urlencode({'$filter':"contains(meterName, '5.4') and armRegionName eq 'eastus'"})
 with urllib.request.urlopen('https://prices.azure.com/api/retail/prices?'+query,timeout=30) as response: prices=json.load(response)
@@ -41,6 +42,12 @@ require(not prices.get('NextPageLink'),'Price query was incomplete. Stop for pri
 for sku,expected in [('5.4 mini Inp Dz',0.825),('5.4 mini Opt Dz',4.95)]:
     matches=[item for item in prices['Items'] if item.get('skuName')==sku and item.get('unitOfMeasure')=='1M' and item.get('type')=='Consumption']
     require(len(matches)==1 and matches[0]['retailPrice']==expected,'Model retail pricing changed or is ambiguous. Stop for budget-policy review.')
+if web_discovery:
+    require(health.get('release')=='assisted-research-v18','Install v18 before enabling web discovery.')
+    query=urllib.parse.urlencode({'$filter':"contains(productName, 'Bing')"})
+    with urllib.request.urlopen('https://prices.azure.com/api/retail/prices?'+query,timeout=30) as response: grounding=json.load(response)
+    matches=[item for item in grounding['Items'] if item.get('productName')=='Grounding with Bing' and item.get('skuName')=='Search' and item.get('unitOfMeasure')=='1K' and item.get('type')=='Consumption']
+    require(not grounding.get('NextPageLink') and len(matches)==1 and matches[0]['retailPrice']==14,'Bing grounding pricing changed or could not be verified. No discovery activated.')
 # Read responses include null placeholders and read-only model fields. Send only
 # supported, non-null configuration fields back to the management update API.
 def deployment_model(value):
@@ -61,8 +68,9 @@ if info['properties'].get('versionUpgradeOption')!='NoAutoUpgrade':
     require(deployment_model(pinned['properties']['model'])==deployment_model(model) and deployment_sku(pinned['sku'])==deployment_sku(info['sku']) and pinned['properties']['versionUpgradeOption']=='NoAutoUpgrade','Model pinning is not yet confirmed. No application activation performed.')
 keys=az('cognitiveservices','account','keys','list','--name',resource,'--resource-group',group)
 settings={'ETALONOPS_RESEARCH_ENABLED':'true','ETALONOPS_OPENAI_ENDPOINT':endpoint,'ETALONOPS_OPENAI_DEPLOYMENT':deployment,'ETALONOPS_AZURE_OPENAI_API_KEY':keys['key1'],'ETALONOPS_RESEARCH_BUDGET_USD':'30','ETALONOPS_RESEARCH_PRICING':'gpt-5.4-mini-2026-03-17-us-dz-2026-10-18','ETALONOPS_AI_ENABLED':'false'}
+if web_discovery: settings.update({'ETALONOPS_RESEARCH_WEB_ENABLED':'true','ETALONOPS_RESEARCH_WEB_PRICING':'bing-14-per-1k-2026-10-18'})
 with tempfile.TemporaryDirectory(prefix='etalonops-ai-settings-') as directory:
     path=pathlib.Path(directory)/'settings.json';path.write_text(json.dumps(settings));path.chmod(0o600)
     subprocess.run(['az','webapp','config','appsettings','set','--resource-group',state['resourceGroup'],'--name',state['appName'],'--settings','@'+str(path),'--output','none'],check=True)
 print('Existing Azure model pinned; manufacturer-page research enabled with $30/month conservative reservations. No new resource or paid test request created.')
-print('Allow the app to restart, then refresh EtalonOps. General web search remains disabled.')
+print('Allow the app to restart, then refresh EtalonOps. '+('Bounded product web discovery enabled; Bing and model costs count toward the AI allowance.' if web_discovery else 'Web discovery activation was not requested.'))

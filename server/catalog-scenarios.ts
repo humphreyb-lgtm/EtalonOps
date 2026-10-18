@@ -12,6 +12,20 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'AI research publication reuses material across makers, repeated products and phrases, and holds incomplete specifications',run:async store=>{
+ const {admin,user}=people();await store.member(user,'riverside');
+ const base={externalKey:'research-pvc',category:'conduit',productUnit:'STICK',attributes:material().attributes,manufacturer:'Synthetic Maker One',partNumber:'ONLY-ONE',title:'Synthetic PVC conduit',sourceUrl:'https://example.invalid/pvc',verificationBasis:'Synthetic evidence for duplicate detection tests only.',phrases:['synthetic pvc research']};
+ const publish=async(item:typeof base)=>{let batch=await store.catalogCommand(admin,'research-stage',{results:{scope:'Synthetic research',coverageNotes:'Fictional evidence only.',items:[item]}});if(!batch.items.some((row:any)=>row.state==='unpublished'))return batch;batch=await store.catalogCommand(admin,'inbox-publish',{id:batch.id,version:batch.version,itemIds:batch.items.filter((row:any)=>row.state==='unpublished').map((row:any)=>row.id),approval:'I approve and publish these records'});return batch;};
+ await publish(base);const first=(await store.search(user,'ONLY-ONE'))[0];assert.ok(first);
+ const second={...base,externalKey:'another-ai-key',manufacturer:'Synthetic Maker Two',partNumber:'ONLY-TWO'};await publish(second);await publish(second);
+ const details=await store.catalogCommand(admin,'details',{id:first.id});assert.equal(details.products.length,2);assert.equal((await store.catalogCommand(admin,'overview',{})).manufacturers.length,2);
+ assert.equal((await store.search(user,'ONLY-TWO'))[0].id,first.id);assert.equal((await store.catalogCommand(admin,'translations',{id:first.id})).filter((row:any)=>row.phrase==='synthetic pvc research').length,1);
+ await publish({...second,manufacturer:'Synthetic Maker Two, Inc.',partNumber:'ONLY-THREE',attributes:{...second.attributes,material:'polyvinyl chloride',endConnection:'plain end'}});assert.equal((await store.catalogCommand(admin,'overview',{})).manufacturers.length,2);assert.equal((await store.catalogCommand(admin,'details',{id:first.id})).products.length,3);
+ const incomplete={...base,externalKey:'missing-end',partNumber:'INCOMPLETE',attributes:{diameterIn:2,material:'PVC',type:'conduit',schedule:'40',lengthIn:120}};
+ const partial=await store.catalogCommand(admin,'research-stage',{results:{scope:'Partial product',coverageNotes:'End connection unknown.',items:[incomplete]}});assert.ok(partial.items.length);assert.match(partial.research.coverageNotes,/endConnection/);
+ await assert.rejects(async()=>store.catalogCommand(admin,'inbox-publish',{id:partial.id,version:partial.version,itemIds:partial.items.map((row:any)=>row.id),approval:'I approve and publish these records'}));assert.equal((await store.search(user,'INCOMPLETE')).length,0);
+ await assert.rejects(async()=>publish({...base,attributes:{...base.attributes,lengthIn:240}}),/different specifications|reviewed correction/);
+}},
 {name:'successful AI usage settles once and releases the unused reservation while failed calls remain held',run:async store=>{
  const {admin}=people(),requestId=randomUUID(),id=randomUUID();await store.paidResearch(admin,'reserve',{requestId});assert.equal((await store.paidResearch(admin,'usage',{})).reservedUsd,0.15);
  const save={id,requestId,actualCostMicroUsd:5000,digest:id.replaceAll('-','').repeat(2),payload:JSON.stringify({cacheKey:'a'.repeat(64),results:{scope:'Synthetic',coverageNotes:'Test only.',items:[]}})};

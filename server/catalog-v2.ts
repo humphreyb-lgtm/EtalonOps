@@ -30,6 +30,14 @@ export const imageReferenceInput=z.object({materialKey:reference,manufacturer:na
 export { purchaseSchema, type Purchasing } from './purchasing';
 import { purchaseSchema, type Purchasing } from './purchasing';
 export const policyInput=z.object({id:z.uuid().optional(),projectId:z.enum(['riverside','northside']),materialKey:reference.nullable(),category:z.enum(['conduit','bracket','box','general']).nullable(),enabled:z.boolean().default(false),manufacturerIds:z.array(z.uuid()).max(100),productIds:z.array(z.uuid()).max(100)}).strict().refine(v=>!(v.materialKey&&v.category),'Choose material or category scope, not both.').refine(v=>v.manufacturerIds.length+v.productIds.length>0,'An allow list cannot be empty.');
+function materialIdentity(category:string,productUnit:string,attributes:Record<string,unknown>){
+ const canonical=Object.fromEntries(Object.entries(attributes).filter(([field])=>!['nominalSpacing','category','recordOrigin'].includes(field)).sort(([x],[y])=>x.localeCompare(y)).map(([field,value])=>{
+  let normalized=typeof value==='string'?key(value):value;
+  if(field==='endConnection'&&typeof normalized==='string'){const end=normalized.replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();normalized=['bell','bell end','belled','belled end'].includes(end)?'bell end':['plain','plain end'].includes(end)?'plain end':end;}
+  if(field==='material'&&typeof normalized==='string'&&['pvc','polyvinyl chloride','polyvinylchloride'].includes(normalized))normalized='pvc';
+  return [field,normalized];
+ }));return digest(JSON.stringify({category,productUnit,attributes:canonical}));
+}
 export function describeMaterial(input:MaterialInput){
   const a=input.attributes;
   if(Object.keys(a).some(field=>/manufacturer|brand|vendor|partnumber|source|verification|price|usage|image/i.test(field)))throw new ApiError(400,'Brands, part numbers and administrative metadata belong outside material specifications.');
@@ -45,8 +53,7 @@ export function describeMaterial(input:MaterialInput){
     if(a.nominalSpacing)description+=`, ${a.nominalSpacing} Nominal Spacing`;
   }else if(input.category==='box')description=`${required('type')} Box, ${positive('widthIn')} × ${positive('heightIn')} × ${positive('depthIn')} in., ${required('material')}, ${required('knockouts')}`;
   else description=`${required('type')}, ${required('specification')}`;
-  const canonical=Object.fromEntries(Object.entries(a).filter(([field])=>field!=='nominalSpacing').sort(([x],[y])=>x.localeCompare(y)).map(([k,v])=>[k,typeof v==='string'?key(v):v]));
-  return {description,identity:digest(JSON.stringify({category:input.category,productUnit:input.productUnit,attributes:canonical}))};
+  return {description,identity:materialIdentity(input.category,input.productUnit,a)};
 }
 export function* materialByKey(p:Principal,externalKey:string):Operation<RecordRow>{
   const row=(yield* query('SELECT * FROM materials WHERE tenant=@p0 AND LOWER(external_key)=LOWER(@p1) AND active=1',p.tenant,externalKey))[0];
@@ -61,7 +68,8 @@ function admin(p:Principal){if(!p.roles.includes('Admin'))throw new ApiError(403
 export function* createMaterial(p:Principal,data:unknown,dry=false):Operation<any>{
   admin(p);const input=materialInput.parse(data),built=describeMaterial(input);
   if(input.origin!=='admin_reviewed'&&input.verification==='reviewed')throw new ApiError(400,'AI-origin material records must enter as provisional.');
-  const existing=(yield* query('SELECT material_id FROM catalog_profiles WHERE tenant=@p0 AND identity_key=@p1',p.tenant,built.identity))[0];
+  let existing=(yield* query('SELECT material_id FROM catalog_profiles WHERE tenant=@p0 AND identity_key=@p1',p.tenant,built.identity))[0];
+  if(!existing){const profiles=yield* query('SELECT p.material_id,p.attributes FROM catalog_profiles p JOIN materials m ON m.id=p.material_id AND m.tenant=p.tenant WHERE p.tenant=@p0 AND m.product_uom=@p1',p.tenant,input.productUnit);const matches=profiles.filter(row=>{const attributes=JSON.parse(row.attributes);return attributes.category===input.category&&materialIdentity(input.category,input.productUnit,attributes)===built.identity;});if(matches.length>1)throw new ApiError(409,'Several existing materials share these specifications. Resolve duplicate material records before importing.');existing=matches[0];}
   const byKey=(yield* query('SELECT id FROM materials WHERE tenant=@p0 AND LOWER(external_key)=LOWER(@p1)',p.tenant,input.externalKey))[0];
   if(existing){if(byKey&&String(byKey.id).toLowerCase()!==String(existing.material_id).toLowerCase())throw new ApiError(409,'External key conflicts with another material.');return {id:String(existing.material_id).toLowerCase(),unchanged:true};}
   if(byKey)throw new ApiError(409,'Existing external key requires reviewed correction; no automatic merge.');
@@ -77,9 +85,16 @@ export function* createMaterial(p:Principal,data:unknown,dry=false):Operation<an
   yield* query('INSERT INTO catalog_profiles(material_id,tenant,identity_key,attributes,verification,high_use) VALUES(@p0,@p1,@p2,@p3,@p4,0)',id,p.tenant,built.identity,JSON.stringify({category:input.category,...input.attributes,recordOrigin:input.origin}),input.verification);
   yield* audit(p,input.origin==='admin_reviewed'?'catalog.material_created':'catalog.material_ai_created',id);return {id,description:built.description,unchanged:false};
 }
+// Brand spelling and legal suffix variations are not new manufacturers. Ambiguous aliases require review.
+export function manufacturerIdentity(value:string){return key(value).replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/(?:\s+(?:inc|incorporated|corp|corporation|llc|ltd|limited))+$/,'').trim();}
+export function* manufacturerByName(p:Principal,name:string):Operation<any>{
+ const exact=(yield* query('SELECT * FROM manufacturers WHERE tenant=@p0 AND normalized=@p1',p.tenant,key(name)))[0];if(exact)return exact;
+ const matches=(yield* query('SELECT * FROM manufacturers WHERE tenant=@p0',p.tenant)).filter(row=>manufacturerIdentity(row.name)===manufacturerIdentity(name));
+ if(matches.length>1)throw new ApiError(409,'Manufacturer name matches several existing records. Resolve the duplicate manufacturer records before importing.');return matches[0];
+}
 export function* addProduct(p:Principal,data:unknown,dry=false):Operation<any>{
   admin(p);const input=productInput.parse(data);if(input.origin!=='admin_reviewed'&&input.verification==='reviewed')throw new ApiError(400,'AI-origin products must enter as provisional.');const material=yield* materialByKey(p,input.materialKey);
-  let maker=(yield* query('SELECT * FROM manufacturers WHERE tenant=@p0 AND normalized=@p1',p.tenant,key(input.manufacturer)))[0];
+  let maker=yield* manufacturerByName(p,input.manufacturer);
   const prior=maker?(yield* query('SELECT * FROM manufacturer_products WHERE tenant=@p0 AND manufacturer_id=@p1 AND normalized_part=@p2',p.tenant,maker.id,key(input.partNumber)))[0]:null;
   if(prior){if(String(prior.material_id).toLowerCase()!==String(material.id).toLowerCase())throw new ApiError(409,'Manufacturer part number is already linked to another material.');return {id:String(prior.id).toLowerCase(),unchanged:true};}
   if(dry)return {};
@@ -160,7 +175,7 @@ export function* translationsForAdmin(p:Principal,materialId:string):Operation<R
 export function* rejectTranslation(p:Principal,id:string):Operation<any>{admin(p);if(!(yield* query('SELECT id FROM translations WHERE id=@p0 AND tenant=@p1',id,p.tenant)).length)throw new ApiError(404,'Translation not found.');yield* query('UPDATE translations SET active=0 WHERE id=@p0 AND tenant=@p1',id,p.tenant);yield* audit(p,'translation.rejected',id);return {rejected:true};}
 export function* addImageReference(p:Principal,data:unknown,dry=false,batch:string|null=null):Operation<any>{
   admin(p);const input=imageReferenceInput.parse(data),m=yield* materialByKey(p,input.materialKey);let productId:string|null=null;
-  if(input.manufacturer){const row=(yield* query('SELECT p.id FROM manufacturer_products p JOIN manufacturers m ON m.id=p.manufacturer_id AND m.tenant=p.tenant WHERE p.tenant=@p0 AND p.material_id=@p1 AND m.normalized=@p2 AND p.normalized_part=@p3 AND p.active=1',p.tenant,m.id,key(input.manufacturer),key(input.partNumber!)))[0];if(!row)throw new ApiError(400,'Image manufacturer product not found.');productId=String(row.id).toLowerCase();}
+  if(input.manufacturer){const maker=yield* manufacturerByName(p,input.manufacturer);const row=maker?(yield* query('SELECT p.id FROM manufacturer_products p WHERE p.tenant=@p0 AND p.material_id=@p1 AND p.manufacturer_id=@p2 AND p.normalized_part=@p3 AND p.active=1',p.tenant,m.id,maker.id,key(input.partNumber!)))[0]:undefined;if(!row)throw new ApiError(400,'Image manufacturer product not found.');productId=String(row.id).toLowerCase();}
   const prior=(yield* query('SELECT id,product_id FROM image_references WHERE tenant=@p0 AND material_id=@p1 AND source_url=@p2',p.tenant,m.id,input.sourceUrl)).find(row=>(row.product_id?String(row.product_id).toLowerCase():null)===productId);if(prior)return {id:String(prior.id).toLowerCase(),unchanged:true};if(dry)return {};
   const id=randomUUID();yield* query("INSERT INTO image_references(id,tenant,material_id,product_id,source_url,rights_basis,status,batch_id) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,'pending',@p6)",id,p.tenant,m.id,productId,input.sourceUrl,input.rightsBasis,batch);yield* audit(p,'image.reference_imported',id);return {id,unchanged:false};
 }
@@ -311,12 +326,13 @@ export function* correctCatalog(p:Principal,kind:'material'|'product'|'merge',da
  if(kind==='material'){
   const m=yield* materialById(p,input.id);if(!m.active)throw new ApiError(409,'Retired materials are historical records. Correct their active replacement instead.');
   const profile=(yield* query('SELECT * FROM catalog_profiles WHERE tenant=@p0 AND material_id=@p1',p.tenant,input.id))[0];
-  const built=describeMaterial(input.material);mode=profile?.identity_key===built.identity?'metadata':'replacement';
+  const built=describeMaterial(input.material);mode=profile&&materialIdentity(input.material.category,m.product_uom,JSON.parse(profile.attributes))===built.identity?'metadata':'replacement';
   if(mode==='metadata'&&input.material.externalKey!==m.external_key)throw new ApiError(400,'Keep the stable key for a metadata correction.');
   if(mode==='replacement'&&key(input.material.externalKey)===key(m.external_key))throw new ApiError(400,'A specification change needs a new stable material key; the old key is retained for history.');
   const origin=profile?JSON.parse(profile.attributes).recordOrigin??'admin_reviewed':'admin_reviewed';
   before={material:m,profile:profile??null};after={...input.material,origin,verification:'provisional',description:built.description};impact=yield* materialImpact(p,input.id);
-  const existing=(yield* query('SELECT material_id FROM catalog_profiles WHERE tenant=@p0 AND identity_key=@p1',p.tenant,built.identity))[0];
+  let existing=(yield* query('SELECT material_id FROM catalog_profiles WHERE tenant=@p0 AND identity_key=@p1',p.tenant,built.identity))[0];
+  if(!existing){const profiles=yield* query('SELECT p.material_id,p.attributes FROM catalog_profiles p JOIN materials m ON m.id=p.material_id AND m.tenant=p.tenant WHERE p.tenant=@p0 AND m.product_uom=@p1',p.tenant,input.material.productUnit);const matches=profiles.filter(row=>{const attributes=JSON.parse(row.attributes);return attributes.category===input.material.category&&materialIdentity(input.material.category,input.material.productUnit,attributes)===built.identity;});if(matches.length>1)throw new ApiError(409,'Several existing materials share these specifications. Resolve duplicate material records before importing.');existing=matches[0];}
   if(existing&&String(existing.material_id).toLowerCase()!==input.id.toLowerCase()){after.existingTarget=yield* materialById(p,String(existing.material_id).toLowerCase());if(!after.existingTarget.active)throw new ApiError(409,'The matching canonical material is retired. Review it separately before correcting this item.');}
  }else if(kind==='product'){
   const product=(yield* query('SELECT p.*,m.name AS manufacturer FROM manufacturer_products p JOIN manufacturers m ON m.id=p.manufacturer_id AND m.tenant=p.tenant WHERE p.tenant=@p0 AND p.id=@p1',p.tenant,input.id))[0];if(!product)throw new ApiError(404,'Product not found.');if(!product.active)throw new ApiError(409,'Retired products are historical records.');

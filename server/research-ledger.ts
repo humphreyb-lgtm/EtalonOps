@@ -12,6 +12,7 @@ export function* researchLedger(p:Principal,action:string,data:unknown):Operatio
   const costs=new Map<string,number>();for(const row of settled){const parts=String(row.target).split('/'),cost=Number(parts[2]);if(costs.has(parts[1])||!Number.isSafeInteger(cost)||cost<0||cost>researchPolicy.reservationMicroUsd)throw new ApiError(503,'AI budget ledger requires review.');costs.set(parts[1],cost);}
   let committed=0,held=0,successful=0;for(const row of rows){const parts=String(row.target).split('/'),reserve=Number(parts[2]);if(reserve!==researchPolicy.reservationMicroUsd)throw new ApiError(503,'AI budget ledger requires review.');if(costs.has(parts[1])){committed+=costs.get(parts[1])!;successful+=costs.get(parts[1])!;}else{committed+=reserve;held+=reserve;}}
   if(action==='usage')return {period,limitUsd:researchPolicy.monthlyMicroUsd/1e6,reservedUsd:committed/1e6,heldUsd:held/1e6,estimatedSuccessfulUsd:successful/1e6,requests:rows.length,reservationUsd:researchPolicy.reservationMicroUsd/1e6};
+  const blocked=yield {text:"SELECT id FROM audit_events WHERE tenant=@p0 AND action='ai.research.cost_review'",values:[p.tenant]};if(blocked.length)throw new ApiError(503,'Paid research is paused pending review of unexpected Azure search charges or missing billing usage. Saved research and catalog search remain available.');
   const input=z.object({requestId:z.uuid()}).strict().parse(data),target=period+'/'+input.requestId+'/'+researchPolicy.reservationMicroUsd;
   const prior=yield {text:"SELECT id FROM audit_events WHERE tenant=@p0 AND action='ai.research.reserved' AND target LIKE @p1",values:[p.tenant,'%/'+input.requestId+'/%']};
   if(prior.length)throw new ApiError(409,'This research request was already reserved. No automatic paid retry.');
@@ -25,6 +26,16 @@ export function* researchLedger(p:Principal,action:string,data:unknown):Operatio
   yield {text:"INSERT INTO catalog_batches(id,tenant,digest,state,csv,report,created_at) VALUES(@p0,@p1,@p2,'ai-research',@p3,@p4,@p5)",values:[input.id,p.tenant,input.digest,input.payload,JSON.stringify({workflow:'live-research-v1',actor:p.oid}),new Date().toISOString()]};
   // Settle to returned token usage atomically with the saved research. Unknown/failed usage stays fully reserved.
   yield {text:'INSERT INTO audit_events(id,tenant,actor,action,target,at) VALUES(@p0,@p1,@p2,@p3,@p4,@p5)',values:[randomUUID(),p.tenant,p.oid,'ai.research.settled',`${reservedPeriod}/${input.requestId}/${input.actualCostMicroUsd}`,new Date().toISOString()]};return {id:input.id};
+ }
+ if(action==='finish'){
+  const input=z.object({id:z.uuid(),payload:z.string().max(500000)}).strict().parse(data);
+  const row=(yield {text:"SELECT report FROM catalog_batches WHERE id=@p0 AND tenant=@p1 AND state='ai-research'",values:[input.id,p.tenant]})[0];
+  if(!row||JSON.parse(row.report).actor!==p.oid)throw new ApiError(404,'Research not found.');
+  yield {text:"UPDATE catalog_batches SET csv=@p0 WHERE id=@p1 AND tenant=@p2",values:[input.payload,input.id,p.tenant]};return {id:input.id};
+ }
+ if(action==='list'){
+  const rows=yield {text:"SELECT id,csv,report,created_at FROM catalog_batches WHERE tenant=@p0 AND state='ai-research' ORDER BY created_at DESC",values:[p.tenant]};
+  return rows.filter((row:any)=>JSON.parse(row.report).actor===p.oid).flatMap((row:any)=>{const payload=JSON.parse(row.csv);return payload.internalStep?[]:[{id:String(row.id).toLowerCase(),scope:payload.results.scope,at:row.created_at,candidates:payload.results.items.length,estimatedUsd:payload.usage.estimatedUsd}];}).slice(0,20);
  }
  if(action==='get'){
   const input=z.object({id:z.uuid()}).strict().parse(data);const row=(yield {text:"SELECT csv,report FROM catalog_batches WHERE id=@p0 AND tenant=@p1 AND state='ai-research'",values:[input.id,p.tenant]})[0];
