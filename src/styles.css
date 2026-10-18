@@ -572,3 +572,18 @@ dialog::backdrop { background: #14203c55; }
 .admin-workspace > .modal-heading { padding: 8px 10px; }
 .admin-workspace .admin-sections { gap: 4px; padding: 5px 8px; }
 .saved-imports { margin: 4px 0; }
+.entry-actions { display: flex; align-items: center; justify-content: end; gap: 8px; min-width: 0; }
+.allow-changes { display: flex; align-items: center; gap: 4px; font-size: 11px; white-space: nowrap; }
+.entry-actions input[type=checkbox], .entry-purchasing input[type=checkbox] { width: 15px; min-height: 15px; height: 15px; margin: 0; padding: 0; }
+.entry-actions .find-button { padding: 5px 9px; white-space: nowrap; }
+.entry-purchasing { margin-top: 4px; font-size: 11px; }
+.entry-purchasing > label { display: flex; align-items: center; gap: 4px; }
+.exact-product-fields { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.exact-product-fields label { flex: 1; min-width: 100px; }
+.exact-product-fields input { display: block; width: 100%; min-height: 28px; padding: 3px 5px; font-size: 12px; }
+.no-substitutions .line-description > strong, .no-substitutions .line-manufacturer strong { color: #b42318; }
+.publication-plan { flex-basis: 100%; padding: 3px 0; font-size: 12px; }
+.publication-plan details p { margin: 2px 0; overflow-wrap: anywhere; }
+@media(min-width:761px){.entry-form { grid-template-columns: minmax(190px,.65fr) minmax(0,1.55fr) 245px;gap:10px; }}
+@media(max-width:760px){.entry-actions { justify-content: space-between; }.entry-actions .find-button { min-width: 145px; }}
+@media(max-width:380px){.entry-actions .find-button{min-width:120px;}.allow-changes{font-size:10px;}}

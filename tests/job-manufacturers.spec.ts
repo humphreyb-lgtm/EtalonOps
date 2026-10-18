@@ -13,7 +13,7 @@ for(const width of [390,1440])test(`job manufacturer rules are prepared inactive
  await region.getByLabel('Find allowed manufacturers',{exact:true}).fill(name);await region.getByRole('button',{name:'Browse manufacturers for rule',exact:true}).click();await region.getByLabel(`Permit manufacturer ${name}`,{exact:true}).check();
  const response=page.waitForResponse(r=>r.url().endsWith('/api/catalog/policy')&&r.request().method()==='POST');await region.getByRole('button',{name:'Save job manufacturer rule',exact:true}).click();const rule=await(await response).json();expect(rule.enabled).toBe(false);
  await expect(region.getByRole('status')).toContainText('Manufacturer rule saved');
- await region.getByRole('button',{name:`Edit manufacturer rule ${rule.id}`,exact:true}).click();
+ await region.getByRole('button',{name:new RegExp(`^Edit manufacturer rule ${rule.id}$`,'i')}).click();
  await expect(region.getByRole('button',{name:`Remove allowed manufacturer ${name}`,exact:true})).toBeVisible();
  await region.getByLabel('Manufacturer rule scope',{exact:true}).selectOption('category');await region.getByLabel('Restricted material category',{exact:true}).selectOption('box');
  await region.getByRole('button',{name:'Save job manufacturer rule',exact:true}).click();await expect(region.getByRole('status')).toContainText('Manufacturer rule saved');
