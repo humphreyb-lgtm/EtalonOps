@@ -1,0 +1,3 @@
+CREATE TABLE application_users(tenant TEXT NOT NULL,oid TEXT NOT NULL,display_name TEXT NOT NULL,active INTEGER NOT NULL CHECK(active IN (0,1)),role_limit TEXT CHECK(role_limit IN ('Admin','Foreman')),entra_admin INTEGER NOT NULL CHECK(entra_admin IN (0,1)),version INTEGER NOT NULL,created_at TEXT NOT NULL,seen_at TEXT,PRIMARY KEY(tenant,oid));
+CREATE TABLE user_access_changes(id TEXT PRIMARY KEY,tenant TEXT NOT NULL,oid TEXT NOT NULL,before_json TEXT NOT NULL,after_json TEXT NOT NULL,reason TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE INDEX user_access_history ON user_access_changes(tenant,oid,created_at);

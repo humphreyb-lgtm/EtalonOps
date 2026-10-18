@@ -21,7 +21,7 @@ try {
   await pool.request().batch(migration);
   await pool.request().query('IF OBJECT_ID(\'dbo.migration_checksums\') IS NULL CREATE TABLE dbo.migration_checksums(version int PRIMARY KEY,checksum char(64) NOT NULL)');
   await pool.request().input('checksum', sql.VarChar(64), checksum).query('IF NOT EXISTS(SELECT 1 FROM dbo.migration_checksums WHERE version=1) INSERT dbo.migration_checksums VALUES(1,@checksum)');
-  for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql']] as const){
+  for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql']] as const){
     const migration=readFileSync(`db/${file}`,'utf8'), checksum=createHash('sha256').update(migration).digest('hex');
     const prior=(await pool.request().input('version',sql.Int,version).query('SELECT checksum FROM dbo.migration_checksums WHERE version=@version')).recordset[0];
     if(prior&&prior.checksum!==checksum)throw new Error('Applied catalog migration checksum changed.');
@@ -51,10 +51,10 @@ try {
     if(repair.create)await request().query(`CREATE USER etalonops_runtime WITH SID=${repair.sid}, TYPE=E`);
     for(const table of tables)await request().query(`GRANT SELECT,INSERT,UPDATE,DELETE ON dbo.${table} TO etalonops_runtime`);
     await request().query('GRANT SELECT,INSERT ON dbo.audit_events TO etalonops_runtime; GRANT SELECT ON dbo.schema_migrations TO etalonops_runtime;');
-    await request().query('GRANT SELECT,INSERT ON dbo.catalog_revisions TO etalonops_runtime');
+    await request().query('GRANT SELECT,INSERT ON dbo.catalog_revisions TO etalonops_runtime; GRANT SELECT,INSERT ON dbo.user_access_changes TO etalonops_runtime; GRANT SELECT,INSERT,UPDATE ON dbo.application_users TO etalonops_runtime; REVOKE DELETE ON dbo.application_users FROM etalonops_runtime');
     await transaction.commit();
     console.log('SQL runtime identity verified against the managed identity client ID; restricted grants preserved.');
   }catch(error){try{await transaction.rollback();}catch{}throw error;}
-  for (const project of ['riverside', 'northside']) await pool.request().input('tenant', state.tenant).input('owner', state.ownerId).input('project', project).query('IF NOT EXISTS(SELECT 1 FROM dbo.memberships WHERE tenant=@tenant AND owner=@owner AND project=@project) INSERT dbo.memberships VALUES(@tenant,@owner,@project)');
+  for (const project of ['riverside', 'northside']) await pool.request().input('tenant', state.tenant).input('owner', state.ownerId).input('project', project).query('IF NOT EXISTS(SELECT 1 FROM dbo.application_users WHERE tenant=@tenant AND oid=@owner) AND NOT EXISTS(SELECT 1 FROM dbo.memberships WHERE tenant=@tenant AND owner=@owner AND project=@project) INSERT dbo.memberships VALUES(@tenant,@owner,@project)');
   console.log('Cloud schema checksum verified; restricted runtime identity and pilot owner memberships prepared. No fixture catalog imported.');
 } finally { await pool.close(); }

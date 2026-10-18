@@ -1,6 +1,6 @@
 # Named MRF demonstration
 
-This milestone demonstrates multiple named drafts, not submitted MRFs or a completed purchasing system. Live AI remains disabled. Microsoft Entra access roles and project membership checks exist; the user administration interface is a later phase in [the completion plan](MRF_COMPLETION_PLAN.md).
+This milestone demonstrates multiple named drafts, not submitted MRFs or a completed purchasing system. Live AI remains disabled. Microsoft Entra access roles and project membership checks exist; the user administration interface is now implemented in update v6; see [the completion plan](MRF_COMPLETION_PLAN.md).
 
 ## Offline review
 
@@ -26,6 +26,6 @@ Saving an existing draft uses its identifier and expected version. Conflicting e
 
 ## Sign-in reload issue
 
-The previous Microsoft session restoration fix is included, and no persistent credential workaround is introduced. Check `https://etalonops-954bb4a3.azurewebsites.net/api/health` after deployment: `release` must be `named-drafts-v5`. This distinguishes deployed code from an older running version.
+The previous Microsoft session restoration fix is included, and no persistent credential workaround is introduced. Check `https://etalonops-954bb4a3.azurewebsites.net/api/health` after deployment: `release` must be `user-access-v6`. This distinguishes deployed code from an older running version.
 
 Sign in once in the same browser tab and reload the saved draft. The session cache should restore the account and revalidate API access. Test this live; local mock sessions and the offline file cannot prove Microsoft session behavior. If the current release still requests a new login, retain the displayed error and check account/organizational session policies and browser storage restrictions. Do not paste tokens or credentials into troubleshooting messages.

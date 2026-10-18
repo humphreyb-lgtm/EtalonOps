@@ -1,0 +1,2 @@
+kind,data_json
+material,"{""externalKey"":""EXAMPLE-SUPPORT-001"",""category"":""bracket"",""attributes"":{""minSpanIn"":12,""maxSpanIn"":20,""mounting"":""FICTIONAL TEST MOUNT"",""material"":""FICTIONAL TEST MATERIAL"",""nominalSpacing"":""EXAMPLE ONLY""},""productUnit"":""EA"",""verification"":""provisional"",""origin"":""ai_import"",""sourceUrl"":""https://example.invalid/fictional-only"",""verificationBasis"":""FICTIONAL SCHEMA EXAMPLE ONLY. Not a real product; do not load into the live catalog.""}"

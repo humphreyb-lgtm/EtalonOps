@@ -27,7 +27,7 @@ export const draftBody = z.object({
   lines: z.array(line).max(500), version: z.number().int().nonnegative(),
 }).strict().refine(value => new Set(value.lines.map(item => item.id)).size === value.lines.length, 'Duplicate line identifiers');
 export type DraftBody = z.infer<typeof draftBody>;
-export type Principal = { tenant: string; oid: string; roles: string[] };
+export type Principal = { tenant: string; oid: string; roles: string[]; displayName?:string };
 export const importRow = z.object({
   schema_version: z.literal('1'), external_key: z.string().regex(/^[\w.-]{1,100}$/),
   description: text, aliases_json: z.string().max(10000), requested_uom: unit, product_uom: unit,

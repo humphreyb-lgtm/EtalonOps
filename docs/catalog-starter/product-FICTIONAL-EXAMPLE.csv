@@ -1,0 +1,2 @@
+kind,data_json
+product,"{""materialKey"":""EXAMPLE-SUPPORT-001"",""manufacturer"":""FICTIONAL EXAMPLE MAKER"",""partNumber"":""EXAMPLE-NOT-A-REAL-PART"",""title"":""FICTIONAL SCHEMA EXAMPLE ONLY"",""sourceUrl"":""https://example.invalid/fictional-only"",""verification"":""provisional"",""origin"":""ai_import""}"

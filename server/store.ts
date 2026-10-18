@@ -1,3 +1,4 @@
+import { admitUser,userAccess } from './user-access';
 import { historicalSnapshot } from './catalog-history';
 import { catalogAction, searchCatalog, validatePurchase, productForMaterial, type Operation } from './catalog-v2';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
@@ -25,7 +26,7 @@ export class Store {
     if (!exists) this.transaction(() => { this.db.exec(migration); this.db.prepare('INSERT INTO schema_migrations(version,checksum) VALUES(1,?)').run(hash(migration)); });
     const applied = this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=1').get();
     if (applied?.checksum !== hash(migration)) throw new Error('Applied migration checksum changed. Create a new migration instead.');
-    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql']] as const){
+    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql']] as const){
       const next=readFileSync(new URL(`../db/migrations/${file}`,import.meta.url),'utf8');
       const prior=this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=?').get(version);
       if(prior&&prior.checksum!==hash(next))throw new Error('Applied catalog migration checksum changed.');
@@ -120,6 +121,8 @@ export class Store {
     }
     return step.value;
   }
+  admit(p:Principal,localBootstrap=false){return this.transaction(()=>this.catalogRun(admitUser(p,localBootstrap)));}
+  users(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(userAccess(p,action,data)));}
   catalogCommand(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(catalogAction(p,action,data)));}
   search(p:Principal,query:string,projectId?:string){return this.catalogRun(searchCatalog(p,query,projectId));}
   parseImport(file: string) { return parseCatalog(file); }

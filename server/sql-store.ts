@@ -1,3 +1,4 @@
+import { admitUser,userAccess } from './user-access';
 import type { Store } from './store';
 import { historicalSnapshot } from './catalog-history';
 import { catalogAction, searchCatalog, validatePurchase, productForMaterial, type Operation } from './catalog-v2';
@@ -119,6 +120,8 @@ export class SqlStore implements Repository {
     while(!step.done){const rows=(await this.q(step.value.text,...step.value.values)).recordset;step=operation.next(rows);}
     return step.value;
   }
+  async admit(p:Principal,localBootstrap=false){return this.transaction(tx=>tx.catalogRun(admitUser(p,localBootstrap)));}
+  async users(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(userAccess(p,action,data)));}
   async catalogCommand(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(catalogAction(p,action,data)));}
   async search(p:Principal,query:string,projectId?:string){return this.catalogRun(searchCatalog(p,query,projectId));}
   async conflicts(p: Principal, rows: ImportRow[]) {

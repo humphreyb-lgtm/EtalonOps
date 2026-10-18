@@ -47,3 +47,5 @@ Regional runner checks: nine deployment tests pass, including the West US 3 temp
 Forward migration 004 adds append-only catalog correction history. Existing-pilot update v4 runs the checksum-verified schema helper before deploying the app; see [update v4](PILOT_UPDATE_V4.md) and [correction behavior](CATALOG_CORRECTIONS.md). No new service or SKU is introduced.
 
 Forward migration 005 supports multiple named drafts while retaining existing draft identifiers and lines. Use [update v5](PILOT_UPDATE_V5.md) for the current existing-pilot update and [the completion plan](MRF_COMPLETION_PLAN.md) for remaining scope. The health response identifies release `named-drafts-v5`; live session restoration still requires acceptance.
+
+Current existing-pilot release: [update v6](PILOT_UPDATE_V6.md), adding application-user/project access controls and retained access history via migration 006. Its health release marker is `user-access-v6`. Microsoft role assignment remains external; paid AI remains disabled.

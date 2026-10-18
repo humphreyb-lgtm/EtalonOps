@@ -34,6 +34,9 @@ test('SQL Server uses verified TLS; the app login cannot run DDL or alter audit 
   await assert.rejects(() => store.q('DELETE dbo.audit_events WHERE 1=0'), /permission|denied/i);
   await assert.rejects(() => store.q('UPDATE dbo.catalog_revisions SET reason=reason WHERE 1=0'), /permission|denied/i);
   await assert.rejects(() => store.q('DELETE dbo.catalog_revisions WHERE 1=0'), /permission|denied/i);
+  await assert.rejects(() => store.q('UPDATE dbo.user_access_changes SET reason=reason WHERE 1=0'), /permission|denied/i);
+  await assert.rejects(() => store.q('DELETE dbo.user_access_changes WHERE 1=0'), /permission|denied/i);
+  await assert.rejects(() => store.q('DELETE dbo.application_users WHERE 1=0'), /permission|denied/i);
   const untrusted = localSqlConfig(false, 'EtalonOpsSqlTests');
   untrusted.options = { ...untrusted.options, cryptoCredentialsDetails: {}, trustServerCertificate: false };
   const bad = new sql.ConnectionPool(untrusted);

@@ -9,8 +9,11 @@ import sys
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v5.zip')
+output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v6.zip')
 files = [
+    'src/UserAdmin.tsx', 'server/user-access.ts', 'server/auth.ts',
+    'db/006-user-access.sql', 'db/migrations/006-user-access.sql',
+    'docs/USER_ADMINISTRATION.md', 'docs/PILOT_UPDATE_V6.md',
     'src/draft-storage.ts', 'server/contracts.ts', 'server/repository.ts',
     'db/005-named-drafts.sql', 'db/migrations/005-named-drafts.sql',
     'docs/MRF_COMPLETION_PLAN.md', 'docs/NAMED_DRAFTS_DEMONSTRATION.md', 'docs/PILOT_UPDATE_V5.md',
@@ -27,6 +30,7 @@ files = [
     'docs/SESSION_DRAFT_REPAIR.md', 'docs/CATALOG_SNAPSHOT.md',
     'docs/LARGE_CATALOG_EXPORT.md', 'docs/CATALOG_ADMIN_WORKFLOWS.md', 'docs/PILOT_UPDATE_V2.md', 'docs/PILOT_UPDATE_V3.md',
 ]
+files += sorted(str(path.relative_to(root)) for path in (root / 'docs/catalog-starter').iterdir() if path.is_file())
 with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
     for name in files:
         archive.write(root / name, name)

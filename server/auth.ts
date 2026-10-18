@@ -23,7 +23,7 @@ export function createAuth(options: AuthOptions) {
         if (payload.tid !== tenant || typeof payload.oid !== 'string' || typeof payload.scp !== 'string' || !payload.scp.split(' ').includes('access_as_user') || !Array.isArray(payload.roles)) throw new Error('Invalid claims');
         const roles = payload.roles.filter((role): role is string => typeof role === 'string' && ['Admin', 'Foreman'].includes(role));
         if (!roles.length) throw new ApiError(403, 'Application assignment required.');
-        return { tenant, oid: payload.oid, roles };
+        return { tenant, oid: payload.oid.toLowerCase(), roles,...(typeof payload.name==='string'?{displayName:payload.name.trim().slice(0,200)}:{}) };
       } catch (error) { if (error instanceof ApiError) throw error; throw new ApiError(401, 'Valid API access token required.'); }
     },
   };

@@ -27,3 +27,9 @@ Catalog preparation starts now and need not wait for AI activation or final subm
 ## Phase 1 implementation evidence
 
 Named drafts, project-scoped owner lists, explicit resume URLs, unsaved-change navigation protection and legacy migration are implemented in update v5. The production build, 51 backend tests, 30 actual SQL Server tests, 51 browser tests and nine deployment checks passed. Additional browser walkthroughs verified named requests with different material lines against SQL Server and at phone width in browser storage. Live Azure deployment, the reported Microsoft reload issue and a second assigned real user remain acceptance items. User administration is still phase 2; no paid AI has been activated.
+
+## User-administration milestone
+
+Update v6 implements the application-user directory, registration of existing Microsoft object IDs, role restrictions bounded by Microsoft assignments, project access, deactivation on subsequent protected requests and append-only before/after access history. Existing drafts remain owned by their original users. Microsoft invitation/account creation and Microsoft role assignment remain external identity-administration tasks; this app introduces no password system or Graph permissions. See USER_ADMINISTRATION.md. Live acceptance is pending deployment.
+
+Starter dataset preparation is also underway: docs/catalog-starter contains import templates, fictional contract examples and instructions for the AI creating the initial catalog and translation dump. The examples pass the actual staged import contract in an isolated test database; they are not a production seed catalog or verified product research.

@@ -1,0 +1,13 @@
+# Instructions for the AI preparing the launch dataset
+
+Prepare a small review batch using the CSV format in README.md before producing the large dataset. Do not submit the fictional example files as real parts.
+
+1. Research the exact product on authoritative manufacturer documentation where available. Capture actual dimensions, range/spread, material, grade/schedule, connection and stocking unit. Distinguish nominal sizes/spacing from measured dimensions. Identify conflicting or unavailable facts in a separate unresolved-items report; exclude incomplete identities from import-ready materials.
+2. Create one canonical material for each meaningful specification identity. Keep manufacturer/vendor names and manufacturer part numbers out of canonical attributes. Associate each verified alternative through a separate product record. Do not assume two superficially similar parts meet the same specifications.
+3. Use the supported category attributes and decimal-inch numeric fields exactly. Do not supply a free-form canonical description: the application generates that description from the structured specification. Keep stable material keys consistent across all four files.
+4. Mark every AI-prepared material and product as ai_import/provisional. Supply exact source evidence and explain the verification basis. Do not call your own output human-reviewed. Manufacturer alternatives must have their own supporting evidence.
+5. Produce a modest set of reasonable search variations grounded in the known part facts: common terminology, word order and equivalent written units. Keep generated phrases marked ai_generated and include source evidence. Preserve ambiguity where size is absent. Do not invent search history, manufacturer equivalence, dimensions, conversions, endorsements or company usage frequency.
+6. Supply image references only where the exact part identity and usage rights can be documented. Otherwise omit the image entry. Do not download or embed photos in the CSV, and do not assume internet availability is permission to reuse an image.
+7. Validate CSV quoting and JSON syntax, remove duplicate rows and canonical identities, and check all relationship keys. Split by kind and within the file limits. Deliver materials, products, translations and optional images separately, plus source/research notes and unresolved items.
+
+The owner will preview and review the first batch in the application's import workflow. A successful import preserves provenance; it does not make an AI assertion independently verified. Do not activate APIs, subscribe to services, or incur charges on the owner's behalf.

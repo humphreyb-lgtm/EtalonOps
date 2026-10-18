@@ -475,3 +475,5 @@ dialog::backdrop { background: #14203c55; }
 .saved-drafts p { color:var(--muted); }
 .saved-drafts .catalog-actions { flex-wrap:wrap; }
 @media(max-width:600px) { .draft-tools { padding:12px; }.draft-tools .catalog-actions { flex-wrap:wrap; }.saved-drafts { padding:12px; } }
+.page-heading { flex-wrap:wrap; }
+.catalog-modal article { overflow-wrap:anywhere; }

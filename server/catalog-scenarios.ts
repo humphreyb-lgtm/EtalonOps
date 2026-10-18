@@ -11,6 +11,26 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'user administration enforces Microsoft role ceilings, revocation, history and tenant isolation',run:async store=>{
+ const {admin,user,foreign}=people();await store.admit(admin,true);await store.admit(user,true);await store.admit(foreign,true);
+ const original=await store.users(admin,'detail',{oid:user.oid});assert.equal(original.active,true);
+ const registered=await store.users(admin,'save',{oid:'registered-foreman',displayName:'Registered Fixture Foreman',active:true,roleLimit:null,projects:['northside'],version:0,reason:'Register this existing Microsoft identity before first sign-in.'});assert.equal(registered.version,1);const registrationHistory=await store.users(admin,'history',{oid:'registered-foreman'});assert.equal(registrationHistory.records[0].before,null);assert.equal(registrationHistory.records[0].after.displayName,'Registered Fixture Foreman');
+ const body=draftBody.parse({projectId:'riverside',name:'Retain this request',deliveryDate:'2026-11-10',version:0,lines:[]});const saved=await store.saveDraft(user,body);
+ const change={oid:user.oid,displayName:'Fixture Foreman',active:true,roleLimit:null,projects:['northside'],version:original.version,reason:'Limit this foreman to the Northside pilot project.'};
+ await assert.rejects(async()=>store.users(user,'list',{}),/Administrator/);
+ await assert.rejects(async()=>store.users(admin,'save',{...change,roleLimit:'Admin'}),/Microsoft first/);
+ const limited=await store.users(admin,'save',change);await assert.rejects(async()=>store.getDraft(user,String(saved.id)),/Project not found/);
+ await store.admit(user,true);await assert.rejects(async()=>store.listDrafts(user,'riverside'),/Project not found/);
+ await assert.rejects(async()=>store.users(admin,'save',change),/changed elsewhere/);
+ await store.users(admin,'save',{...change,version:limited.version,active:false,reason:'Deactivate this pilot account while retaining its saved MRFs.'});
+ await assert.rejects(async()=>store.admit(user),/deactivated/);await assert.rejects(async()=>store.admit(user,true),/deactivated/);
+ const deactivated=await store.users(admin,'detail',{oid:user.oid});const restored=await store.users(admin,'save',{...change,version:deactivated.version,projects:['riverside'],reason:'Restore access to the original request without replacing it.'});assert.equal(restored.active,true);await store.admit(user);assert.equal((await store.getDraft(user,String(saved.id))).name,'Retain this request');
+ const history=await store.users(admin,'history',{oid:user.oid});assert.equal(history.total,3);assert.ok(history.records.some((r:any)=>r.before.active===true&&r.after.active===false));
+ assert.equal((await store.users(foreign,'detail',{oid:user.oid})).displayName,user.oid);assert.equal((await store.users(foreign,'history',{oid:user.oid})).total,0);assert.equal((await store.users(foreign,'list',{})).total,1);
+ const own=await store.users(admin,'detail',{oid:admin.oid});await assert.rejects(async()=>store.users(admin,'save',{...change,oid:admin.oid.toUpperCase(),version:own.version,active:false}),/your own/);
+ const second={...admin,oid:'second-admin'};await store.admit(second,true);const secondRow=await store.users(admin,'detail',{oid:second.oid});await store.users(admin,'save',{...change,oid:second.oid,version:secondRow.version,roleLimit:'Foreman',projects:[],reason:'Restrict the second assigned administrator to foreman features.'});const effective=await store.admit(second);assert.deepEqual(effective.roles,['Foreman']);await assert.rejects(async()=>store.users(effective,'list',{}),/Administrator/);
+}},
+
 {name:'multiple named drafts remain independent, owned, paged and protected against stale saves',run:async store=>{
  const {admin,user,foreign}=people();await store.member(user,'riverside');await store.member(user,'northside');await store.member(admin,'riverside');await store.member(foreign,'riverside');
  const item={id:randomUUID(),quantity:'2.5',requestedUnit:'EA',description:'User-entered fixture part',rawInput:{quantity:'2.5',requestedUnit:'EA',description:'User-entered fixture part'},candidate:null,source:'user_description',deliveryMode:'inherit',overrideDate:null,purchasing:{productId:null,manufacturer:'Fixture Maker',partNumber:'PART-A',noSubstitutions:true}};
