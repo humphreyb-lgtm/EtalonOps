@@ -1,3 +1,4 @@
+import {separateResearchDetails} from '../src/research-attributes';
 import {researchGaps} from './research-output';
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
@@ -11,7 +12,7 @@ const requestSchema=z.object({results:researchResults,previewHash:z.string().opt
 const csv=(kind:string,rows:readonly unknown[])=>'kind,data_json\n'+rows.map(row=>`${kind},"${JSON.stringify(row).replaceAll('"','""')}"`).join('\n');
 export function* researchAction(p:Principal,data:unknown,apply=false):Operation<any>{
  if(!p.roles.includes('Admin'))throw new ApiError(403,'Administrator role required.');
- const input=requestSchema.parse(data),materials=new Map<string,any>(),products:any[]=[],phrases=new Map<string,any>(),summaries:any[]=[],identities=new Map<string,string>(),parts=new Set<string>();
+ const input=requestSchema.parse(data);input.results.items=input.results.items.map(separateResearchDetails);const materials=new Map<string,any>(),products:any[]=[],phrases=new Map<string,any>(),summaries:any[]=[],identities=new Map<string,string>(),parts=new Set<string>();
  for(const item of input.results.items){
   const material=materialInput.parse({externalKey:item.externalKey,category:item.category,productUnit:item.productUnit,attributes:item.attributes,sourceUrl:item.sourceUrl,verificationBasis:item.verificationBasis,origin:'ai_discovery',verification:'provisional'}),built=describeMaterial(material);
   const sameKey=materials.get(item.externalKey.toLowerCase());if(sameKey&&describeMaterial(sameKey).identity!==built.identity)throw new ApiError(409,'One material key has conflicting specifications.');
@@ -19,14 +20,14 @@ export function* researchAction(p:Principal,data:unknown,apply=false):Operation<
   let materialKey=identities.get(built.identity)??material.externalKey;
   if(existing.id){const row=(yield {text:'SELECT external_key FROM materials WHERE tenant=@p0 AND id=@p1',values:[p.tenant,existing.id]})[0];materialKey=String(row.external_key);}
   identities.set(built.identity,materialKey);materials.set(item.externalKey.toLowerCase(),material);
-  const product=productInput.parse({materialKey,manufacturer:item.manufacturer,partNumber:item.partNumber,title:item.title,sourceUrl:item.sourceUrl,verification:'provisional',origin:'ai_discovery'});
+  const product=productInput.parse({materialKey,manufacturer:item.manufacturer,partNumber:item.partNumber,title:item.title,...(item.productDetails?{details:item.productDetails}:{}),sourceUrl:item.sourceUrl,verification:'provisional',origin:'ai_discovery'});
   const partKey=JSON.stringify([product.manufacturer.toLowerCase(),product.partNumber.toLowerCase()]);if(parts.has(partKey))throw new ApiError(409,'A manufacturer part appears more than once.');parts.add(partKey);
   const maker=yield* manufacturerByName(p,product.manufacturer);const prior=maker?(yield {text:'SELECT id,material_id FROM manufacturer_products WHERE tenant=@p0 AND manufacturer_id=@p1 AND normalized_part=@p2',values:[p.tenant,maker.id,product.partNumber.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim()]})[0]:undefined;
   if(prior&&(!existing.id||String(prior.material_id).toLowerCase()!==String(existing.id).toLowerCase()))throw new ApiError(409,'Manufacturer part is linked to different specifications; use reviewed corrections.');
   if(existing.id)yield* addProduct(p,product,true);
   products.push(product);
   for(const phrase of item.phrases){const value=translationInput.parse({materialKey,phrase,sourceUrl:item.sourceUrl,origin:'ai_generated'});phrases.set(JSON.stringify([materialKey.toLowerCase(),phrase.toLowerCase().replace(/\s+/g,' ').trim()]),value);}
-  summaries.push({manufacturer:product.manufacturer,partNumber:product.partNumber,description:built.description,materialKey,materialAction:existing.id?'Link existing material':'Create or share material',productAction:prior?'Keep existing manufacturer product':'Link manufacturer product'});
+  summaries.push({manufacturer:product.manufacturer,partNumber:product.partNumber,description:built.description,materialKey,materialAction:existing.id?'Link existing material':'Create or share material',productAction:prior?(item.productDetails?'Keep existing manufacturer product; review additional details':'Keep existing manufacturer product'):'Link manufacturer product'});
  }
  const phraseCheck=parseExtendedCsv(csv('translation',[...phrases.values()]));if(phraseCheck.errors.length)throw new ApiError(400,JSON.stringify(phraseCheck.errors));
  const previewHash=createHash('sha256').update(JSON.stringify({results:input.results,summaries})).digest('hex');
@@ -42,6 +43,7 @@ export function* researchAction(p:Principal,data:unknown,apply=false):Operation<
 export function* stageResearch(p:Principal,data:unknown):Operation<any>{
  if(!p.roles.includes('Admin'))throw new ApiError(403,'Administrator role required.');
  const input=z.object({results:researchResults,searchPhrase:z.string().trim().max(500).default(''),images:z.array(z.object({manufacturer:z.string(),partNumber:z.string(),sourceUrl:z.url()})).max(5).default([])}).strict().parse(data);
+ input.results.items=input.results.items.map(separateResearchDetails);
  const complete=input.results.items.every(item=>researchGaps(item).length===0);
  const preview=complete?yield* researchAction(p,{results:input.results}):{summaries:input.results.items.map(item=>({materialKey:item.externalKey}))};
  const items:InboxItem[]=[],materials=new Set<string>(),phrases=new Set<string>();
@@ -52,7 +54,7 @@ export function* stageResearch(p:Principal,data:unknown):Operation<any>{
    const attributes:Record<string,string>={};for(const [key,value] of Object.entries(item.attributes))attributes[(materialColumns as readonly string[]).includes(key)?key:'attribute.'+key]=String(value);
    append('material',{externalKey:materialKey,category:item.category,productUnit:item.productUnit,verification:'provisional',origin:'ai_import',sourceUrl:item.sourceUrl,verificationBasis:item.verificationBasis,...attributes});materials.add(materialKey);
   }
-  append('product',{materialKey,manufacturer:item.manufacturer,partNumber:item.partNumber,title:item.title,sourceUrl:item.sourceUrl,verification:'provisional',origin:'ai_import'});
+  append('product',{materialKey,manufacturer:item.manufacturer,partNumber:item.partNumber,title:item.title,...(item.productDetails?{details:JSON.stringify(item.productDetails)}:{}),sourceUrl:item.sourceUrl,verification:'provisional',origin:'ai_import'});
   for(const phrase of [...item.phrases,...(input.searchPhrase?[input.searchPhrase]:[])]){
    const key=JSON.stringify([materialKey,phrase.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim()]);if(phrases.has(key))continue;phrases.add(key);
    append('translation',{materialKey,phrase,origin:'ai_generated',sourceUrl:item.sourceUrl});

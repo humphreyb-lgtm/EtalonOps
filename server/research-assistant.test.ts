@@ -5,7 +5,7 @@ import {discoverAzure,bingRequestMicroUsd} from './research-discovery';
 import {researchNumericFields,researchTextFields,decodeResearchOutput} from './research-output';
 import {Store} from './store';
 import {createApp} from './app';
-const source={url:'https://maker.example/conduit',text:'Fictional official source text.',imageUrls:[]};
+const source={url:'https://maker.example/conduit',text:'Fictional official source text.',imageUrls:['https://maker.example/product.png']};
 const attrs={diameterIn:1,lengthIn:120,material:'PVC',type:'conduit',schedule:'40'};
 const item={externalKey:'fictional-pvc-1-10',category:'conduit' as const,productUnit:'STICK' as const,attributes:attrs,manufacturer:'Fictional One',partNumber:'P100',title:'1 inch Schedule 40 PVC conduit',sourceUrl:source.url,verificationBasis:'Fictional source evidence, not a real product.',phrases:['1 inch pvc sch 40']};
 const wire={coverageNotes:'End connection not documented.',items:[{...Object.fromEntries(Object.entries(item).filter(([k])=>!['sourceUrl','attributes'].includes(k))),sourceIndex:0,imageIndex:null,attributes:Object.fromEntries([...researchNumericFields,...researchTextFields].map(k=>[k,(attrs as any)[k]??null])),additionalDefiningAttributes:[]}]};
@@ -27,6 +27,8 @@ test('assistant discovers without a URL, saves partial review, reopens privately
  const cached=await(await post('/api/research/run',{...input,requestId:randomUUID()},session.token)).json();assert.equal(cached.cached,true);assert.equal(discovery,1);assert.equal(extraction,1);
  const history=await(await fetch(base+'/api/research/history',{headers})).json();assert.equal(history.length,1);
  const saved=await(await fetch(base+'/api/research/saved/'+result.id,{headers})).json();assert.deepEqual(saved.results.items[0].missingFields,['endConnection']);
+ const images=await(await post('/api/research/images',{researchId:result.id,index:0},session.token)).json();assert.deepEqual(images.imageChoices,source.imageUrls);assert.equal(discovery,1);assert.equal(extraction,1);
+ assert.equal((await post('/api/research/stage',{researchId:result.id,indices:[0],imageSelections:{'0':'https://example.invalid/forged.png'}},session.token)).status,400);
  const staged=await post('/api/research/stage',{researchId:result.id,indices:[0]},session.token);assert.equal(staged.status,200,await staged.clone().text());
  assert.equal((await post('/api/research/select',{researchId:result.id,index:0,eventId:randomUUID(),projectId:'riverside'},session.token)).status,400);
  const foreman=await(await post('/api/dev/session',{identity:'foreman-one'})).json();assert.equal((await fetch(base+'/api/research/saved/'+result.id,{headers:{Authorization:'Bearer '+foreman.token}})).status,403);
@@ -58,4 +60,11 @@ test('multiple completed search action records share the reported Bing billing c
  const result=await run();assert.equal(result.bingRequests,1);assert.equal(result.searchMicroUsd,14000);assert.deepEqual(result.urls,[source.url]);
  value.tool_usage.web_search.num_requests=3;value.output[1].status='searching';assert.equal((await run()).bingRequests,3);value.output[1].status='failed';assert.equal((await run()).searchMicroUsd,42000);value.output[0].status='failed';await assert.rejects(run,/2 search action records.*failed.*open_page/);
  value.output=value.output.filter(item=>item.type!=='web_search_call');await assert.rejects(run,/0 search action records.*count: 3/);
+});
+
+test('an unreadable supplied page reports its reason before making any paid model or Bing call by default',async()=>{
+ const store=new Store(':memory:');let paid=0;const server=createApp(store,{mode:'local'},{research:{discoveryEnabled:true,async discover(){paid++;throw Error('Must not run');},async research(){paid++;throw Error('Must not run');}},researchSourceLoader:async()=>{throw Error('Manufacturer source HTTP 403; login or restricted page.');}}).listen(0,'127.0.0.1');await new Promise<void>(r=>server.once('listening',r));const base='http://127.0.0.1:'+(server.address() as any).port;
+ const post=(path:string,data:unknown,token?:string)=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(data)});
+ try{const session=await(await post('/api/dev/session',{identity:'admin'})).json();const failed=await post('/api/research/run',{requestId:randomUUID(),scope:'Fictional direct product',sourceUrls:[source.url]},session.token);assert.equal(failed.status,422);assert.match((await failed.json()).error,/No paid AI or Bing request was made.*HTTP 403/);assert.equal(paid,0);const usage=await(await fetch(base+'/api/admin/research/usage',{headers:{Authorization:'Bearer '+session.token}})).json();assert.equal(usage.requests,0);
+ }finally{await new Promise<void>(r=>server.close(()=>r()));store.db.close();}
 });

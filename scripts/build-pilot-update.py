@@ -9,8 +9,9 @@ import sys
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v18.zip')
+output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v19.zip')
 files = [
+    'docs/PILOT_UPDATE_V19.md', 'scripts/sql-init.ts', 'src/research-attributes.ts', 'db/008-product-details.sql', 'db/migrations/008-product-details.sql',
     'docs/PILOT_UPDATE_V18.md', 'server/research-discovery.ts', 'docs/PILOT_UPDATE_V17.md', 'server/research-output.ts', 'server/research-error.ts', 'docs/PILOT_UPDATE_V16.md', 'docs/AZURE_RESEARCH.md', 'docs/LIVE_AI_ACTIVATION.md', 'scripts/enable-azure-research.py',
     'server/cloud-config.ts', 'server/cloud-main.ts', 'server/ai-provider.ts', 'server/azure-research.ts', 'server/research-policy.ts', 'server/research-ledger.ts', 'server/research-source.ts', 'server/research-pdf.ts', 'server/research-routes.ts', 'server/research-selection.ts', 'src/LiveResearch.tsx',
     'docs/PILOT_UPDATE_V15.md', 'server/catalog-publication.ts', 'docs/PILOT_UPDATE_V14.md',

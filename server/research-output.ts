@@ -1,3 +1,4 @@
+import {separateResearchDetails} from '../src/research-attributes';
 import {z} from 'zod';
 import {researchFields,researchCandidate} from '../src/catalog-research';
 import {normalize} from './search';
@@ -17,7 +18,7 @@ export function decodeResearchOutput(raw:unknown,scope:string,sources:ResearchSo
   const source=sources[item.sourceIndex];if(!source)throw Error(`Candidate ${index+1}: sourceIndex does not identify a retrieved source.`);
   const attributes:Record<string,string|number>=Object.fromEntries(Object.entries(item.attributes).filter(([,value])=>value!==null)) as Record<string,string|number>;for(const attribute of item.additionalDefiningAttributes){if(Object.hasOwn(attributes,attribute.name))throw Error(`Candidate ${index+1}: repeated attribute ${attribute.name}.`);attributes[attribute.name]=attribute.value;}
   const {sourceIndex:_source,imageIndex,attributes:_attributes,additionalDefiningAttributes:_extra,...fields}=item;
-  const candidate=researchCandidate.parse({...fields,attributes,sourceUrl:source.url});
+  const candidate=separateResearchDetails(researchCandidate.parse({...fields,attributes,sourceUrl:source.url}));
   const unique=new Map<string,string>();for(const phrase of [...candidate.phrases,`${candidate.manufacturer} ${candidate.partNumber}`,candidate.partNumber]){const key=normalize(phrase);if(!unique.has(key))unique.set(key,phrase);}candidate.phrases=[...unique.values()].slice(0,40);
   const missingFields=researchGaps(candidate);
   let imageUrl:string|undefined;

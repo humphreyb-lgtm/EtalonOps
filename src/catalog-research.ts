@@ -1,7 +1,8 @@
 import {z} from 'zod';
 const text=z.string().trim().min(1).max(500);
 const url=z.url().max(2000).refine(v=>{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password;},'Use a public HTTPS source URL.');
-export const researchCandidate=z.object({externalKey:text.max(100),category:z.enum(['conduit','bracket','box','general']),productUnit:z.enum(['EA','FT','STICK','BOX','ROLL','PAIR']),attributes:z.record(z.string(),z.union([z.string(),z.number()])),manufacturer:text.max(200),partNumber:text.max(200),title:text,sourceUrl:url,verificationBasis:z.string().trim().min(10).max(2000),phrases:z.array(text).min(1).max(40)}).strict();
+export const productDetailsSchema=z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9]{0,39}$/),z.union([z.string().max(4000),z.number().finite()])).refine(value=>Object.keys(value).length<=40);
+export const researchCandidate=z.object({externalKey:text.max(100),category:z.enum(['conduit','bracket','box','general']),productUnit:z.enum(['EA','FT','STICK','BOX','ROLL','PAIR']),attributes:z.record(z.string(),z.union([z.string(),z.number()])),productDetails:productDetailsSchema.optional(),manufacturer:text.max(200),partNumber:text.max(200),title:text,sourceUrl:url,verificationBasis:z.string().trim().min(10).max(2000),phrases:z.array(text).min(1).max(40)}).strict();
 export const researchResults=z.object({scope:z.string().trim().max(2000),coverageNotes:z.string().trim().min(1).max(4000),items:z.array(researchCandidate).min(1).max(100)}).strict();
 // Loading a draft permits gaps so an administrator can repair them on the results page.
 // The server always uses the complete schema above before any preview or insertion.
