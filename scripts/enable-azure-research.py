@@ -33,7 +33,7 @@ model=info['properties']['model']
 require(model['name']=='gpt-5.4-mini' and model['version']=='2026-03-17' and info['sku']['name']=='DataZoneStandard','Unexpected model, version or deployment type. No settings changed.')
 require(info['properties'].get('provisioningState')=='Succeeded','Model deployment is not ready.')
 with urllib.request.urlopen('https://etalonops-954bb4a3.azurewebsites.net/api/health',timeout=30) as response: health=json.load(response)
-require(health.get('release')=='source-research-v16' and health.get('engine')=='Azure SQL','Install the v16 update successfully before enabling research.')
+require(health.get('release') in ['source-research-v16','research-contract-v17'] and health.get('engine')=='Azure SQL','Install the v16 update successfully before enabling research.')
 # Verify current public retail rates before changing the AI deployment or application.
 query=urllib.parse.urlencode({'$filter':"contains(meterName, '5.4') and armRegionName eq 'eastus'"})
 with urllib.request.urlopen('https://prices.azure.com/api/retail/prices?'+query,timeout=30) as response: prices=json.load(response)

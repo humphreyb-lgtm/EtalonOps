@@ -1,3 +1,4 @@
+import {ResearchFailure} from './research-error';
 import type express from 'express';
 import {createHash,randomUUID} from 'node:crypto';
 import {z} from 'zod';
@@ -22,7 +23,7 @@ export function researchRoutes(app:express.Express,store:Repository,provider?:Pr
   checkResearchPricing();
   await store.paidResearch(p,'reserve',{requestId:input.requestId});
   try{const value=await provider.research(input.scope,sources);const id=randomUUID(),payload={cacheKey,results:value.results,searchPhrase:input.searchPhrase,sourceUrls:sources.map(source=>source.url),usage:{inputTokens:value.inputTokens,outputTokens:value.outputTokens,estimatedUsd:value.costMicroUsd/1e6,reservedUsd:researchPolicy.reservationMicroUsd/1e6},researchedAt:new Date().toISOString()};await store.paidResearch(p,'save',{id,requestId:input.requestId,actualCostMicroUsd:value.costMicroUsd,digest:digest({id,cacheKey}),payload:JSON.stringify(payload)});await store.audit(p,'ai.research.used',`${input.requestId}/${value.inputTokens}/${value.outputTokens}/${value.costMicroUsd}`);res.json({id,...payload,cached:false});}
-  catch(error){await store.audit(p,'ai.research.failed',input.requestId);if(error instanceof ApiError)throw error;throw new ApiError(502,'Research failed. The reservation is retained; no automatic paid retry.');}
+  catch(error){if(error instanceof ResearchFailure){console.error('AI_RESEARCH_DIAGNOSTIC '+JSON.stringify({requestId:input.requestId,...error.diagnostic}));await store.audit(p,'ai.research.diagnostic',input.requestId+'/'+error.diagnostic.code);}await store.audit(p,'ai.research.failed',input.requestId);if(error instanceof ApiError)throw error;throw new ApiError(502,'Research failed. The reservation is retained; no automatic paid retry.');}
  });
  app.post('/api/research/select',async(req,res)=>{
   const p=res.locals.principal;await store.requireAdmin(p);const input=z.object({researchId:z.uuid(),index:z.number().int().min(0).max(researchPolicy.maxItems-1),eventId:z.uuid(),projectId:z.enum(['riverside','northside'])}).strict().parse(req.body);

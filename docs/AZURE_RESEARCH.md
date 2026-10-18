@@ -51,3 +51,7 @@ Calls already in progress may finish. Saved catalog data remains. Do not rerun f
 ## Validation boundary
 
 Automated checks use fictional data and mocked provider/HTTP responses. They test payload/model/usage limits, no tools, single attempts, secret-safe failures, private-target rejection, PDF extraction, persistent budget/settlement, concurrency, selection replay, canonical reuse, images, publication, job checks and saved exact-product lines on desktop/mobile. This development environment cannot resolve/connect to the supplied CANTEX host through its permitted network path; a live manufacturer fetch and a paid Azure response remain deployment acceptance checks. Do not bypass source-network protections to make an inaccessible source pass.
+
+## v17 research contract
+
+The current adapter uses the documented Azure Responses v1 endpoint with strict JSON-schema output. Dimension fields are numeric/nullable, text fields such as schedule are text/nullable, and model source/image indices resolve to retrieved references. Optional unavailable images are omitted with coverage notes. Azure rejection and validation stages now report safe diagnostic codes; no prompts, full model output or keys are dumped. A past generic v16 error did not retain its cause. See PILOT_UPDATE_V17.md for the repair update; existing activation remains in place.
