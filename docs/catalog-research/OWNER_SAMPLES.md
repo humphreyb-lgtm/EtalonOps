@@ -8,9 +8,15 @@ Owner-supplied manufacturer URL: https://pvcelectrical.cantexinc.com/Page/1-PVC-
 
 The trailing `v` after the hyperlink is excluded from the URL. The owner pasted the same 30-term list twice; retain one copy below. The joined text `A52BA121` at the boundary is a paste artifact (part number A52BA12 followed by list number 1), not another part number or a new alias.
 
-Proposed identity from the owner's description: nominal 1-inch PVC electrical conduit, Schedule 40, 10-foot length. Proposed linked manufacturer product: Cantex, A52BA12. These require verification from the linked manufacturer source before an import-ready row is produced. Confirm end connection, exact manufacturer designation, product unit, relevant ratings and dimensions separately; do not infer them solely from the URL. Keep nominal trade size separate from measured outside diameter. Do not infer underground/burial suitability or color from field terminology alone.
+Proposed identity from the owner's description: nominal 1-inch PVC electrical conduit, Schedule 40, 10-foot length. Proposed linked manufacturer product: Cantex, A52BA12. These require verification from the linked manufacturer source before an import-ready row is produced. The owner subsequently confirmed bell end from the manufacturer sell sheet (see below). Confirm exact manufacturer designation, product unit, relevant ratings and dimensions separately; do not infer them solely from the URL. Keep nominal trade size separate from measured outside diameter. Do not infer underground/burial suitability or color from field terminology alone.
 
 Canonical catalog identity remains brand-independent. A verified Cantex product links to that canonical item, with other manufacturer alternatives added only after equivalence is independently supported. Brand/part search intent must remain explicit, but does not itself mean No Substitutions. No stocking/request unit or conversion has been chosen by the owner for this sample.
+
+### Follow-up source details supplied by the owner
+
+- The owner confirms that sell-sheet links on this product page explicitly state **bell end**. Record the end connection as owner-confirmed from the manufacturer sell sheet, not as an inference from the URL. The assistant has not independently fetched the page or sell sheet: the environment blocked the HTTPS request with a 403 tunnel response.
+- The owner identifies the product-page image as the desired candidate photo. The exact image URL/file and reuse permission have not yet been captured. Link the candidate to the Cantex A52BA12 manufacturer product; generic-material use needs a separate representation review.
+- Proposed descriptive line, subject to remaining evidence/unit review: **1 in. PVC Electrical Conduit, Schedule 40, 10 FT, Bell End**. This is a human-readable research description, not an already imported or independently verified catalog record.
 
 ### Owner-provided field terminology (deduplicated)
 
