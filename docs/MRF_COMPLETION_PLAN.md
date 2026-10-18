@@ -43,3 +43,7 @@ The submission milestone passed 58 backend, 35 SQL Server and 56 browser tests, 
 ## Administration workspace milestone
 
 Update v8 brings the existing protected user, catalog/import, image, job-restriction and AI-usage workflows into a dedicated Administration workspace. Section changes preserve form entries and the MRF editor remains intact behind it. Existing review/history controls and owner isolation remain in force. See ADMIN_WORKSPACE.md and PILOT_UPDATE_V8.md. Deployment and real Microsoft acceptance remain pending; no new paid capability is enabled.
+
+## Initial catalog delivery checks
+
+An offline preflight command now rehearses ordered multi-file deliveries in an empty in-memory catalog, checks real import rules and replay, flags cross-file conflicting canonical keys, and reports relationship/phrase coverage and file hashes. See CATALOG_DELIVERY_READINESS.md. The production build, 62 backend tests and CLI success/failure checks passed. No live data was changed, source facts were not externally verified and no paid AI was invoked. The real source-backed starter delivery is still needed before live catalog acceptance.
