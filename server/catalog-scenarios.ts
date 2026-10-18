@@ -10,6 +10,27 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'relationship snapshot preserves provenance, inactive records and tenant isolation',run:async store=>{
+ const {admin,user,foreign}=people();await store.member(user,'riverside');
+ const m=await store.catalogCommand(admin,'material',material());
+ const prod=await store.catalogCommand(admin,'product',product('pvc'));
+ const phrase=await store.catalogCommand(admin,'translation',{materialKey:'pvc',phrase:'retired stock phrase',origin:'ai_import',sourceUrl:'https://example.invalid/source'});
+ await store.catalogCommand(admin,'reject-translation',{id:phrase.id});
+ await store.catalogCommand(admin,'image-reference',{materialKey:'pvc',manufacturer:'Fixture Alpha',partNumber:'TEST-1624',sourceUrl:'https://example.invalid/photo',rightsBasis:'Synthetic rights evidence only.'});
+ await store.catalogCommand(user,'selection',{eventId:randomUUID(),projectId:'riverside',materialId:m.id,productId:prod.id,phrase:'selected stock phrase'});
+ await store.catalogCommand(foreign,'material',bracket('foreign-only'));
+ await assert.rejects(async()=>store.catalogCommand(user,'export-snapshot',{}),/Administrator/);
+ const snap=await store.catalogCommand(admin,'export-snapshot',{});
+ assert.equal(snap.format,'etalonops-catalog-snapshot');assert.equal(snap.version,1);assert.equal(snap.imageFilesIncluded,false);
+ assert.equal(snap.tables.materials.length,1);assert.equal(snap.tables.materials[0].id.toLowerCase(),m.id.toLowerCase());
+ assert.equal(snap.tables.manufacturer_products[0].id.toLowerCase(),prod.id.toLowerCase());
+ assert.equal(snap.tables.manufacturers[0].name,'Fixture Alpha');
+ const retired=snap.tables.translations.find((row:any)=>row.phrase==='retired stock phrase');assert.equal(Number(retired.active),0);assert.equal(retired.source_url,'https://example.invalid/source');assert.equal(retired.origin,'ai_import');
+ assert.equal(snap.tables.selection_events.length,1);assert.equal(snap.tables.image_references[0].status,'pending');
+ assert.equal(snap.recordCount,Object.values(snap.tables).reduce((n:number,rows:any)=>n+rows.length,0));
+ for(const rows of Object.values(snap.tables) as any[][])assert.ok(rows.every(row=>row.tenant===admin.tenant));
+ assert.equal('drafts' in snap.tables,false);assert.equal('memberships' in snap.tables,false);
+}},
 {name:'canonical identity reuses materials across brands and preserves specification differences',run:async store=>{
  const {admin,user}=people();const first=await store.catalogCommand(admin,'material',material());
  const duplicate=await store.catalogCommand(admin,'material',{...material('another-key'),attributes:{...material().attributes,material:' pvc ',endConnection:'PLAIN'}});assert.equal(duplicate.id,first.id);assert.equal(duplicate.unchanged,true);

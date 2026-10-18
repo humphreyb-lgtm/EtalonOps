@@ -16,6 +16,11 @@ test('catalog history and record previews are admin-only, tenant-isolated and pr
   try {
     const foreman = await session('foreman-one'), admin = await session('admin');
     for (const token of [null,foreman]) assert.equal((await fetch(base+'/api/admin/imports', { headers: token ? {Authorization:`Bearer ${token}`} : {} })).status,token ? 403 : 401);
+    for (const token of [null,foreman]) assert.equal((await fetch(base+'/api/admin/catalog-snapshot.json', { headers: token ? {Authorization:`Bearer ${token}`} : {} })).status,token ? 403 : 401);
+    const snapshotResponse=await fetch(base+'/api/admin/catalog-snapshot.json',{headers:{Authorization:`Bearer ${admin}`}});
+    assert.equal(snapshotResponse.status,200);assert.equal(snapshotResponse.headers.get('cache-control'),'no-store');
+    assert.match(snapshotResponse.headers.get('content-disposition')??'',/etalonops-catalog-snapshot.json/);
+    assert.equal((await snapshotResponse.json()).tables.materials.length,0);
     const headers = { Authorization:`Bearer ${admin}`, 'Content-Type':'application/json' };
     const history = () => fetch(base+'/api/admin/imports', {headers}).then(r=>r.json());
     assert.deepEqual((await history()).batches,[]);

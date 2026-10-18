@@ -78,6 +78,10 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
     res.json(await store.applyImport(principal(res), req.params.id, approval, local));
   });
   app.post('/api/admin/imports/:id/rollback', async (req, res) => res.json(await store.rollbackImport(principal(res), req.params.id)));
+  app.get('/api/admin/catalog-snapshot.json', async (_req,res) => {
+    const snapshot=await store.catalogCommand(principal(res),'export-snapshot',{});
+    res.set('Cache-Control','no-store').type('application/json').attachment('etalonops-catalog-snapshot.json').send(JSON.stringify(snapshot,null,2));
+  });
   app.get('/api/admin/catalog.csv', async (_req, res) => res.type('text/csv').attachment('etalonops-catalog.csv').send(await store.exportCsv(principal(res))));
   app.post('/api/admin/memberships', async (req, res) => {
     const p = principal(res); await store.requireAdmin(p);

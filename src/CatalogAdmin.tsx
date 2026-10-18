@@ -1,7 +1,7 @@
 import { CatalogRelationships } from './CatalogRelationships';
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { databaseMode, request, downloadCatalog, type ImportBatch, type ImportPreview } from './api';
+import { databaseMode, request, downloadCatalog, downloadCatalogSnapshot, type ImportBatch, type ImportPreview } from './api';
 import { AIUsage } from './AIUsage';
 import { ImageAdmin } from './ImageAdmin';
 import { cloudMode } from './cloud-auth';
@@ -39,7 +39,7 @@ export function CatalogAdmin() {
       <fieldset disabled={busy} className="catalog-fields"><legend>Review a CSV batch</legend>
         <label htmlFor="catalog-file">Choose CSV file (maximum 500 KB)</label><input id="catalog-file" type="file" accept=".csv,text/csv" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setPreview(null); setReviewed(false); void run(async () => { if (file.size > 500000) throw new Error('CSV file exceeds 500 KB. Split it into reviewed batches.'); changeCsv(await file.text()); }); }} />
         <label htmlFor="catalog-csv">CSV contents</label><textarea id="catalog-csv" value={csv} maxLength={800000} rows={5} onChange={event => changeCsv(event.target.value)} placeholder="Paste a CSV with the documented v1 headers." />
-        <div className="catalog-actions"><button className="button" disabled={!csv.trim()} onClick={() => void run(async () => { setReviewed(false); setPreview(await request<ImportPreview>('/admin/imports/preview', 'POST', { csv })); await refresh(); })}>Preview import</button><button className="button" onClick={() => void run(async () => { await downloadCatalog(); setNotice('Catalog export downloaded.'); })}>Export active catalog</button></div>
+        <div className="catalog-actions"><button className="button" disabled={!csv.trim()} onClick={() => void run(async () => { setReviewed(false); setPreview(await request<ImportPreview>('/admin/imports/preview', 'POST', { csv })); await refresh(); })}>Preview import</button><button className="button" onClick={() => void run(async () => { await downloadCatalog(); setNotice('Catalog export downloaded.'); })}>Export active catalog</button><button className="button" onClick={() => void run(async () => { await downloadCatalogSnapshot(); setNotice('Catalog snapshot downloaded, including manufacturer relationships, translations and image metadata. Image files are separate.'); })}>Export catalog relationships</button></div>
       </fieldset>
       {preview && <section aria-label="Import preview" className="catalog-preview"><h3>Import preview</h3><p>{preview.report.rows} records · {preview.report.kind || 'unclassified'} · {preview.state}</p>
         {preview.report.errors.length > 0 && <ul className="catalog-errors">{preview.report.errors.map((issue, i) => <li key={i}>Row {issue.row}: {issue.message}</li>)}</ul>}

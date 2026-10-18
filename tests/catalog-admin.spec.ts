@@ -38,6 +38,12 @@ for (const width of [390,1440]) test(`admin previews, explicitly approves, expor
   await page.getByRole('button',{name:'Export active catalog',exact:true}).click();
   const download=await downloadPromise;
   expect(readFileSync((await download.path())!,'utf8')).toContain(key);
+  const snapshotDownload=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export catalog relationships',exact:true}).click();
+  const snapshot=JSON.parse(readFileSync((await (await snapshotDownload).path())!,'utf8'));
+  expect(snapshot.format).toBe('etalonops-catalog-snapshot');
+  expect(snapshot.tables.materials.some((item:{external_key:string})=>item.external_key===key)).toBe(true);
+  expect(snapshot.imageFilesIncluded).toBe(false);
   const {token}=await (await request.post('http://127.0.0.1:3002/api/dev/session',{data:{identity:'admin'}})).json();
   const headers={Authorization:`Bearer ${token}`};
   // Identify our applied batch from its content hash rather than another worker's history.

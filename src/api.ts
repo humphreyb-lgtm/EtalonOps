@@ -42,6 +42,14 @@ export async function downloadCatalog() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+export async function downloadCatalogSnapshot() {
+  const response=await fetch('/api/admin/catalog-snapshot.json',{headers:{Authorization:`Bearer ${await accessToken()}`}});
+  if(!response.ok){const error=await response.json();throw new Error(error.error??'Catalog snapshot export failed.');}
+  const url=URL.createObjectURL(await response.blob());
+  const link=document.createElement('a');link.href=url;link.download='etalonops-catalog-snapshot.json';link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
 export type ImageRecord = { id: string; materialId: string; productId?:string|null; contentHash: string; sourceUrl: string; rightsBasis: string; status: 'pending'|'approved'|'rejected'; reviewer: string|null; reviewedAt: string|null };
 export async function imageBlob(path: string) {
   const response=await fetch(`/api${path}`,{headers:{Authorization:`Bearer ${await accessToken()}`}});

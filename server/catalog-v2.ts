@@ -262,8 +262,29 @@ export function* selectDiscovery(p:Principal,data:unknown):Operation<any>{
   }
   yield* audit(p,'discovery.fingerprint',fingerprint);yield* audit(p,'catalog.discovery_selected',input.eventId);return {materialId:material.id,productId:product.id,selected,provisional:true};
 }
+// A versioned review snapshot preserves inactive records and their provenance.
+// It is intentionally distinct from staged imports and database/blob recovery.
+export function* exportCatalogSnapshot(p:Principal):Operation<any>{
+  admin(p);
+  const tables:Record<string,RecordRow[]>={};
+  let count=0;
+  for(const table of ['materials','aliases','catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references','image_associations','import_batches']){
+    const source=table==='aliases'?'aliases a INNER JOIN materials m ON m.id=a.material_id':table;
+    const scope=table==='aliases'?'m.tenant':'tenant';
+    const columns=table==='aliases'?'a.*,m.tenant':'*';
+    const size=Number((yield* query(`SELECT COUNT(*) AS total FROM ${source} WHERE ${scope}=@p0`,p.tenant))[0].total);
+    count+=size;
+    if(count>10000)throw new ApiError(413,'Catalog snapshot exceeds 10,000 records. Request a paged export before expanding this catalog.');
+    tables[table]=yield* query(`SELECT ${columns} FROM ${source} WHERE ${scope}=@p0`,p.tenant);
+  }
+  const snapshot={format:'etalonops-catalog-snapshot',version:1,exportedAt:new Date().toISOString(),tenant:p.tenant,recordCount:count,includesInactive:true,imageFilesIncluded:false,tables};
+  if(Buffer.byteLength(JSON.stringify(snapshot),'utf8')>20000000)throw new ApiError(413,'Catalog snapshot exceeds 20 MB. Request a paged export.');
+  yield* audit(p,'catalog.snapshot_exported',String(count));
+  return snapshot;
+}
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
   switch(action){
+    case 'export-snapshot':return yield* exportCatalogSnapshot(p);
     case 'select-discovery':return yield* selectDiscovery(p,data);
     case 'material':return yield* createMaterial(p,data);
     case 'product':return yield* addProduct(p,data);
