@@ -50,3 +50,12 @@ test('pre-v18 material identities are reused without rewriting specs and metadat
  const corrected=await store.catalogCommand(p,'preview-material-correction',{id:first.id,material,reason:'Check historical identity upgrade compatibility.'});assert.equal(corrected.mode,'metadata');
  }finally{store.db.close();}
 });
+
+
+test('multiple completed search action records share the reported Bing billing count; missing or failed actions have safe diagnostics',async()=>{
+ const value={status:'completed',model:'gpt-5.4-mini',usage:{input_tokens:500,output_tokens:100},tool_usage:{web_search:{num_requests:1}},output:[{type:'web_search_call',status:'completed',action:{type:'search',sources:[{url:source.url}]}},{type:'web_search_call',status:'completed',action:{type:'open_page'}},{type:'message',content:[{type:'output_text',text:'Official source found.',annotations:[]}]}]};
+ const run=()=>discoverAzure('https://pilot.openai.azure.com','gpt-5.4-mini','fictional-key-for-test-only',async()=>new Response(JSON.stringify(value)),'Fictional part',[]);
+ const result=await run();assert.equal(result.bingRequests,1);assert.equal(result.searchMicroUsd,14000);assert.deepEqual(result.urls,[source.url]);
+ value.output[1].status='failed';await assert.rejects(run,/2 search action records.*failed.*open_page/);
+ value.output=value.output.filter(item=>item.type!=='web_search_call');await assert.rejects(run,/0 search action records.*count: 1/);
+});

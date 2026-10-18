@@ -16,7 +16,13 @@ export async function discoverAzure(endpoint:string,deployment:string,key:string
   const value=JSON.parse(Buffer.concat(chunks).toString('utf8'));
   if(!response.ok)throw Error(`Azure web discovery HTTP ${response.status}: ${value.error?.code??''} ${value.error?.message??''}`);
   if(value.status!=='completed'||!/^gpt-5\.4-mini(?:-2026-03-17)?$/.test(value.model)||!Array.isArray(value.output)||value.output.some((v:any)=>!['reasoning','message','web_search_call'].includes(v.type)))throw Error('Azure web discovery did not complete with the configured model.');
-  const calls=value.output.filter((v:any)=>v.type==='web_search_call');if(calls.length!==1||calls[0].status!=='completed')throw Error('Expected one completed web-search tool call.');
+  const calls=value.output.filter((v:any)=>v.type==='web_search_call');
+  // One hosted search invocation may emit several action records (search/open/find).
+  // Billable Bing requests are validated from tool_usage below, never inferred here.
+  if(!calls.length||calls.some((call:any)=>call.status!=='completed')){
+   const shape=calls.map((call:any)=>({status:String(call.status??'missing').replace(/[^a-zA-Z_-]/g,'').slice(0,40),action:String(call.action?.type??'missing').replace(/[^a-zA-Z_-]/g,'').slice(0,40)})).slice(0,12);
+   throw Error('Discovery returned '+calls.length+' search action records: '+JSON.stringify(shape)+'. Billable Bing request count: '+(Number.isSafeInteger(value.tool_usage?.web_search?.num_requests)?value.tool_usage.web_search.num_requests:'not reported')+'. A completed search action is required; no source text or credentials are included in this diagnostic.');
+  }
   const inputTokens=value.usage?.input_tokens,outputTokens=value.usage?.output_tokens,bingRequests=value.tool_usage?.web_search?.num_requests;
   if(!Number.isSafeInteger(inputTokens)||inputTokens<0||!Number.isSafeInteger(outputTokens)||outputTokens<0||outputTokens>2000||!Number.isSafeInteger(bingRequests)||bingRequests<1)throw new ResearchFailure({code:'web-discovery-usage',stage:'web-discovery'},'Azure did not report valid model and billable Bing request usage. Further paid requests are paused for cost review.');
   const modelMicroUsd=researchCost(inputTokens,outputTokens),searchMicroUsd=bingRequests*bingRequestMicroUsd,costMicroUsd=modelMicroUsd+searchMicroUsd;

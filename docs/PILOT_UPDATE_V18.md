@@ -55,3 +55,7 @@ References:
 - https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/web-search
 - https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/responses
 - https://prices.azure.com/api/retail/prices (exact Consumption meters verified by activation helper)
+
+## v18.1 discovery response hotfix
+
+Removes the incorrect requirement that a completed discovery response contain exactly one `web_search_call` output record. One hosted invocation may expose multiple search/open/find action records. All returned search records must still be completed, source URLs are independently fetched, and billing continues to use Azure's reported Bing request count. Missing/incomplete actions now report bounded action counts/statuses/types without logging prompts, source text or keys. The original generic error alone cannot establish which condition failed. The release health marker remains `assisted-research-v18`; no activation or schema change is needed when updating an already activated v18 app.
