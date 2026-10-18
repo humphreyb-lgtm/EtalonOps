@@ -11,7 +11,25 @@ curl --fail --silent --show-error --location 'https://codeload.github.com/humphr
 unzip -q "$recovery_dir/source.zip" -d "$recovery_dir/source"
 source_dir=$(find "$recovery_dir/source" -mindepth 1 -maxdepth 1 -type d -name 'EtalonOps-*')
 [ -n "$source_dir" ] && [ -f "$source_dir/package-lock.json" ]
-cp -an "$source_dir/." "$workspace/"
+python3 - "$source_dir" "$workspace" <<'COPY'
+import pathlib, shutil, sys
+source, target = map(pathlib.Path, sys.argv[1:])
+copied = 0
+for entry in source.rglob('*'):
+    destination = target / entry.relative_to(source)
+    if entry.is_symlink():
+        raise SystemExit('Unexpected source symlink; stopped.')
+    if destination.is_symlink():
+        raise SystemExit('Unexpected workspace symlink; stopped without following it.')
+    if entry.is_dir():
+        destination.mkdir(parents=True, exist_ok=True)
+    elif not destination.exists():
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with entry.open('rb') as original, destination.open('xb') as restored:
+            shutil.copyfileobj(original, restored)
+        copied += 1
+print(f'Restored {copied} missing source files; existing files preserved.')
+COPY
 cd "$workspace"
 python3 - <<'PY'
 import json, pathlib, subprocess, uuid
