@@ -91,3 +91,8 @@ export type AIClarification={summary:string;description:string;reply:string;ques
 export type DraftSummary={id:string;name:string;projectId:string;deliveryDate:string;savedAt:string;itemCount:number;version:number};
 export type DraftPage={records:DraftSummary[];total:number;page:number;pages:number};
 export function listDatabaseDrafts(projectId:string,page=1,filters:DraftFilters={}){const params=new URLSearchParams({page:String(page)});for(const [key,value] of Object.entries(filters))if(value)params.set(key,value);return request<DraftPage>(`/projects/${encodeURIComponent(projectId)}/drafts?${params}`);}
+
+export async function uploadCatalogWorkbook<T>(file:File):Promise<T>{
+ const response=await fetch('/api/admin/catalog-upload',{method:'POST',headers:{Authorization:`Bearer ${await accessToken()}`,'Content-Type':'application/octet-stream','x-catalog-filename':encodeURIComponent(file.name)},body:file});
+ const value=await response.json();if(!response.ok)throw new Error(value.error??'Workbook upload failed.');return value;
+}

@@ -13,6 +13,7 @@ assert s['resourceGroup']=='rg-etalonops-poc' and s['appName']=='etalonops-954bb
 app=json.loads(subprocess.check_output(['az','webapp','show','-g',s['resourceGroup'],'-n',s['appName'],'-o','json']))
 assert app['identity']['principalId'].lower()==s['runtimePrincipal'].lower(),'Runtime identity mismatch; stopped.'
 PY
+npm ci --no-audit --no-fund
 npm run build
 bash scripts/migrate-cloud-schema.sh
 python3 deploy/package.py

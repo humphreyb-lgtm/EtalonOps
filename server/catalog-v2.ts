@@ -1,3 +1,4 @@
+import {inboxAction} from './catalog-inbox';
 import {researchAction} from './catalog-research';
 import { spreadsheetRecord } from './catalog-spreadsheet';
 import { catalogReadiness } from './catalog-readiness';
@@ -376,7 +377,7 @@ export function* catalogPage(p:Principal,data:unknown):Operation<any>{
     case 'manufacturers':table='manufacturers';columns='id,name';order='normalized,id';if(input.manufacturerIds){if(!input.manufacturerIds.length)where+=' AND 1=0';else{where+=' AND id IN ('+input.manufacturerIds.map(id=>{values.push(id);return '@p'+(values.length-1);}).join(',')+')';}}else if(input.text){values.push('%'+input.text.toLowerCase().replace(/[!%_]/g,c=>'!'+c)+'%');where+=" AND LOWER(name) LIKE @p1 ESCAPE '!'";}break;
     case 'revisions':table='catalog_revisions';columns='id,kind,entity_id,replacement_id,reason,actor,created_at';order='created_at DESC,id';if(input.entityId){values.push(input.entityId);where+=' AND (entity_id=@p1 OR replacement_id=@p1 OR entity_id IN (SELECT id FROM manufacturer_products WHERE tenant=@p0 AND material_id=@p1))';}break;
     case 'images':table='image_references';break;
-    case 'batches':table='catalog_batches';columns='id,state,report,created_at';order='created_at DESC,id';break;
+    case 'batches':table='catalog_batches';columns='id,state,report,created_at';where+=" AND state IN ('preview','applied','rolled_back')";order='created_at DESC,id';break;
   }
   const total=Number((yield* query(`SELECT COUNT(*) AS total FROM ${table} WHERE ${where}`,...values))[0].total);
   const pages=Math.max(1,Math.ceil(total/input.pageSize)),page=Math.min(input.page,pages),start=(page-1)*input.pageSize;
@@ -387,6 +388,7 @@ export function* catalogPage(p:Principal,data:unknown):Operation<any>{
 export function* batchDetails(p:Principal,data:unknown):Operation<any>{
   admin(p);const input=z.object({id:z.uuid(),page:z.number().int().min(1).default(1),includeSource:z.boolean().default(false)}).strict().parse(data);
   const row=(yield* query('SELECT * FROM catalog_batches WHERE tenant=@p0 AND id=@p1',p.tenant,input.id))[0];if(!row)throw new ApiError(404,'Import not found.');
+  if(JSON.parse(row.report).workflow==='unpublished-import-v1')throw new ApiError(400,'Open this import in Administration → Workbook imports.');
   const parsed=parseExtendedCsv(row.csv),pages=Math.max(1,Math.ceil(parsed.records.length/25)),page=Math.min(input.page,pages);
   return {id:String(row.id).toLowerCase(),state:row.state,report:JSON.parse(row.report),...(input.includeSource?{sourceCsv:row.csv}:{}),records:parsed.records.slice((page-1)*25,page*25),page,pages};
 }
@@ -426,6 +428,7 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
   return snapshot;
 }
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
+  if(action.startsWith('inbox-'))return yield* inboxAction(p,action,data);
   switch(action){
     case 'research-preview':return yield* researchAction(p,data);
     case 'research-apply':return yield* researchAction(p,data,true);
@@ -463,7 +466,7 @@ export function* catalogAction(p:Principal,action:string,data:any):Operation<any
     case 'rollback':return yield* rollbackBulk(p,z.uuid().parse(data.id));
     case 'disable-policy':{admin(p);const id=z.uuid().parse(data.id);if(!(yield* query('SELECT id FROM job_restrictions WHERE tenant=@p0 AND id=@p1',p.tenant,id)).length)throw new ApiError(404,'Restriction not found.');yield* query('UPDATE job_restrictions SET enabled=0 WHERE tenant=@p0 AND id=@p1',p.tenant,id);yield* audit(p,'job.restriction_disabled',id);return {disabled:true};}
     case 'readiness':return yield* catalogReadiness(p,data);
-    case 'overview':admin(p);return {manufacturers:yield* query('SELECT * FROM manufacturers WHERE tenant=@p0',p.tenant),policies:yield* query('SELECT * FROM job_restrictions WHERE tenant=@p0',p.tenant),batches:yield* query('SELECT id,state,report,created_at FROM catalog_batches WHERE tenant=@p0',p.tenant),imageReferences:yield* query('SELECT * FROM image_references WHERE tenant=@p0',p.tenant)};
+    case 'overview':admin(p);return {manufacturers:yield* query('SELECT * FROM manufacturers WHERE tenant=@p0',p.tenant),policies:yield* query('SELECT * FROM job_restrictions WHERE tenant=@p0',p.tenant),batches:yield* query("SELECT id,state,report,created_at FROM catalog_batches WHERE tenant=@p0 AND state IN ('preview','applied','rolled_back')",p.tenant),imageReferences:yield* query('SELECT * FROM image_references WHERE tenant=@p0',p.tenant)};
     default:throw new ApiError(404,'Unknown catalog operation.');
   }
 }

@@ -9,8 +9,9 @@ import sys
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v11.zip')
+output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v12.zip')
 files = [
+    'server/catalog-inbox.ts', 'server/catalog-workbook.ts', 'src/CatalogInbox.tsx', 'package-lock.json', 'docs/PILOT_UPDATE_V12.md', 'docs/WORKBOOK_PUBLISHING.md',
     'src/CatalogResearch.tsx', 'src/catalog-research.ts', 'server/catalog-research.ts', 'docs/PRODUCT_RESEARCH.md', 'docs/PILOT_UPDATE_V11.md',
     'server/catalog-spreadsheet.ts', 'scripts/build-catalog-workbook.py', 'docs/PILOT_UPDATE_V10.md',
     'src/CatalogReadiness.tsx', 'src/AdminStatus.tsx', 'src/draft-filters.ts',
