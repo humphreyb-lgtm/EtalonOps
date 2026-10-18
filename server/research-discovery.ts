@@ -19,7 +19,7 @@ export async function discoverAzure(endpoint:string,deployment:string,key:string
   const calls=value.output.filter((v:any)=>v.type==='web_search_call');
   // One hosted search invocation may emit several action records (search/open/find).
   // Billable Bing requests are validated from tool_usage below, never inferred here.
-  if(!calls.length||calls.some((call:any)=>call.status!=='completed')){
+  if(!calls.some((call:any)=>call.status==='completed'&&(!call.action?.type||call.action.type==='search'))){
    const shape=calls.map((call:any)=>({status:String(call.status??'missing').replace(/[^a-zA-Z_-]/g,'').slice(0,40),action:String(call.action?.type??'missing').replace(/[^a-zA-Z_-]/g,'').slice(0,40)})).slice(0,12);
    throw Error('Discovery returned '+calls.length+' search action records: '+JSON.stringify(shape)+'. Billable Bing request count: '+(Number.isSafeInteger(value.tool_usage?.web_search?.num_requests)?value.tool_usage.web_search.num_requests:'not reported')+'. A completed search action is required; no source text or credentials are included in this diagnostic.');
   }
@@ -28,7 +28,7 @@ export async function discoverAzure(endpoint:string,deployment:string,key:string
   const modelMicroUsd=researchCost(inputTokens,outputTokens),searchMicroUsd=bingRequests*bingRequestMicroUsd,costMicroUsd=modelMicroUsd+searchMicroUsd;
   if(costMicroUsd>researchPolicy.reservationMicroUsd)throw new ResearchFailure({code:'web-discovery-usage',stage:'web-discovery'},'Discovery exceeded the request reservation. Further paid requests are paused for Azure cost review.');
   const messages=value.output.filter((v:any)=>v.type==='message').flatMap((v:any)=>v.content??[]);if(messages.some((v:any)=>v.type!=='output_text'))throw Error('Azure refused discovery.');
-  const links=[...messages.flatMap((v:any)=>(v.annotations??[]).filter((a:any)=>a.type==='url_citation').map((a:any)=>a.url)),...calls.flatMap((v:any)=>v.action?.sources??[]).map((v:any)=>v.url)];
+  const links=[...messages.flatMap((v:any)=>(v.annotations??[]).filter((a:any)=>a.type==='url_citation').map((a:any)=>a.url)),...calls.filter((call:any)=>call.status==='completed').flatMap((v:any)=>v.action?.sources??[]).map((v:any)=>v.url)];
   const found:string[]=[];for(const link of links){try{const url=publicSourceUrl(link).href;if(!found.includes(url))found.push(url);}catch{/* Untrusted search links never bypass the source fetch protections. */}}
   return {urls:found.slice(0,8),notes:messages.map((v:any)=>v.text).join('\n').slice(0,8000),inputTokens,outputTokens,bingRequests,modelMicroUsd,searchMicroUsd,costMicroUsd};
  }catch(error){if(error instanceof ResearchFailure)throw error;throw new ResearchFailure({code:'web-discovery',stage:'web-discovery'},safeResearchMessage(error instanceof Error?error.message:'Web discovery failed.',key));}

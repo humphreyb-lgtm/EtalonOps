@@ -56,6 +56,6 @@ test('multiple completed search action records share the reported Bing billing c
  const value={status:'completed',model:'gpt-5.4-mini',usage:{input_tokens:500,output_tokens:100},tool_usage:{web_search:{num_requests:1}},output:[{type:'web_search_call',status:'completed',action:{type:'search',sources:[{url:source.url}]}},{type:'web_search_call',status:'completed',action:{type:'open_page'}},{type:'message',content:[{type:'output_text',text:'Official source found.',annotations:[]}]}]};
  const run=()=>discoverAzure('https://pilot.openai.azure.com','gpt-5.4-mini','fictional-key-for-test-only',async()=>new Response(JSON.stringify(value)),'Fictional part',[]);
  const result=await run();assert.equal(result.bingRequests,1);assert.equal(result.searchMicroUsd,14000);assert.deepEqual(result.urls,[source.url]);
- value.output[1].status='failed';await assert.rejects(run,/2 search action records.*failed.*open_page/);
- value.output=value.output.filter(item=>item.type!=='web_search_call');await assert.rejects(run,/0 search action records.*count: 1/);
+ value.tool_usage.web_search.num_requests=3;value.output[1].status='searching';assert.equal((await run()).bingRequests,3);value.output[1].status='failed';assert.equal((await run()).searchMicroUsd,42000);value.output[0].status='failed';await assert.rejects(run,/2 search action records.*failed.*open_page/);
+ value.output=value.output.filter(item=>item.type!=='web_search_call');await assert.rejects(run,/0 search action records.*count: 3/);
 });

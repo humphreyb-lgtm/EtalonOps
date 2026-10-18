@@ -58,4 +58,9 @@ References:
 
 ## v18.1 discovery response hotfix
 
-Removes the incorrect requirement that a completed discovery response contain exactly one `web_search_call` output record. One hosted invocation may expose multiple search/open/find action records. All returned search records must still be completed, source URLs are independently fetched, and billing continues to use Azure's reported Bing request count. Missing/incomplete actions now report bounded action counts/statuses/types without logging prompts, source text or keys. The original generic error alone cannot establish which condition failed. The release health marker remains `assisted-research-v18`; no activation or schema change is needed when updating an already activated v18 app.
+Removes the incorrect requirement that a completed discovery response contain exactly one `web_search_call` output record. One hosted invocation may expose multiple search/open/find action records. In v18.1 all returned search records were required to be completed; v18.2 below replaces this condition. Source URLs are independently fetched, and billing uses Azure's reported Bing request count. Missing/incomplete actions now report bounded action counts/statuses/types without logging prompts, source text or keys. The original generic error alone cannot establish which condition failed. The release health marker remains `assisted-research-v18`; no activation or schema change is needed when updating an already activated v18 app.
+
+
+## v18.2 completed search with unfinished page action
+
+Azure returned an overall completed response containing a completed search and a secondary open_page still marked searching. Discovery now requires a completed search, not completion of every secondary page action. Unfinished/failed action source lists are ignored. Cited URLs and completed-action sources are independently fetched before any product extraction. Bing billing still uses the reported request count, including any unfinished page activity; no paid retry or extra search is introduced. Health marker remains assisted-research-v18.
