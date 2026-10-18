@@ -1,6 +1,6 @@
 # EtalonOps — MRF Builder
 
-MRF Builder proof of concept based on the approved V2 handoff. **Frontend visuals approved; local SQL Server and SQLite implementations tested.** The owner created the pilot identity/resource group in Cloud Shell; paid hosting is blocked by B1 quota. No DNS records were changed. See [SQL Server setup/validation](docs/SQL_SERVER_MILESTONE.md), [import tools](docs/DATABASE_MILESTONE.md), and [verified retail pricing](docs/COST_UPDATE.md).
+MRF Builder proof of concept based on the approved V2 handoff. **Frontend visuals approved; local SQL Server and SQLite implementations tested.** The owner provisioned the approved West US 3 pilot through Cloud Shell. Application startup is under repair for its SQL managed-identity mapping; it is not yet accepted as ready. See [targeted repair](docs/SQL_IDENTITY_REPAIR.md). No DNS records were changed. See [SQL Server setup/validation](docs/SQL_SERVER_MILESTONE.md), [import tools](docs/DATABASE_MILESTONE.md), and [verified retail pricing](docs/COST_UPDATE.md).
 
 ## Try the preview
 

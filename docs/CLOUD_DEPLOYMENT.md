@@ -2,6 +2,8 @@
 
 The owner approved the approximately $25/month base estimate and the illustrated AI expenses on October 17, 2026, following the roughly $30/month combined planning estimate and its exclusions. This is an operating estimate, not a hard cap. Existing Azure charges are additional. AI stays disabled until its complete service chain is verified within the approved scope. DNS remains unapproved. The owner subsequently explicitly approved West US 3 at the approximately $25/month base estimate; live AI/search remain off.
 
+Current status: approved West US 3 infrastructure/schema provisioning completed, but the first application deployment failed at SQL login. Use the [targeted SQL identity repair](SQL_IDENTITY_REPAIR.md), not another infrastructure deployment, for that known failure. Existing resources can continue billing while startup is repaired.
+
 ## Scope and identities
 
 Target: Azure Standard, subscription `a428f249-9b2a-4314-8619-6b3fd33c805e`, West US 3, existing owned `rg-etalonops-poc`. Resource providers were registered by the owner. B1 and full-template validation succeeded in the owner’s Cloud Shell for West US 3; allocation and live readiness remain deployment-time checks. The group’s metadata location can remain East US. Regional resources target West US 3. No existing MaterialsManagement resources are changed.
