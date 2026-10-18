@@ -1,3 +1,4 @@
+import {preparedResearchAction} from './prepared-research';
 import {isProductDetail} from '../src/research-attributes';
 import {productDetailsSchema} from '../src/catalog-research';
 import {inboxAction} from './catalog-inbox';
@@ -448,6 +449,8 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
   if(action.startsWith('inbox-'))return yield* inboxAction(p,action,data);
   switch(action){
+    case 'prepared-preview':return yield* preparedResearchAction(p,data);
+    case 'prepared-stage':return yield* preparedResearchAction(p,data,true);
     case 'research-stage':return yield* stageResearch(p,data);
     case 'research-preview':return yield* researchAction(p,data);
     case 'research-apply':return yield* researchAction(p,data,true);

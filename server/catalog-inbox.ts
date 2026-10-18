@@ -5,9 +5,9 @@ import {ApiError,type Principal} from './contracts';
 import {type Operation,materialInput,productInput,translationInput,imageReferenceInput,describeMaterial,createMaterial,addProduct,addTranslation,addImageReference} from './catalog-v2';
 import {spreadsheetRecord,type SpreadsheetKind} from './catalog-spreadsheet';
 export type InboxItem={id:string;kind:SpreadsheetKind;sheet:string;row:number;fields:Record<string,string>;state:'unpublished'|'published'|'deleted'};
-const fields=z.record(z.string().max(100),z.string().max(4000)).refine(v=>Object.keys(v).length<=60);
+const fields=z.record(z.string().max(100),z.string().max(20000)).refine(v=>Object.keys(v).length<=60);
 const itemSchema=z.object({id:z.uuid(),kind:z.enum(['material','product','translation','image']),sheet:z.string().max(100),row:z.number().int().positive(),fields,state:z.enum(['unpublished','published','deleted'])}).strict();
-const payloadSchema=z.object({filename:z.string().trim().min(1).max(200),items:z.array(itemSchema).min(1).max(2000),research:z.object({scope:z.string().max(2000),coverageNotes:z.string().max(4000),searchPhrase:z.string().max(500)}).strict().optional()}).strict();
+const payloadSchema=z.object({filename:z.string().trim().min(1).max(200),items:z.array(itemSchema).min(1).max(2000),research:z.object({scope:z.string().max(2000),coverageNotes:z.string().max(4000),searchPhrase:z.string().max(500),originalJson:z.string().max(300000).optional()}).strict().optional()}).strict();
 const marker='unpublished-import-v1';
 function summary(payload:any,version:number){return {workflow:marker,version,filename:payload.filename,unpublished:payload.items.filter((i:InboxItem)=>i.state==='unpublished').length,published:payload.items.filter((i:InboxItem)=>i.state==='published').length,deleted:payload.items.filter((i:InboxItem)=>i.state==='deleted').length};}
 function admin(p:Principal){if(!p.roles.includes('Admin'))throw new ApiError(403,'Administrator role required.');}
