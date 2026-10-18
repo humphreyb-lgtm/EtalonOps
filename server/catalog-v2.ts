@@ -294,10 +294,10 @@ export function* catalogPage(p:Principal,data:unknown):Operation<any>{
   return {records:records.map(({page_row,...row})=>row),total,page,pageSize:input.pageSize,pages};
 }
 export function* batchDetails(p:Principal,data:unknown):Operation<any>{
-  admin(p);const input=z.object({id:z.uuid(),page:z.number().int().min(1).default(1)}).strict().parse(data);
+  admin(p);const input=z.object({id:z.uuid(),page:z.number().int().min(1).default(1),includeSource:z.boolean().default(false)}).strict().parse(data);
   const row=(yield* query('SELECT * FROM catalog_batches WHERE tenant=@p0 AND id=@p1',p.tenant,input.id))[0];if(!row)throw new ApiError(404,'Import not found.');
   const parsed=parseExtendedCsv(row.csv),pages=Math.max(1,Math.ceil(parsed.records.length/25)),page=Math.min(input.page,pages);
-  return {id:String(row.id).toLowerCase(),state:row.state,report:JSON.parse(row.report),records:parsed.records.slice((page-1)*25,page*25),page,pages};
+  return {id:String(row.id).toLowerCase(),state:row.state,report:JSON.parse(row.report),...(input.includeSource?{sourceCsv:row.csv}:{}),records:parsed.records.slice((page-1)*25,page*25),page,pages};
 }
 // A versioned review snapshot preserves inactive records and their provenance.
 // It is intentionally distinct from staged imports and database/blob recovery.

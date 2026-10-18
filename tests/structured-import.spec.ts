@@ -27,6 +27,7 @@ for(const width of [390,1440])test(`structured import records, paging and histor
  await page.reload();await page.getByRole('button',{name:'Catalog administration',exact:true}).click();
  await region.getByRole('button',{name:'Refresh structured import history',exact:true}).click();
  await region.getByRole('button',{name:`Review structured batch ${batch.id}`,exact:true}).click();
+ await expect(region.getByLabel('Structured CSV contents',{exact:true})).toHaveValue(csv);
  await expect(records).toContainText(`${key} phrase 0`);
  await region.getByRole('button',{name:'Review structured rollback',exact:true}).click();
  await region.getByRole('button',{name:'Confirm structured rollback',exact:true}).click();

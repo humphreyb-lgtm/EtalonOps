@@ -42,7 +42,7 @@ export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>
  const {admin,user,foreign}=people();const m=await store.catalogCommand(admin,'material',material());
  const input=csv('translation',Array.from({length:27},(_,i)=>({materialKey:'pvc',phrase:`paged phrase ${i}`,origin:'ai_import',sourceUrl:'https://example.invalid/phrases'})));
  const preview=await store.catalogCommand(admin,'preview',{csv:input});assert.equal(preview.report.errors.length,0);
- const first=await store.catalogCommand(admin,'batch-details',{id:preview.id});assert.equal(first.records.length,25);assert.equal(first.pages,2);
+ const first=await store.catalogCommand(admin,'batch-details',{id:preview.id});assert.equal(first.records.length,25);assert.equal(first.pages,2);assert.equal('sourceCsv' in first,false);assert.equal((await store.catalogCommand(admin,'batch-details',{id:preview.id,includeSource:true})).sourceCsv,input);
  const last=await store.catalogCommand(admin,'batch-details',{id:preview.id,page:999});assert.equal(last.page,2);assert.equal(last.records.length,2);assert.equal(last.records[1].row,28);
  await assert.rejects(async()=>store.catalogCommand(foreign,'batch-details',{id:preview.id}),/not found/);
  await store.catalogCommand(admin,'apply',{id:preview.id,approval:'I reviewed this batch'});
