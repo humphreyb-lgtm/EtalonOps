@@ -1,10 +1,9 @@
-EtalonOps combined update v9
+EtalonOps Excel catalog template and combined update v10
 
-Existing Azure pilot: download EtalonOps-pilot-update-v9.zip using Download raw file. Upload it to the original authenticated Azure Cloud Shell and follow the instructions below. Includes all prior user-access, catalog and submission work plus catalog readiness queues, My Drafts name/date filters, preserved item reordering and installed-pilot status.
-Update instructions: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/PILOT_UPDATE_V9.md
-Demonstration runbook: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/DEMONSTRATION_RUNBOOK.md
-Completion plan: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/MRF_COMPLETION_PLAN.md
-Catalog preparation: EtalonOps-catalog-starter-kit.zip contains templates, fictional examples and AI preparation instructions. Do not import fictional examples as real stock. Offline preflight runs from the source checkout.
-Offline preview: EtalonOps-preview.zip demonstrates browser drafts, filters and item reordering; protected administration/submission require the database-backed pilot.
+For catalog preparation: download EtalonOps-catalog-template.xlsx using Download raw file and open it in Excel. It is a blank native Excel workbook with ordinary columns and separate parts/manufacturer/translation/image sheets. One record per row, one phrase per translation row; no JSON cells. Keep the master XLSX and export populated data sheets as CSV UTF-8 (Comma delimited) for import. Direct XLSX upload is not supported.
+The starter ZIP includes the workbook, separate flat CSV templates, fictional examples and preparation instructions. FICTIONAL-EXAMPLE files are syntax examples, not real launch stock.
 
-Source commit 5fdb175. Builds, 64 backend tests, 37 SQL tests, 65 browser tests and nine deployment checks passed, with additional SQL-backed walkthroughs. The combined patch built over v8 while preserving existing runtime state. Azure installation and real Microsoft/recovery acceptance are pending. No new services, subscriptions, paid AI or vendor ordering are activated.
+Install EtalonOps-pilot-update-v10.zip on the existing pilot before importing the new flat CSVs. It includes all earlier updates and maintains legacy JSON batch compatibility. No new service, subscription, schema migration, application dependency or paid AI is added. Azure installation remains pending.
+Update instructions: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/PILOT_UPDATE_V10.md
+Excel preparation instructions: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/catalog-starter/README.md
+Source commit f3996e1. Native workbook round trips and column imports were checked, including SQL Server phone/desktop walkthroughs. Prior protected workflows remain covered by regression checks.
