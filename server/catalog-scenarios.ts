@@ -12,6 +12,40 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'product-family review previews without inserting, shares canonical items and applies idempotently',run:async store=>{
+ const {admin,user,foreign}=people();
+ const item={externalKey:'research-pvc',category:'conduit',productUnit:'STICK',attributes:material().attributes,manufacturer:'Fictional Research Maker',partNumber:'RESEARCH-001',title:'Fictional PVC conduit',sourceUrl:'https://example.invalid/research',verificationBasis:'Synthetic test source, no manufacturer verification.',phrases:['Fictional Research Maker RESEARCH-001','research pvc conduit']};
+ const results={scope:'Fictional family',coverageNotes:'Two fictional manufacturer parts, not actual research.',items:[item,{...item,externalKey:'same-spec-other-key',manufacturer:'Other Fictional Maker',partNumber:'RESEARCH-002'}]};
+ await assert.rejects(async()=>store.catalogCommand(user,'research-preview',{results}),/Administrator/);
+ const preview=await store.catalogCommand(admin,'research-preview',{results});assert.equal(preview.summaries.length,2);assert.equal(preview.summaries[0].materialKey,preview.summaries[1].materialKey);assert.equal((await store.search(user,'RESEARCH-001')).length,0);
+ await assert.rejects(async()=>store.catalogCommand(admin,'research-apply',{results,previewHash:preview.previewHash,approval:'yes'}),/review confirmation/);
+ await assert.rejects(async()=>store.catalogCommand(admin,'research-apply',{results:{...results,items:[{...item,title:'Edited after preview'}]},previewHash:preview.previewHash,approval:'I reviewed these products and sources'}),/Preview changed/);
+ const applied=await store.catalogCommand(admin,'research-apply',{results,previewHash:preview.previewHash,approval:'I reviewed these products and sources'});assert.equal(applied.batches.length,3);
+ const found=await store.search(user,'RESEARCH-001');assert.equal(found.length,1);assert.equal(found[0].verification,'provisional');assert.equal((await store.search(foreign,'RESEARCH-001')).length,0);
+ const details=await store.catalogCommand(admin,'details',{id:found[0].id});assert.equal(details.products.length,2);
+ const again=await store.catalogCommand(admin,'research-preview',{results});assert.equal(again.summaries[0].materialAction,'Link existing material');await store.catalogCommand(admin,'research-apply',{results,previewHash:again.previewHash,approval:'I reviewed these products and sources'});assert.equal((await store.catalogCommand(admin,'details',{id:found[0].id})).products.length,2);
+}},
+{name:'research rejects incomplete evidence, normalized duplicate phrases and conflicting products',run:async store=>{
+ const {admin,user}=people();const item={externalKey:'research-bracket',category:'bracket',productUnit:'EA',attributes:bracket().attributes,manufacturer:'Fictional Research',partNumber:'FAIL-001',title:'Fictional bracket',sourceUrl:'https://example.invalid/research',verificationBasis:'Synthetic specifications for transactional test.',phrases:['15 3/4 inch research bracket']};
+ const results={scope:'Test',coverageNotes:'Synthetic research only.',items:[item]};
+ await assert.rejects(async()=>store.catalogCommand(admin,'research-preview',{results:{...results,items:[{...item,attributes:{...item.attributes,maxSpanIn:0}}]}}),/maxSpanIn/);
+ await assert.rejects(async()=>store.catalogCommand(admin,'research-preview',{results:{...results,items:[{...item,sourceUrl:''}]}}));
+ await assert.rejects(async()=>store.catalogCommand(admin,'research-preview',{results:{...results,items:[item,item]}}),/more than once/);
+ const broken={...results,items:[{...item,phrases:['research bracket stick','research bracket']}]};
+ await assert.rejects(async()=>store.catalogCommand(admin,'research-preview',{results:broken}),/Repeated catalog identity/);
+ assert.equal((await store.search(user,'FAIL-001')).length,0);assert.equal((await store.catalogCommand(admin,'overview',{})).batches.length,0);
+ await store.catalogCommand(admin,'material',bracket());await store.catalogCommand(admin,'product',product('bracket','Fictional Research','FAIL-001'));
+ await assert.rejects(async()=>store.catalogCommand(admin,'research-preview',{results:{...results,items:[{...item,attributes:{...item.attributes,maxSpanIn:30}}]}}),/different specifications/);
+}},
+
+{name:'explicit translated field terminology can retrieve conduit called pipe without overriding dimensional constraints',run:async store=>{
+ const {admin,user}=people();const a=await store.catalogCommand(admin,'material',material());await store.catalogCommand(admin,'material',material('pvc80','80'));
+ assert.equal((await store.search(user,'1 inch PVC pipe schedule 40')).length,0);
+ await store.catalogCommand(admin,'translation',{materialKey:'pvc',phrase:'1 inch PVC pipe schedule 40',origin:'ai_import',sourceUrl:'https://example.invalid/owner-terminology'});
+ assert.equal((await store.search(user,'1 inch PVC pipe schedule 40'))[0]?.id,a.id);assert.equal((await store.search(user,'2 inch PVC pipe schedule 40')).length,0);assert.equal((await store.search(user,'1 inch PVC pipe schedule 80')).length,0);assert.equal((await store.search(user,'1 inch PVC plumbing pipe schedule 40')).length,0);
+ const phrases=await store.catalogCommand(admin,'translations',{id:a.id});await store.catalogCommand(admin,'reject-translation',{id:phrases[0].id});assert.equal((await store.search(user,'1 inch PVC pipe schedule 40')).length,0);
+}},
+
 {name:'Excel-friendly CSV imports retain linked manufacturer identifiers, phrase text and provisional provenance',run:async store=>{
  const {admin}=people();
  const files=[

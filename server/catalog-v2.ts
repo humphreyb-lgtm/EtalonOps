@@ -1,3 +1,4 @@
+import {researchAction} from './catalog-research';
 import { spreadsheetRecord } from './catalog-spreadsheet';
 import { catalogReadiness } from './catalog-readiness';
 import { createHash, randomUUID } from 'node:crypto';
@@ -199,7 +200,8 @@ export function* searchCatalog(p:Principal,input:string,projectId?:string):Opera
     let rank=0;for(const phrase of new Set(phraseList))rank=Math.max(rank,score(q,searchWords(phrase)));
     const schedule=q.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1],expectedSchedule=attributes.schedule??material.description.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1];
     const diameter=q.match(/\b(\d+(?:\.\d+|\/\d+)?)\s*(?:inch|in\b|["″])/i)?.[1];
-    if((/\bpipe\b/i.test(q)&&attributes.type==='conduit')||(/\bconduit\b/i.test(q)&&attributes.type==='pipe'))rank=0;
+    const mappedTerminology=(phrasesByMaterial.get(id)??[]).some(phrase=>score(q,searchWords(phrase))>=90);
+    if(!mappedTerminology&&((/\bpipe\b/i.test(q)&&attributes.type==='conduit')||(/\bconduit\b/i.test(q)&&attributes.type==='pipe')))rank=0;
     if((schedule&&expectedSchedule&&String(schedule)!==String(expectedSchedule))||(diameter&&attributes.diameterIn&&Number(diameter)!==Number(attributes.diameterIn)))rank=0;
     choices.sort((a,b)=>Number(key(input).includes(key(b.part_number)))-Number(key(input).includes(key(a.part_number)))||Number(String(b.id).toLowerCase()===String(profile?.preferred_product_id).toLowerCase())-Number(String(a.id).toLowerCase()===String(profile?.preferred_product_id).toLowerCase()));
     const useCount=countsByMaterial.get(id)??0;
@@ -425,6 +427,8 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
 }
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
   switch(action){
+    case 'research-preview':return yield* researchAction(p,data);
+    case 'research-apply':return yield* researchAction(p,data,true);
     case 'export-page':return yield* catalogExportPage(p,data);
     case 'preview-material-correction':return yield* correctCatalog(p,'material',data);
     case 'apply-material-correction':return yield* correctCatalog(p,'material',data,true);
