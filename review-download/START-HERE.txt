@@ -1,10 +1,11 @@
-EtalonOps update v7
+EtalonOps update v8
 
-Existing Azure pilot: use EtalonOps-pilot-update-v7.zip. It includes prior improvements plus final MRF review, numbered immutable submissions, My Submitted MRFs, revision drafts and manual purchasing CSV/print exports.
-Offline review: EtalonOps-preview.zip demonstrates named drafts with fictional data. Real submission, revisions and user administration require the database-backed pilot.
-Catalog preparation: EtalonOps-catalog-starter-kit.zip contains templates and AI instructions. Fictional example files must not be loaded as real parts.
-
-Update instructions: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/PILOT_UPDATE_V7.md
-Submission walkthrough: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/MRF_SUBMISSION.md
+Existing Azure pilot: use EtalonOps-pilot-update-v8.zip. Includes all prior functionality plus a dedicated Administration workspace for users/access, catalog/imports, product images, job restrictions and AI usage.
+Download the ZIP with Download raw file and upload to your original authenticated Azure Cloud Shell.
+Update instructions: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/PILOT_UPDATE_V8.md
+Administration walkthrough: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/ADMIN_WORKSPACE.md
 Completion plan: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/MRF_COMPLETION_PLAN.md
-No paid AI, new services or vendor orders are activated.
+
+Offline review: EtalonOps-preview.zip remains a fictional named-draft demonstration; administration requires the database-backed pilot.
+Catalog preparation: EtalonOps-catalog-starter-kit.zip contains templates and instructions; fictional example files must not be loaded as real parts.
+No new services, paid AI or vendor communications enabled. Source is main commit 7529a26. Azure deployment and real Microsoft acceptance remain pending.
