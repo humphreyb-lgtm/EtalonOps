@@ -6,7 +6,13 @@ from datetime import datetime, timezone
 import json, os, pathlib, subprocess, tempfile, urllib.request, urllib.parse
 
 def az(*args):
-    return json.loads(subprocess.check_output(['az',*args,'--output','json'],text=True))
+    try:
+        return json.loads(subprocess.check_output(['az',*args,'--output','json'],text=True,stderr=subprocess.PIPE))
+    except subprocess.CalledProcessError as error:
+        if 'keys' in args:
+            raise SystemExit('Azure could not retrieve the existing API key. Check your Azure resource permissions; do not paste a key in chat.') from None
+        detail=(error.stderr or 'Azure CLI did not return an error description.')[-6000:]
+        raise SystemExit('Azure setup operation failed before activation:\n'+detail) from None
 
 def require(condition,message):
     if not condition: raise SystemExit(message)
@@ -35,16 +41,24 @@ require(not prices.get('NextPageLink'),'Price query was incomplete. Stop for pri
 for sku,expected in [('5.4 mini Inp Dz',0.825),('5.4 mini Opt Dz',4.95)]:
     matches=[item for item in prices['Items'] if item.get('skuName')==sku and item.get('unitOfMeasure')=='1M' and item.get('type')=='Consumption']
     require(len(matches)==1 and matches[0]['retailPrice']==expected,'Model retail pricing changed or is ambiguous. Stop for budget-policy review.')
+# Read responses include null placeholders and read-only model fields. Send only
+# supported, non-null configuration fields back to the management update API.
+def deployment_model(value):
+    return {key:value[key] for key in ['format','name','version','publisher','source','sourceAccount'] if value.get(key) is not None}
+
+def deployment_sku(value):
+    return {key:value[key] for key in ['name','capacity','family','size','tier'] if value.get(key) is not None}
+
 # Pin the existing deployment to the already-approved model/version; preserve its SKU/capacity.
 if info['properties'].get('versionUpgradeOption')!='NoAutoUpgrade':
-    properties={'model':model,'versionUpgradeOption':'NoAutoUpgrade'}
+    properties={'model':deployment_model(model),'versionUpgradeOption':'NoAutoUpgrade'}
     for key in ['raiPolicyName','dynamicThrottlingEnabled']:
-        if key in info['properties']: properties[key]=info['properties'][key]
-    body={'sku':info['sku'],'properties':properties}
+        if info['properties'].get(key) is not None: properties[key]=info['properties'][key]
+    body={'sku':deployment_sku(info['sku']),'properties':properties}
     az('rest','--method','put','--url','https://management.azure.com'+info['id']+'?api-version=2024-10-01','--body',json.dumps(body))
     pinned=az('cognitiveservices','account','deployment','show','--name',resource,'--resource-group',group,'--deployment-name',deployment)
     require(pinned['properties'].get('provisioningState')=='Succeeded','Model pinning is still in progress. Wait a minute and rerun activation; no application settings changed.')
-    require(pinned['properties']['model']==model and pinned['sku']==info['sku'] and pinned['properties']['versionUpgradeOption']=='NoAutoUpgrade','Model pinning is not yet confirmed. No application activation performed.')
+    require(deployment_model(pinned['properties']['model'])==deployment_model(model) and deployment_sku(pinned['sku'])==deployment_sku(info['sku']) and pinned['properties']['versionUpgradeOption']=='NoAutoUpgrade','Model pinning is not yet confirmed. No application activation performed.')
 keys=az('cognitiveservices','account','keys','list','--name',resource,'--resource-group',group)
 settings={'ETALONOPS_RESEARCH_ENABLED':'true','ETALONOPS_OPENAI_ENDPOINT':endpoint,'ETALONOPS_OPENAI_DEPLOYMENT':deployment,'ETALONOPS_AZURE_OPENAI_API_KEY':keys['key1'],'ETALONOPS_RESEARCH_BUDGET_USD':'30','ETALONOPS_RESEARCH_PRICING':'gpt-5.4-mini-2026-03-17-us-dz-2026-10-18','ETALONOPS_AI_ENABLED':'false'}
 with tempfile.TemporaryDirectory(prefix='etalonops-ai-settings-') as directory:
