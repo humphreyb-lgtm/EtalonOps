@@ -1,3 +1,5 @@
+import { AdminStatus } from './AdminStatus';
+import { CatalogReadiness } from './CatalogReadiness';
 import { useEffect, useRef, useState } from 'react';
 import { Settings, X } from 'lucide-react';
 import { databaseMode, request } from './api';
@@ -8,12 +10,13 @@ import { JobManufacturerRestrictions } from './JobManufacturerRestrictions';
 import { AIUsage } from './AIUsage';
 
 const sections = [
-  ['overview', 'Overview'], ['users', 'Users and access'], ['catalog', 'Catalog and imports'],
-  ['images', 'Product images'], ['restrictions', 'Job restrictions'], ['ai', 'AI usage'],
+  ['overview', 'Overview'], ['readiness','Catalog readiness'], ['users', 'Users and access'], ['catalog', 'Catalog and imports'],
+  ['images', 'Product images'], ['status','Pilot status'], ['restrictions', 'Job restrictions'], ['ai', 'AI usage'],
 ] as const;
 type Section = typeof sections[number][0];
 export function AdminWorkspace() {
   const [allowed, setAllowed] = useState(false), [open, setOpen] = useState(false);
+  const [catalogTarget,setCatalogTarget]=useState<{id:string;request:number}|undefined>(),[imageTarget,setImageTarget]=useState<{id:string;request:number}|undefined>();
   const [section, setSection] = useState<Section>('overview');
   const [visited, setVisited] = useState<Section[]>(['overview']);
   const [changed, setChanged] = useState(false), [error, setError] = useState('');
@@ -34,6 +37,7 @@ export function AdminWorkspace() {
       setOpen(true);
     } catch { setError('Unable to verify administrator access. Please try again.'); }
   }
+  function inspect(id:string,area:'catalog'|'images'){if(area==='catalog')setCatalogTarget({id,request:Date.now()});else setImageTarget({id,request:Date.now()});choose(area);}
   function choose(value: Section) { setSection(value); setVisited(current => current.includes(value) ? current : [...current,value]); }
   useEffect(() => {
     if (!open || !changed) return;
@@ -44,7 +48,7 @@ export function AdminWorkspace() {
   function close() {
     if(dialog.current?.querySelector('[aria-busy="true"]')) { setError("Wait for the current administration operation to finish before closing."); return; }
     if (changed && !window.confirm('Close administration? Unsubmitted form entries will be cleared. Saved changes are retained.')) return;
-    dialog.current?.close(); setOpen(false); setChanged(false); setVisited(['overview']); setSection('overview'); trigger.current?.focus();
+    dialog.current?.close(); setOpen(false); setChanged(false); setVisited(['overview']); setSection('overview');setCatalogTarget(undefined);setImageTarget(undefined); trigger.current?.focus();
   }
   if (!allowed) return null;
   return <><button ref={trigger} className="button" onClick={() => void enter()}><Settings size={18} aria-hidden="true"/> Administration</button>
@@ -54,10 +58,12 @@ export function AdminWorkspace() {
       <nav aria-label="Administration sections" className="admin-sections">{sections.map(([id,label]) => <button key={id} className={`button ${section===id?'primary':''}`} aria-current={section===id?'page':undefined} onClick={() => choose(id)}>{label}</button>)}</nav>
       {error && <p role="alert">{error}</p>}
       <div className="admin-content" onChange={() => setChanged(true)}>
-        <section hidden={section!=='overview'} aria-label="Administration overview"><h3>Manage your materials workflow</h3><p>Your MRF stays open while you administer the application. Each section keeps its form entries when you switch sections.</p><div className="admin-cards">{sections.slice(1).map(([id,label]) => <article key={id}><h3>{label}</h3><p>{({users:'Register Microsoft users, manage project access, deactivate accounts and review access history.',catalog:'Maintain canonical materials, manufacturer parts, translations, search priority and reviewed CSV imports.',images:'Upload product photos and review their identity, source evidence and usage rights.',restrictions:'Manage manufacturer restrictions by job or material category.',ai:'Check the current AI activation status and request limits.'} as Record<string,string>)[id]}</p><button className="button" onClick={() => choose(id)}>Open {label.toLowerCase()}</button></article>)}</div><p>Catalog and access changes use the existing review and history controls. Submitting an MRF does not place an order.</p></section>
+        <section hidden={section!=='overview'} aria-label="Administration overview"><h3>Manage your materials workflow</h3><p>Your MRF stays open while you administer the application. Each section keeps its form entries when you switch sections.</p><div className="admin-cards">{sections.slice(1).map(([id,label]) => <article key={id}><h3>{label}</h3><p>{({status:'Check the installed release, database connection and current sign-in access.',readiness:'View catalog counts, find missing relationships and work through specification, product and image reviews.',users:'Register Microsoft users, manage project access, deactivate accounts and review access history.',catalog:'Maintain canonical materials, manufacturer parts, translations, search priority and reviewed CSV imports.',images:'Upload product photos and review their identity, source evidence and usage rights.',restrictions:'Manage manufacturer restrictions by job or material category.',ai:'Check the current AI activation status and request limits.'} as Record<string,string>)[id]}</p><button className="button" onClick={() => choose(id)}>Open {label.toLowerCase()}</button></article>)}</div><p>Catalog and access changes use the existing review and history controls. Submitting an MRF does not place an order.</p></section>
+        {visited.includes('status')&&<section hidden={section!=='status'}><AdminStatus/></section>}
+        {visited.includes('readiness')&&<section hidden={section!=='readiness'}><CatalogReadiness inspect={inspect}/></section>}
         {visited.includes('users')&&<section hidden={section!=='users'} aria-label="Users and access"><h3>Users and access</h3><UserAdmin embedded/></section>}
-        {visited.includes('catalog')&&<section hidden={section!=='catalog'} aria-label="Catalog and imports"><h3>Catalog and imports</h3><CatalogAdmin embedded/></section>}
-        {visited.includes('images')&&<section hidden={section!=='images'}><ImageAdmin/></section>}
+        {visited.includes('catalog')&&<section hidden={section!=='catalog'} aria-label="Catalog and imports"><h3>Catalog and imports</h3><CatalogAdmin embedded materialTarget={catalogTarget}/></section>}
+        {visited.includes('images')&&<section hidden={section!=='images'}><ImageAdmin materialTarget={imageTarget}/></section>}
         {visited.includes('restrictions')&&<section hidden={section!=='restrictions'} aria-label="Job restrictions"><h3>Job restrictions</h3><JobManufacturerRestrictions/></section>}
         {visited.includes('ai')&&<section hidden={section!=='ai'}><AIUsage/></section>}
       </div>

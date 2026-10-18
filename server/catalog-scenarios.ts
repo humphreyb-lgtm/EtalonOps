@@ -12,6 +12,43 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'saved draft filters apply before paging, treat wildcard characters literally and preserve ownership and project boundaries',run:async store=>{
+ const {admin,user,foreign}=people();await store.member(user,'riverside');await store.member(user,'northside');await store.member(admin,'riverside');await store.member(foreign,'riverside');
+ for(let i=0;i<28;i++)await store.saveDraft(user,draftBody.parse({projectId:'riverside',name:`Lighting ${String(i).padStart(2,'0')}`,deliveryDate:i%2?'2026-11-20':'2026-11-10',lines:[],version:0}));
+ await store.saveDraft(user,draftBody.parse({projectId:'riverside',name:'Literal [%_] 100% request',deliveryDate:'2026-11-15',lines:[],version:0}));
+ await store.saveDraft(admin,draftBody.parse({projectId:'riverside',name:'Lighting private other owner',deliveryDate:'2026-11-10',lines:[],version:0}));
+ await store.saveDraft(user,draftBody.parse({projectId:'northside',name:'Lighting private other project',deliveryDate:'2026-11-10',lines:[],version:0}));
+ const all=await store.listDrafts(user,'riverside',1,{text:'LIGHTING'});assert.equal(all.total,28);assert.equal(all.records.length,25);const second=await store.listDrafts(user,'riverside',2,{text:'lighting'});assert.equal(second.records.length,3);assert.equal(new Set([...all.records,...second.records].map(r=>r.id)).size,28);
+ assert.equal((await store.listDrafts(user,'riverside',1,{text:'lighting',deliveryFrom:'2026-11-11',deliveryTo:'2026-11-20'})).total,14);
+ assert.equal((await store.listDrafts(user,'riverside',1,{text:'[%_]'})).total,1);assert.equal((await store.listDrafts(user,'riverside',1,{text:'100%'})).total,1);
+ assert.equal((await store.listDrafts(foreign,'riverside',1,{text:'lighting'})).total,0);
+ const empty=await store.listDrafts(user,'riverside',100,{deliveryFrom:'2027-01-01'});assert.equal(empty.total,0);assert.equal(empty.page,1);
+ await assert.rejects(async()=>store.listDrafts(user,'riverside',1,{deliveryFrom:'2026-11-20',deliveryTo:'2026-11-10'}),/Delivery from/);
+ await assert.rejects(async()=>store.listDrafts(user,'riverside',1,{deliveryFrom:'2026-02-30'}),/Invalid/);
+}},
+
+{name:'catalog readiness queues are tenant-scoped, paged, source-aware and clear after reviewed changes',run:async store=>{
+ const {admin,user,foreign}=people();
+ assert.equal((await store.catalogCommand(admin,'readiness',{})).summary.activeMaterials,0);
+ await assert.rejects(async()=>store.catalogCommand(user,'readiness',{}),/Administrator/);
+ const materials=[];
+ for(let i=0;i<28;i++)materials.push(await store.catalogCommand(admin,'material',{...bracket(`READINESS-${String(i).padStart(2,'0')}`),attributes:{...bracket().attributes,maxSpanIn:25+i}}));
+ const prod=await store.catalogCommand(admin,'product',product('READINESS-00'));
+ await store.catalogCommand(admin,'translation',{materialKey:'READINESS-00',phrase:'readiness test bracket',origin:'admin_reviewed'});
+ const evidence={sourceUrl:'https://example.invalid/readiness-photo',rightsBasis:'Synthetic test evidence; no actual image rights claim.'};
+ const image=await store.submitImage(admin,materials[0].id,'d'.repeat(64),evidence);
+ let report=await store.catalogCommand(admin,'readiness',{});assert.equal(report.total,28);assert.equal(report.records.length,25);assert.equal(report.pages,2);assert.equal(report.summary.products,27);assert.equal(report.summary.translations,27);assert.equal(report.summary.images,28);assert.equal(report.summary.productReview,1);assert.equal(report.summary.pendingImages,1);
+ const second=await store.catalogCommand(admin,'readiness',{page:2});assert.equal(second.records.length,3);assert.equal(new Set([...report.records,...second.records].map(r=>r.materialId)).size,28);
+ assert.equal((await store.catalogCommand(admin,'readiness',{text:'READINESS-00'})).total,1);assert.equal((await store.catalogCommand(admin,'readiness',{text:'%'})).total,0);
+ assert.equal((await store.catalogCommand(foreign,'readiness',{})).summary.activeMaterials,0);
+ const pending=await store.catalogCommand(admin,'readiness',{issue:'pendingImages'});assert.equal(pending.records[0].relatedId,image.id);
+ await store.reviewImage(admin,materials[0].id,image.id,'approved');await store.catalogCommand(admin,'review-material',{id:materials[0].id,approval:'I verified the defining specifications'});await store.catalogCommand(admin,'review-product',{materialId:materials[0].id,productId:prod.id,approval:'I verified this product matches the material specification'});
+ report=await store.catalogCommand(admin,'readiness',{});assert.equal(report.total,27);assert.equal(report.summary.reviewedMaterials,1);assert.equal(report.summary.pendingImages,0);assert.equal(report.summary.productReview,0);assert.equal(report.summary.images,27);
+ const imported=await store.previewImport(admin,readFileSync(new URL('../db/fixtures/catalog.csv',import.meta.url),'utf8'));await store.applyImport(admin,imported.id,'I reviewed this batch',true);
+ report=await store.catalogCommand(admin,'readiness',{issue:'legacy'});assert.ok(report.summary.fixtureMaterials>0);assert.equal(report.total,report.summary.fixtureMaterials);assert.equal(report.summary.translations,27); // legacy aliases count as phrase coverage
+ await assert.rejects(async()=>store.catalogCommand(admin,'readiness',{issue:'sql',page:0}),/Invalid|option|small/);
+}},
+
 {name:'MRF submission freezes exact intent, exports safe CSV and creates linked immutable revisions',run:async store=>{
  const {admin,user,foreign}=people();await store.member(user,'riverside');await store.member(admin,'riverside');await store.member(foreign,'riverside');
  await store.catalogCommand(admin,'material',{...bracket(),verification:'reviewed'});const prod=await store.catalogCommand(admin,'product',{...product('bracket'),verification:'reviewed'});const c=(await store.search(user,'Fixture Alpha TEST-1624','riverside'))[0];

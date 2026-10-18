@@ -1,3 +1,5 @@
+import { listSavedDrafts } from './draft-list';
+import type { DraftFilters } from '../src/draft-filters';
 import { submissions,submissionLabel } from './submissions';
 import { admitUser,userAccess } from './user-access';
 import type { Store } from './store';
@@ -70,12 +72,9 @@ export class SqlStore implements Repository {
     await this.requireProject(p, row.project);
     return this.mapDraft(row);
   }
-  async listDrafts(p:Principal,project:string,page=1):Promise<ReturnType<Store['listDrafts']>>{
-    if(!this.session)return this.transaction(tx=>tx.listDrafts(p,project,page),sql.ISOLATION_LEVEL.READ_COMMITTED);
-    await this.requireProject(p,project);const total=Number((await this.q('SELECT COUNT(*) AS total FROM dbo.drafts WHERE tenant=@p0 AND owner=@p1 AND project=@p2 AND NOT EXISTS(SELECT 1 FROM dbo.mrf_submissions s WHERE s.draft_id=drafts.id)',p.tenant,p.oid,project)).recordset[0].total);
-    const pages=Math.max(1,Math.ceil(total/25));page=Math.min(page,pages);
-    const rows=(await this.q('SELECT d.id,d.name,d.project,d.delivery_date,d.updated_at,d.version,(SELECT COUNT(*) FROM dbo.draft_lines l WHERE l.draft_id=d.id) AS item_count FROM dbo.drafts d WHERE d.tenant=@p0 AND d.owner=@p1 AND d.project=@p2 AND NOT EXISTS(SELECT 1 FROM dbo.mrf_submissions s WHERE s.draft_id=d.id) ORDER BY d.updated_at DESC,d.id DESC OFFSET @p3 ROWS FETCH NEXT 25 ROWS ONLY',p.tenant,p.oid,project,(page-1)*25)).recordset;
-    return {records:rows.map(r=>({id:String(r.id).toLowerCase(),name:r.name,projectId:r.project,deliveryDate:dateOnly(r.delivery_date),savedAt:r.updated_at instanceof Date?r.updated_at.toISOString():r.updated_at,itemCount:Number(r.item_count),version:Number(r.version)})),total,page,pages};
+  async listDrafts(p:Principal,project:string,page=1,filters:DraftFilters={}):Promise<ReturnType<Store['listDrafts']>>{
+    if(!this.session)return this.transaction(tx=>tx.listDrafts(p,project,page,filters),sql.ISOLATION_LEVEL.READ_COMMITTED);
+    return this.catalogRun(listSavedDrafts(p,project,page,filters));
   }
   async getProjectDraft(p: Principal, project: string): Promise<Awaited<ReturnType<SqlStore['mapDraft']>> | null> {
     if (!this.session) return this.transaction(tx => tx.getProjectDraft(p, project), sql.ISOLATION_LEVEL.READ_COMMITTED);

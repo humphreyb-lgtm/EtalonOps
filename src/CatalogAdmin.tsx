@@ -6,7 +6,7 @@ import { AIUsage } from './AIUsage';
 import { ImageAdmin } from './ImageAdmin';
 import { cloudMode } from './cloud-auth';
 
-export function CatalogAdmin({embedded=false}:{embedded?:boolean}={}) {
+export function CatalogAdmin({embedded=false,materialTarget}:{embedded?:boolean;materialTarget?:{id:string;request:number}}={}) {
   const [allowed, setAllowed] = useState(false), [open, setOpen] = useState(false);
   const [csv, setCsv] = useState(''), [preview, setPreview] = useState<ImportPreview | null>(null);
   const [reviewed, setReviewed] = useState(false), [busy, setBusy] = useState(false);
@@ -51,7 +51,7 @@ export function CatalogAdmin({embedded=false}:{embedded?:boolean}={}) {
       </section>}
       <section aria-label="Import history"><h3>Import history</h3><p className="muted">Up to 50 batches. Rollback deactivates the batch; existing draft references are preserved.</p><div className="catalog-history">{batches.map(batch => <article className="catalog-history-row" key={batch.id}><span><strong>{batch.report.rows} records · {batch.state}</strong><small>{batch.id}{batch.approvedAt && ` · ${batch.approvedAt}`}</small></span>{batch.state === 'applied' && <button className="button" disabled={busy} onClick={() => setRollback(batch)}>Review rollback</button>}</article>)}</div>
         {rollback && <div className="catalog-rollback" role="group" aria-label="Confirm catalog rollback"><p>Deactivate all records in batch {rollback.id}? Existing saved MRF lines keep their historical references.</p><div className="catalog-actions"><button className="button" disabled={busy} onClick={() => setRollback(null)}>Keep batch</button><button className="button danger" disabled={busy} onClick={() => void run(async () => { await request(`/admin/imports/${rollback.id}/rollback`, 'POST'); if (preview?.id === rollback.id) setPreview({ ...preview, state: 'rolled_back' }); setRollback(null); setNotice('Batch deactivated. Historical draft references retained.'); await refresh(); })}>Deactivate batch</button></div></div>}
-      </section></>}<CatalogRelationships />{!embedded&&<><ImageAdmin /><AIUsage /></>}{busy && <p role="status">Working on catalog…</p>}
+      </section></>}<CatalogRelationships materialTarget={materialTarget}/>{!embedded&&<><ImageAdmin /><AIUsage /></>}{busy && <p role="status">Working on catalog…</p>}
     </>;
   return embedded?<section aria-label="Catalog administration" aria-busy={busy}>{content}</section>:<><button className="button text-button" ref={trigger} onClick={() => { setOpen(true); void run(refresh); }}>Catalog administration</button><dialog ref={dialog} className="modal catalog-modal" aria-labelledby="catalog-admin-title" onCancel={event => { event.preventDefault(); close(); }}><div className="modal-heading"><h2 id="catalog-admin-title">Catalog administration</h2><button className="icon-button" aria-label="Close catalog administration" disabled={busy} onClick={close}><X size={20}/></button></div>{open&&content}</dialog></>;
 }

@@ -4,6 +4,8 @@ Sign into the database-backed application as an assigned Microsoft Admin and ope
 
 The workspace provides:
 
+- **Catalog readiness (v9):** current organization counts and paged/filterable queues for unreviewed specifications/products, missing structured identities, missing product links/search phrases/approved images, and uploaded images awaiting review. Queue links open the matching material or image controls. Refresh after saving; counts do not certify external facts.
+- **Pilot status (v9):** installed release, current database connection and sign-in mode to help distinguish deployed updates from source-only changes.
 - **Users and access:** register existing Microsoft users, assign project memberships, cap application roles, deactivate access and inspect access-change history. Microsoft remains the sign-in authority.
 - **Catalog and imports:** canonical materials, defining dimensions, manufacturer products, potential translations, high-use ranking, correction review/history, staged CSV imports, rollback and exports.
 - **Product images:** source-backed uploads, usage-rights evidence and separate approval/rejection for generic materials or manufacturer products.
@@ -19,3 +21,5 @@ This workspace does not grant administrators access to other users' private MRFs
 At phone and desktop widths, open Administration, begin a user registration without saving, switch to AI usage and back, and verify the entry remains. Open images, restrictions and catalog imports. Return to MRF, cancel the close confirmation, then accept it; the original MRF name and entries should remain. Foremen must have no Administration button and an authenticated direct user-management API call must return 403. Real Microsoft session/revocation acceptance still requires the deployed Azure pilot.
 
 Development verification: production build, 58 backend tests, 60 browser tests and nine deployment checks passed. All four administration walkthrough tests also passed with the SQL Server repository. Screenshots are saved in `artifacts/screenshots/390-administration-workspace.png` and `1440-administration-workspace.png`. These local checks do not substitute for live Azure/Microsoft acceptance.
+
+V9 adds Catalog readiness and Pilot status. Development verification passed the production build, 64 backend tests, 37 SQL Server tests, 65 browser tests and nine deployment checks. Additional SQL-backed browser walkthroughs exercise queue-to-review navigation and refreshed counts. Readiness is a record-completeness report, not an automatic product-fact or image-rights verification service.

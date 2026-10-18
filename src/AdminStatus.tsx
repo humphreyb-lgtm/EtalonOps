@@ -1,0 +1,9 @@
+import {useEffect,useState} from 'react';
+import {request} from './api';
+type Status={health:{status:string;engine:string;microsoftSignIn:boolean;release:string};account:{roles:string[];displayName?:string;mode:string};checkedAt:string};
+export function AdminStatus(){
+ const [status,setStatus]=useState<Status|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ async function refresh(){setBusy(true);setError('');try{const [health,account]=await Promise.all([request<Status['health']>('/health'),request<Status['account']>('/me')]);setStatus({health,account,checkedAt:new Date().toISOString()});}catch(e){setError(e instanceof Error?e.message:'Pilot status is unavailable.');}finally{setBusy(false);}}
+ useEffect(()=>{void refresh();},[]);
+ return <section aria-label="Pilot status" aria-busy={busy}><h3>Pilot status</h3><p>Check the installed application version and current connection before a demonstration or support request.</p>{error&&<p role="alert">{error}</p>}{status&&!error&&<dl className="pilot-status"><dt>Installed release</dt><dd>{status.health.release}</dd><dt>Database</dt><dd>{status.health.engine} · {status.health.status==='ok'?'Connection verified':status.health.status}</dd><dt>Sign-in</dt><dd>{status.health.microsoftSignIn?'Microsoft sign-in required':'Local test sign-in'}</dd><dt>Current access</dt><dd>{status.account.displayName??'Current signed-in account'} · {status.account.roles.join(', ')}</dd><dt>Last checked</dt><dd>{new Date(status.checkedAt).toLocaleString()}</dd></dl>}<button className="button" disabled={busy} onClick={()=>void refresh()}>Refresh pilot status</button><p>These checks verify the current connection. Test reload and a second assigned user on the deployed pilot to verify Microsoft session restoration and access isolation.</p></section>;
+}

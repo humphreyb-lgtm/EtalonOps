@@ -1,3 +1,4 @@
+import type { DraftFilters } from './draft-filters';
 import { catalogStreamValidator } from './catalog-stream';
 import type { Candidate, Draft } from './domain';
 import { cloudMode, cloudToken } from './cloud-auth';
@@ -89,4 +90,4 @@ export type AIClarification={summary:string;description:string;reply:string;ques
 
 export type DraftSummary={id:string;name:string;projectId:string;deliveryDate:string;savedAt:string;itemCount:number;version:number};
 export type DraftPage={records:DraftSummary[];total:number;page:number;pages:number};
-export function listDatabaseDrafts(projectId:string,page=1){return request<DraftPage>(`/projects/${encodeURIComponent(projectId)}/drafts?page=${page}`);}
+export function listDatabaseDrafts(projectId:string,page=1,filters:DraftFilters={}){const params=new URLSearchParams({page:String(page)});for(const [key,value] of Object.entries(filters))if(value)params.set(key,value);return request<DraftPage>(`/projects/${encodeURIComponent(projectId)}/drafts?${params}`);}

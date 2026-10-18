@@ -1,3 +1,5 @@
+import { listSavedDrafts } from './draft-list';
+import type { DraftFilters } from '../src/draft-filters';
 import { submissions,submissionLabel } from './submissions';
 import { admitUser,userAccess } from './user-access';
 import { historicalSnapshot } from './catalog-history';
@@ -58,12 +60,7 @@ export class Store {
     this.requireProject(p, String(row.project));
     return this.mapDraft(row);
   }
-  listDrafts(p:Principal,project:string,page=1){
-    this.requireProject(p,project);const total=Number(this.db.prepare('SELECT COUNT(*) AS total FROM drafts WHERE tenant=? AND owner=? AND project=? AND NOT EXISTS(SELECT 1 FROM mrf_submissions s WHERE s.draft_id=drafts.id)').get(p.tenant,p.oid,project)!.total);
-    const pages=Math.max(1,Math.ceil(total/25));page=Math.min(page,pages);
-    const records=this.db.prepare('SELECT d.id,d.name,d.project,d.delivery_date,d.updated_at,d.version,(SELECT COUNT(*) FROM draft_lines l WHERE l.draft_id=d.id) AS item_count FROM drafts d WHERE d.tenant=? AND d.owner=? AND d.project=? AND NOT EXISTS(SELECT 1 FROM mrf_submissions s WHERE s.draft_id=d.id) ORDER BY d.updated_at DESC,d.id DESC LIMIT 25 OFFSET ?').all(p.tenant,p.oid,project,(page-1)*25);
-    return {records:records.map(r=>({id:r.id,name:r.name,projectId:r.project,deliveryDate:r.delivery_date,savedAt:r.updated_at,itemCount:Number(r.item_count),version:Number(r.version)})),total,page,pages};
-  }
+  listDrafts(p:Principal,project:string,page=1,filters:DraftFilters={}){return this.transaction(()=>this.catalogRun(listSavedDrafts(p,project,page,filters)));}
   getProjectDraft(p: Principal, project: string) {
     this.requireProject(p, project);
     const row = this.db.prepare('SELECT * FROM drafts WHERE project=? AND tenant=? AND owner=? AND NOT EXISTS(SELECT 1 FROM mrf_submissions s WHERE s.draft_id=drafts.id) ORDER BY updated_at DESC,id DESC LIMIT 1').get(project, p.tenant, p.oid);

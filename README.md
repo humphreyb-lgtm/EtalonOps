@@ -1,8 +1,10 @@
 # EtalonOps — MRF Builder
 
-MRF Builder based on the approved V2 handoff, with named drafts, user access management, catalog relationships/imports, immutable MRF submissions and linked revisions. The owner provisioned the approved West US 3 pilot and confirmed its initial form worked after the SQL identity repair. Current source adds a dedicated [Administration workspace](docs/ADMIN_WORKSPACE.md); apply the [combined v8 update](docs/PILOT_UPDATE_V8.md) to use it on the existing pilot. Live Microsoft session restoration and second-user isolation remain acceptance items. No paid AI or new services are activated. See [SQL Server setup](docs/SQL_SERVER_MILESTONE.md), [import tools](docs/DATABASE_MILESTONE.md) and [completion plan](docs/MRF_COMPLETION_PLAN.md).
+MRF Builder based on the approved V2 handoff, with named drafts, user access management, catalog relationships/imports, immutable MRF submissions and linked revisions. The owner provisioned the approved West US 3 pilot and confirmed its initial form worked after the SQL identity repair. Current source includes a dedicated [Administration workspace](docs/ADMIN_WORKSPACE.md), catalog readiness queues, draft search/date filters and item reordering; apply the [combined v9 update](docs/PILOT_UPDATE_V9.md) to use it on the existing pilot. Live Microsoft session restoration and second-user isolation remain acceptance items. No paid AI or new services are activated. See [SQL Server setup](docs/SQL_SERVER_MILESTONE.md), [import tools](docs/DATABASE_MILESTONE.md) and [completion plan](docs/MRF_COMPLETION_PLAN.md).
 
 Prepare a real catalog delivery using the [catalog delivery readiness workflow](docs/CATALOG_DELIVERY_READINESS.md) and `npm run catalog:preflight -- <ordered CSV files>`. The offline rehearsal does not write to the live catalog.
+
+For a full database-backed walkthrough, follow the [demonstration runbook](docs/DEMONSTRATION_RUNBOOK.md).
 
 ## Try the preview
 

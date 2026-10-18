@@ -1,3 +1,4 @@
+import { catalogReadiness } from './catalog-readiness';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { parse } from 'csv-parse/sync';
@@ -454,6 +455,7 @@ export function* catalogAction(p:Principal,action:string,data:any):Operation<any
     case 'apply':return yield* applyBulk(p,z.uuid().parse(data.id),z.string().parse(data.approval));
     case 'rollback':return yield* rollbackBulk(p,z.uuid().parse(data.id));
     case 'disable-policy':{admin(p);const id=z.uuid().parse(data.id);if(!(yield* query('SELECT id FROM job_restrictions WHERE tenant=@p0 AND id=@p1',p.tenant,id)).length)throw new ApiError(404,'Restriction not found.');yield* query('UPDATE job_restrictions SET enabled=0 WHERE tenant=@p0 AND id=@p1',p.tenant,id);yield* audit(p,'job.restriction_disabled',id);return {disabled:true};}
+    case 'readiness':return yield* catalogReadiness(p,data);
     case 'overview':admin(p);return {manufacturers:yield* query('SELECT * FROM manufacturers WHERE tenant=@p0',p.tenant),policies:yield* query('SELECT * FROM job_restrictions WHERE tenant=@p0',p.tenant),batches:yield* query('SELECT id,state,report,created_at FROM catalog_batches WHERE tenant=@p0',p.tenant),imageReferences:yield* query('SELECT * FROM image_references WHERE tenant=@p0',p.tenant)};
     default:throw new ApiError(404,'Unknown catalog operation.');
   }

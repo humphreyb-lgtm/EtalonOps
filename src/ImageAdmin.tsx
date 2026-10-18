@@ -1,19 +1,21 @@
-import { useState } from 'react';
+import { useEffect,useState } from 'react';
 import { databaseSearch,request,uploadProductImage,type ImageRecord } from './api';
 import type { Candidate,ManufacturerProduct } from './domain';
 import { ProductPhoto } from './ProductPhoto';
 
-export function ImageAdmin() {
+export function ImageAdmin({materialTarget}:{materialTarget?:{id:string;request:number}}={}) {
   const [products,setProducts]=useState<ManufacturerProduct[]>([]),[productId,setProductId]=useState<string|null>(null);
-  const [query,setQuery]=useState(''),[results,setResults]=useState<Candidate[]>([]),[selected,setSelected]=useState<Candidate|null>(null);
+  const [query,setQuery]=useState(''),[results,setResults]=useState<Candidate[]>([]),[selected,setSelected]=useState<Pick<Candidate,'id'|'description'>|null>(null);
   const [images,setImages]=useState<ImageRecord[]>([]),[file,setFile]=useState<File|null>(null),[source,setSource]=useState(''),[rights,setRights]=useState('');
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[reviewed,setReviewed]=useState<string[]>([]);
   async function run(work:()=>Promise<void>){setBusy(true);setError('');setNotice('');try{await work();}catch(error){setError(error instanceof Error?error.message:'Image operation failed.');}finally{setBusy(false);}}
   async function load(id:string){setImages((await request<{images:ImageRecord[]}>(`/admin/materials/${id}/images`)).images);setReviewed([]);}
+  async function select(id:string){const details=await request<{id:string;description:string;products:ManufacturerProduct[]}>('/catalog/details','POST',{id});setSelected(details);setProductId(null);setProducts(details.products);setFile(null);setSource('');setRights('');await load(id);}
+  useEffect(()=>{if(materialTarget)void run(()=>select(materialTarget.id));},[materialTarget?.id,materialTarget?.request]);
   return <section aria-label="Product image administration" aria-busy={busy} className="image-admin"><h3>Product images</h3><p>Upload a source-backed product photo, then review it separately from catalog approval. Foremen see only the approved image.</p>
     {error&&<p className="error-message" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
     <form className="catalog-actions" onSubmit={event=>{event.preventDefault();void run(async()=>{setResults(await databaseSearch(query));setSelected(null);setImages([]);});}}><label htmlFor="image-material-query">Find catalog material</label><input id="image-material-query" value={query} onChange={e=>setQuery(e.target.value)} maxLength={200} required disabled={busy}/><button className="button" disabled={busy||!query.trim()}>Find material for image review</button></form>
-    <div className="image-material-results">{results.map(material=><button key={material.id} className="button image-material-choice" disabled={busy} onClick={()=>void run(async()=>{setSelected(material);setProductId(null);setProducts((await request<{products:ManufacturerProduct[]}>('/catalog/details','POST',{id:material.id})).products);setFile(null);setSource('');setRights('');await load(material.id);})}>{material.description}{material.source==='verified_fixture'?' · fictional fixture':''}</button>)}</div>
+    <div className="image-material-results">{results.map(material=><button key={material.id} className="button image-material-choice" disabled={busy} onClick={()=>void run(async()=>{await select(material.id);})}>{material.description}{material.source==='verified_fixture'?' · fictional fixture':''}</button>)}</div>
     {selected&&<><h4>Image review: {selected.description}</h4><label>Image belongs to<select aria-label="Image belongs to" value={productId??''} disabled={busy} onChange={e=>{setProductId(e.target.value||null);setReviewed([]);}}><option value="">Generic material</option>{products.map(product=><option key={product.id} value={product.id}>{product.manufacturer} · {product.partNumber}</option>)}</select></label><form className="catalog-fields" onSubmit={event=>{event.preventDefault();if(!file)return;void run(async()=>{if(file.size>5*1024*1024)throw new Error('Choose an image of at most 5 MB.');const uploaded=await uploadProductImage(selected.id,file,source,rights,productId);await load(selected.id);setNotice(uploaded.image.status==='approved'?'This image is already approved; its original evidence was retained.':'Uploaded for review. Foremen cannot see it until approved.');});}}>
       <label htmlFor="product-image-file">Product photo (JPEG, PNG or WebP, maximum 5 MB)</label><input id="product-image-file" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} required onChange={e=>setFile(e.target.files?.[0]??null)}/>
       <label htmlFor="image-evidence-url">Public HTTPS source/evidence URL</label><input id="image-evidence-url" type="url" required maxLength={2000} value={source} disabled={busy} onChange={e=>setSource(e.target.value)}/>

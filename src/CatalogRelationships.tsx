@@ -1,7 +1,7 @@
 import { CatalogCorrections } from './CatalogCorrections';
 import { parseInches } from './measurements';
 import { JobManufacturerRestrictions } from './JobManufacturerRestrictions';
-import { useState } from 'react';
+import { useEffect,useState } from 'react';
 import { request,databaseSearch } from './api';
 import type { Candidate,ManufacturerProduct } from './domain';
 type Details={id:string;externalKey:string;description:string;active:boolean;productUnit:string;attributes:Record<string,string|number>;sourceUrl:string;verificationBasis:string;verification:'provisional'|'reviewed';highUse:boolean;preferredProductId:string|null;products:ManufacturerProduct[]};
@@ -14,7 +14,7 @@ function ImportRecord({record}:{record:{row:number;kind:string;data:unknown}}){
  const names:Record<string,string>={externalKey:'Material key',materialKey:'Related material key',category:'Category',attributes:'Defining specifications',productUnit:'Product unit',verification:'Verification status',origin:'Origin',sourceUrl:'Source evidence',verificationBasis:'Review basis',manufacturer:'Manufacturer',partNumber:'Manufacturer part number',title:'Product title',phrase:'Search phrase',rightsBasis:'Image usage rights'};
  return <article><h4>Row {record.row} · {record.kind}</h4><dl>{Object.entries(record.data as Record<string,unknown>).map(([key,value])=><div key={key}><dt>{names[key]??key}</dt><dd style={{overflowWrap:'anywhere'}}>{typeof value==='object'&&value!==null?<dl>{Object.entries(value).map(([attribute,detail])=><div key={attribute}><dt>{labels[attribute]??attribute}</dt><dd>{String(detail)}</dd></div>)}</dl>:String(value)}</dd></div>)}</dl></article>;
 }
-export function CatalogRelationships(){
+export function CatalogRelationships({materialTarget}:{materialTarget?:{id:string;request:number}}={}){
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [search,setSearch]=useState(''),[matches,setMatches]=useState<Candidate[]>([]),[selected,setSelected]=useState<Details|null>(null);
   const [category,setCategory]=useState('conduit'),[externalKey,setExternalKey]=useState(''),[attributes,setAttributes]=useState<Record<string,string>>({}),[unit,setUnit]=useState('EA'),[materialSource,setMaterialSource]=useState(''),[basis,setBasis]=useState(''),[materialReviewed,setMaterialReviewed]=useState(false);
@@ -39,6 +39,7 @@ export function CatalogRelationships(){
   async function call<T>(action:string,data:unknown){return request<T>(`/catalog/${action}`,'POST',data);}
   async function run(work:()=>Promise<void>){setBusy(true);setError('');setNotice('');try{await work();}catch(e){setError(e instanceof Error?e.message:'Catalog operation failed.');}finally{setBusy(false);}}
   async function select(id:string){const details=await call<Details>('details',{id});setSelected(details);setPolicies([]);setPolicyPage(null);setVerifiedMaterial(false);setReviewProduct(null);setAllowed([]);setAllowedManufacturers([]);setEditingPolicy(null);setEnabled(false);await loadTranslations(id);}
+  useEffect(()=>{if(materialTarget)void run(()=>select(materialTarget.id));},[materialTarget?.id,materialTarget?.request]);
   return <section className="catalog-relationships" aria-label="Catalog relationships" aria-busy={busy}><h3>Materials and manufacturer products</h3><p>One material per defining specification. Manufacturer products remain linked choices. AI-origin records stay provisional until separately reviewed.</p>{error&&<p role="alert" className="error-message">{error}</p>}{notice&&<p role="status">{notice}</p>}
     <fieldset disabled={busy} className="catalog-fields"><legend>Find a catalog material</legend><label>Material search<input value={search} onChange={e=>{setSearch(e.target.value);setBrowse(null);}} /></label><button className="button" onClick={()=>void run(async()=>setMatches(await databaseSearch(search)))} disabled={!search.trim()}>Find material relationships</button>{matches.map(m=><button className="button" key={m.id} onClick={()=>void run(()=>select(m.id))}>{m.description}</button>)}</fieldset>
     <fieldset disabled={busy} className="catalog-fields"><legend>Browse catalog</legend><p>Browse by material description or stable key using the search field above.</p><label className="catalog-review"><input type="checkbox" checked={includeInactive} onChange={e=>{setIncludeInactive(e.target.checked);setBrowse(null);}}/>Include inactive materials</label><button className="button" onClick={()=>void run(()=>loadBrowse())}>Browse catalog materials</button>{browse&&<><p>{browse.total} materials</p>{browse.records.map(m=><article key={m.id}><button className="button" onClick={()=>void run(()=>select(m.id))}>{m.description}</button><p>{m.external_key} · {m.active?'Active':'Inactive'}</p></article>)}<Pager value={browse} label="materials" busy={busy} load={page=>void run(()=>loadBrowse(page))}/></>}</fieldset>
