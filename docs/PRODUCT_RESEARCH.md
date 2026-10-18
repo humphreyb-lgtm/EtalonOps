@@ -12,6 +12,10 @@ Source URLs establish provenance, not verified truth. Every new material/manufac
 
 Adding uses one existing database transaction spanning materials, manufacturer products and translations. Failure rolls everything back. Successful operations produce three normal catalog-history batches, retaining existing audit and rollback controls. Preview makes no catalog additions. Every candidate edit or selection change invalidates the preview; server-side revalidation rejects changed inputs or changed matching decisions. Repeating the same operation is idempotent. Existing rejected translations remain rejected.
 
+## Unpublished research handoff (development)
+
+Selected research can now be saved with Save selected research unpublished. The server validates the candidate relationships, shares canonical materials, and stages selected manufacturer products and phrases together. An optional original search phrase is retained as a potential match for selected materials. Coverage notes and the search phrase persist with the saved import. Nothing becomes searchable until the normal workbook review/publication action. Duplicate saves reopen the same batch. Existing direct reviewed publication remains available for compatibility. Image research and collection are still unfinished.
+
 ## Future live research adapter
 
 This review workflow is ready for provider output, but the live adapter is not implemented or enabled. It must support bounded discovery across manufacturer family pages and linked sell sheets, document exact sources for each specification, report excluded/uncertain candidates, and distinguish complete verified family coverage from partial results. Scope includes manufacturer, category, schedule, dimensions, lengths and end connections; the word “all” alone is not proof of completeness.

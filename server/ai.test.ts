@@ -81,3 +81,16 @@ test('AI HTTP checks membership and reserves usage before one provider call, inc
     assert.ok(store.db.prepare("SELECT id FROM audit_events WHERE action='ai.failed'").get());
   }finally{await new Promise<void>(r=>server.close(()=>r()));store.db.close();}
 });
+
+test('Azure API-key authentication is server-only, single-attempt and never leaks provider errors',async()=>{
+ const apiKey='fictional-test-key-not-a-real-secret';let calls=0;
+ const transport:typeof fetch=async(url,init)=>{calls++;assert.match(String(url),/^https:\/\/pilot\.openai\.azure\.com\//);const headers=init?.headers as Record<string,string>;assert.equal(headers['api-key'],apiKey);assert.equal(headers.Authorization,undefined);assert.equal(init?.redirect,'error');return new Response(JSON.stringify({model:reply.model,choices:[{finish_reason:'stop',message:{content:JSON.stringify(reply.result)}}],usage:{prompt_tokens:700,completion_tokens:80}}));};
+ const model=new AzureDirectModel('https://pilot.openai.azure.com','mini',{apiKey},transport);
+ assert.equal((await model.interpret(prepareAI(input()))).model,reply.model);assert.equal(calls,1);
+ const bad=new AzureDirectModel('https://pilot.openai.azure.com','mini',{apiKey},async()=>{throw Error('provider error containing '+apiKey);});
+ await assert.rejects(()=>bad.interpret(prepareAI(input())),error=>error instanceof Error&&!error.message.includes(apiKey)&&/unavailable/.test(error.message));
+ assert.throws(()=>new AzureDirectModel('https://pilot.openai.azure.com','mini',{apiKey:'bad key'}),/secure server environment/);
+ // A key alone cannot bypass model/pricing activation guards or turn on discovery.
+ assert.throws(()=>configuredModel({ETALONOPS_AI_ENABLED:'true',ETALONOPS_AZURE_OPENAI_API_KEY:apiKey}));
+ assert.equal(configuredModel({ETALONOPS_AI_ENABLED:'false',ETALONOPS_AZURE_OPENAI_API_KEY:apiKey}),undefined);
+});

@@ -1,5 +1,8 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
+import {randomUUID} from 'node:crypto';
+import {inboxAction,type InboxItem} from './catalog-inbox';
+import {materialColumns} from './catalog-spreadsheet';
 import {researchResults} from '../src/catalog-research';
 import {ApiError,type Principal} from './contracts';
 import {type Operation,materialInput,productInput,translationInput,describeMaterial,createMaterial,addProduct,previewBulk,applyBulk,parseExtendedCsv} from './catalog-v2';
@@ -32,4 +35,26 @@ export function* researchAction(p:Principal,data:unknown,apply=false):Operation<
  const batches=[];const canonical=new Map<string,any>();for(const material of materials.values()){const identity=describeMaterial(material).identity;if(!canonical.has(identity))canonical.set(identity,material);}
  for(const [kind,rows] of [['material',[...canonical.values()]],['product',products],['translation',[...phrases.values()]]] as const){const batch=yield* previewBulk(p,csv(kind,rows));if(batch.report.errors.length)throw new ApiError(409,JSON.stringify(batch.report.errors));const result=yield* applyBulk(p,batch.id,'I reviewed this batch');batches.push({kind,id:batch.id,...result});}
  return {batches,products:products.length,verification:'provisional'};
+}
+
+/** Persist chosen research as unpublished records; this does not invoke AI or publish facts. */
+export function* stageResearch(p:Principal,data:unknown):Operation<any>{
+ if(!p.roles.includes('Admin'))throw new ApiError(403,'Administrator role required.');
+ const input=z.object({results:researchResults,searchPhrase:z.string().trim().max(500).default('')}).strict().parse(data);
+ const preview=yield* researchAction(p,{results:input.results});
+ const items:InboxItem[]=[],materials=new Set<string>(),phrases=new Set<string>();
+ const append=(kind:InboxItem['kind'],fields:Record<string,string>)=>items.push({id:randomUUID(),kind,sheet:'AI research '+kind,row:items.length+2,fields:{kind,...fields},state:'unpublished'});
+ input.results.items.forEach((item,index)=>{
+  const materialKey=preview.summaries[index].materialKey;
+  if(!materials.has(materialKey)){
+   const attributes:Record<string,string>={};for(const [key,value] of Object.entries(item.attributes))attributes[(materialColumns as readonly string[]).includes(key)?key:'attribute.'+key]=String(value);
+   append('material',{externalKey:materialKey,category:item.category,productUnit:item.productUnit,verification:'provisional',origin:'ai_import',sourceUrl:item.sourceUrl,verificationBasis:item.verificationBasis,...attributes});materials.add(materialKey);
+  }
+  append('product',{materialKey,manufacturer:item.manufacturer,partNumber:item.partNumber,title:item.title,sourceUrl:item.sourceUrl,verification:'provisional',origin:'ai_import'});
+  for(const phrase of [...item.phrases,...(input.searchPhrase?[input.searchPhrase]:[])]){
+   const key=JSON.stringify([materialKey,phrase.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim()]);if(phrases.has(key))continue;phrases.add(key);
+   append('translation',{materialKey,phrase,origin:'ai_generated',sourceUrl:item.sourceUrl});
+  }
+ });
+ return yield* inboxAction(p,'inbox-stage',{filename:'Product research — '+(input.results.scope.trim()||'selected products').slice(0,160),research:{scope:input.results.scope,coverageNotes:input.results.coverageNotes,searchPhrase:input.searchPhrase},items});
 }

@@ -12,6 +12,20 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'selected research persists unpublished materials, products, source phrases and coverage until reviewed publication',run:async store=>{
+ const {admin,user,foreign}=people();const key='selected-research-'+randomUUID();
+ const item={externalKey:key,category:'general',productUnit:'EA',attributes:{type:'Synthetic research item',specification:key},manufacturer:'Fictional Staging Maker',partNumber:key,title:'Synthetic research product',sourceUrl:'https://example.invalid/staged-research',verificationBasis:'Synthetic source used for testing only.',phrases:['Synthetic '+key]};
+ const input={results:{scope:'Synthetic research scope',coverageNotes:'Only two synthetic products; not a complete family.',items:[item,{...item,externalKey:key+'-same',manufacturer:'Second Fictional Maker',partNumber:key+'-second'}]},searchPhrase:'original phrase '+key};
+ await assert.rejects(async()=>store.catalogCommand(user,'research-stage',input),/Administrator/);
+ const batch=await store.catalogCommand(admin,'research-stage',input);assert.equal(batch.research.coverageNotes,input.results.coverageNotes);assert.equal(batch.items.filter((i:any)=>i.kind==='material').length,1);assert.equal(batch.items.filter((i:any)=>i.kind==='product').length,2);assert.equal(batch.items.filter((i:any)=>i.kind==='translation').length,2);assert.ok(batch.items.every((i:any)=>i.state==='unpublished'&&!i.error));assert.equal((await store.search(user,key)).length,0);
+ await assert.rejects(async()=>store.catalogCommand(foreign,'inbox-get',{id:batch.id}),/not found/);
+ const again=await store.catalogCommand(admin,'research-stage',input);assert.equal(again.id,batch.id);
+ const ids=batch.items.map((i:any)=>i.id),plan=await store.catalogCommand(admin,'inbox-plan',{id:batch.id,version:batch.version,itemIds:ids});assert.equal(plan.held.length,0);
+ await store.catalogCommand(admin,'inbox-publish-ready',{id:batch.id,version:batch.version,itemIds:ids,planHash:plan.planHash,approval:'I approve and publish these records'});
+ const found=await store.search(user,input.searchPhrase);assert.equal(found.length,1);assert.equal((await store.catalogCommand(admin,'details',{id:found[0].id})).products.length,2);
+ const reopened=await store.catalogCommand(admin,'inbox-get',{id:batch.id});assert.equal(reopened.research.searchPhrase,input.searchPhrase);assert.ok(reopened.items.every((i:any)=>i.state==='published'));
+}},
+
 {name:'reviewed bulk publication holds invalid rows and includes cross-page dependencies; bulk deletion preserves published records',run:async store=>{
  const {admin,user}=people();const materialRow=(key:string,valid=true)=>({id:randomUUID(),kind:'material',sheet:'Other Parts',row:2,fields:{kind:'material',externalKey:key,category:'general',productUnit:'EA',verification:'provisional',origin:'ai_import',sourceUrl:'https://example.invalid/bulk',verificationBasis:'Synthetic bulk-publication test only.',type:'Fictional '+key,specification:valid?'Synthetic specification '+key:''},state:'unpublished'});
  const materials=Array.from({length:27},(_,i)=>({...materialRow('bulk-'+i,i!==0),row:i+2}));const part={id:randomUUID(),kind:'product',sheet:'Manufacturer Products',row:2,state:'unpublished',fields:{kind:'product',materialKey:'bulk-26',manufacturer:'Bulk Fictional Maker',partNumber:'BULK-026',title:'Fictional bulk part',sourceUrl:'https://example.invalid/bulk',origin:'ai_import',verification:'provisional'}};
