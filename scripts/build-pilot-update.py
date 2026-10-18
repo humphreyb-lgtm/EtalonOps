@@ -9,8 +9,14 @@ import sys
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v3.zip')
+output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v4.zip')
 files = [
+    'src/CatalogCorrections.tsx', 'server/catalog-history.ts', 'server/store.ts', 'server/sql-store.ts',
+    'db/001-azure-sql.sql', 'db/002-catalog.sql', 'db/003-translation-evidence.sql',
+    'server/sql-principal.ts', 'scripts/azure-probe.ts', 'scripts/node-cloud.sh',
+    'db/004-catalog-revisions.sql', 'db/migrations/004-catalog-revisions.sql',
+    'scripts/azure-migrate.ts', 'scripts/migrate-cloud-schema.sh',
+    'docs/CATALOG_CORRECTIONS.md', 'docs/PILOT_UPDATE_V4.md',
     'src/ProductPhoto.tsx', 'src/styles.css', 'src/catalog-stream.ts', 'src/App.tsx', 'src/cloud-auth.tsx', 'src/api.ts', 'src/domain.ts', 'src/measurements.ts',
     'src/CatalogAdmin.tsx', 'src/CatalogRelationships.tsx', 'src/JobManufacturerRestrictions.tsx',
     'server/app.ts', 'server/catalog-v2.ts', 'server/catalog-export.ts',

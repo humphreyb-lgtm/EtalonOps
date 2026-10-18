@@ -11,7 +11,7 @@ const file = `/var/opt/mssql/data/etalonops-test-${suffix}.bak`;
 const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
 let restored = false;
 try {
-  const catalogTables=['catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references'];
+  const catalogTables=['catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references','catalog_revisions'];
   const catalogCounts=(db:string)=>catalogTables.map(table=>`(SELECT COUNT(*) FROM [${db}].dbo.${table}) AS [${table}]`).join(',');
   const beforeCatalog=(await pool.request().query(`SELECT ${catalogCounts('EtalonOpsSqlTests')}`)).recordset[0];
   const before = await pool.request().query('SELECT (SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.materials) AS materials,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.drafts) AS drafts,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.draft_lines) AS lines,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.image_associations) AS images,(SELECT COUNT(*) FROM EtalonOpsSqlTests.dbo.audit_events) AS audits');

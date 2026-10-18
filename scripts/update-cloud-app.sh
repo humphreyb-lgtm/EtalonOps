@@ -14,6 +14,7 @@ app=json.loads(subprocess.check_output(['az','webapp','show','-g',s['resourceGro
 assert app['identity']['principalId'].lower()==s['runtimePrincipal'].lower(),'Runtime identity mismatch; stopped.'
 PY
 npm run build
+bash scripts/migrate-cloud-schema.sh
 python3 deploy/package.py
 az webapp deploy --name etalonops-954bb4a3 --resource-group rg-etalonops-poc --src-path .runtime/app.zip --type zip --output none
 host=$(az webapp show --name etalonops-954bb4a3 --resource-group rg-etalonops-poc --query defaultHostName -o tsv)

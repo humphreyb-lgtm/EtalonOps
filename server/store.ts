@@ -1,3 +1,4 @@
+import { historicalSnapshot } from './catalog-history';
 import { catalogAction, searchCatalog, validatePurchase, productForMaterial, type Operation } from './catalog-v2';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { readFileSync, mkdirSync } from 'node:fs';
@@ -24,7 +25,7 @@ export class Store {
     if (!exists) this.transaction(() => { this.db.exec(migration); this.db.prepare('INSERT INTO schema_migrations(version,checksum) VALUES(1,?)').run(hash(migration)); });
     const applied = this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=1').get();
     if (applied?.checksum !== hash(migration)) throw new Error('Applied migration checksum changed. Create a new migration instead.');
-    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql']] as const){
+    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql']] as const){
       const next=readFileSync(new URL(`../db/migrations/${file}`,import.meta.url),'utf8');
       const prior=this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=?').get(version);
       if(prior&&prior.checksum!==hash(next))throw new Error('Applied catalog migration checksum changed.');
@@ -73,26 +74,27 @@ export class Store {
       const draftId = String(existing?.id ?? randomUUID());
       if (existing) this.db.prepare('UPDATE drafts SET delivery_date=?,version=version+1,updated_at=? WHERE id=? AND tenant=? AND owner=?').run(body.deliveryDate, now(), draftId, p.tenant, p.oid);
       else this.db.prepare('INSERT INTO drafts VALUES(?,?,?,?,?,1,?)').run(draftId, p.tenant, p.oid, body.projectId, body.deliveryDate, now());
-      const priorMaterials = new Map(this.db.prepare('SELECT id,material_id,purchasing FROM draft_lines WHERE draft_id=?').all(draftId).map(line => [String(line.id), {materialId:line.material_id,purchasing:line.purchasing}]));
+      const priorMaterials = new Map(this.db.prepare('SELECT id,material_id,purchasing,candidate,source FROM draft_lines WHERE draft_id=?').all(draftId).map(line => [String(line.id), {materialId:line.material_id,purchasing:line.purchasing,candidate:line.candidate,source:line.source}]));
       this.db.prepare('DELETE FROM draft_lines WHERE draft_id=?').run(draftId);
       body.lines.forEach((line, index) => {
         let materialId: string | null = null;
+        const historical = historicalSnapshot(priorMaterials.get(line.id), line);
         if (line.source === 'verified' || line.source === 'verified_fixture') {
           const material = this.db.prepare('SELECT * FROM materials WHERE id=? AND tenant=?').get(line.candidate!.id, p.tenant);
           if (!material || (!material.active && priorMaterials.get(line.id)?.materialId !== material.id)) throw new ApiError(400, 'Catalog candidate no longer exists. Re-run matching.');
           const details = JSON.parse(String(material.details));
           const expectedSource = material.dataset_kind === 'fixture' ? 'verified_fixture' : 'verified';
-          if (line.source !== expectedSource || line.candidate!.description !== material.description || line.candidate!.productUnit !== material.product_uom
-            || JSON.stringify(line.candidate!.specs) !== JSON.stringify(details.specs) || line.candidate!.category !== details.category) throw new ApiError(400, 'Catalog snapshot does not match its source record.');
+          if (!historical && (line.source !== expectedSource || line.candidate!.description !== material.description || line.candidate!.productUnit !== material.product_uom
+            || JSON.stringify(line.candidate!.specs) !== JSON.stringify(details.specs) || line.candidate!.category !== details.category)) throw new ApiError(400, 'Catalog snapshot does not match its source record.');
           materialId = String(material.id);
         }
         this.catalogRun(validatePurchase(p,body.projectId,materialId,line.purchasing,false,Boolean(priorMaterials.get(line.id)?.materialId===materialId&&priorMaterials.get(line.id)?.purchasing===JSON.stringify(line.purchasing))));
-        const snapshot = materialId ? (() => {
+        const snapshot = historical ?? (materialId ? (() => {
           const material = this.db.prepare('SELECT * FROM materials WHERE id=?').get(materialId)!;
           const details = JSON.parse(String(material.details));
           const profile=this.db.prepare('SELECT verification FROM catalog_profiles WHERE tenant=? AND material_id=?').get(p.tenant,materialId);
           return { ...line.candidate,verification:profile?.verification??'reviewed', provenance: { sourceUrl: details.row.source_url, verificationBasis: details.row.verification_basis, datasetKind: material.dataset_kind } };
-        })() : line.candidate;
+        })() : line.candidate);
         this.db.prepare('INSERT INTO draft_lines(id,draft_id,position,material_id,quantity,requested_uom,description,raw_input,candidate,source,delivery_mode,override_date,purchasing) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(line.id, draftId, index, materialId, line.quantity, line.requestedUnit, line.description, JSON.stringify(line.rawInput), snapshot ? JSON.stringify(snapshot) : null, line.source, line.deliveryMode, line.overrideDate, line.purchasing ? JSON.stringify(line.purchasing) : null);
       });
       this.audit(p, 'draft.saved', draftId);

@@ -11,6 +11,82 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'reviewed corrections preserve MRF snapshots and reject forged history',run:async store=>{
+ const {admin,user,foreign}=people();await store.member(user,'riverside');
+ const input={...bracket(),verification:'reviewed'},m=await store.catalogCommand(admin,'material',input),prod=await store.catalogCommand(admin,'product',product('bracket'));
+ const c=(await store.search(user,'Fixture Alpha TEST-1624','riverside'))[0];
+ const body=draftBody.parse({projectId:'riverside',deliveryDate:'2026-11-10',version:0,lines:[{id:randomUUID(),quantity:'2',requestedUnit:'EA',description:c.description,rawInput:{quantity:'2',requestedUnit:'EA',description:'Fixture Alpha bracket'},candidate:c,source:c.source,deliveryMode:'inherit',overrideDate:null,purchasing:{productId:prod.id,manufacturer:'Fixture Alpha',partNumber:'TEST-1624',noSubstitutions:true}}]});
+ const saved=await store.saveDraft(user,body);
+ const correction={id:m.id,reason:'Correct documented nominal spacing and source.',material:{...input,attributes:{...input.attributes,nominalSpacing:'16 to 24 in.'},sourceUrl:'https://example.invalid/corrected'}};
+ await assert.rejects(async()=>store.catalogCommand(user,'preview-material-correction',correction),/Administrator/);
+ await assert.rejects(async()=>store.catalogCommand(foreign,'preview-material-correction',correction),/not found/);
+ const preview=await store.catalogCommand(admin,'preview-material-correction',correction);assert.equal(preview.mode,'metadata');assert.equal(preview.impact.savedLines,1);
+ await assert.rejects(async()=>store.catalogCommand(admin,'apply-material-correction',{...correction,expectedHash:preview.previewHash}),/Explicit/);
+ const apply={...correction,expectedHash:preview.previewHash,approval:'I reviewed the correction and historical impact'};
+ const revision=await store.catalogCommand(admin,'apply-material-correction',apply);assert.equal((await store.catalogCommand(admin,'apply-material-correction',apply)).id,revision.id);
+ const original=saved.lines[0].candidate;
+ const resave=draftBody.parse({deliveryDate:saved.deliveryDate,version:Number(saved.version),projectId:'riverside',lines:[{...saved.lines[0],quantity:'3'}]});
+ const updated=await store.saveDraft(user,resave,String(saved.id));assert.deepEqual(updated.lines[0].candidate,original);assert.equal(updated.lines[0].purchasing?.partNumber,'TEST-1624');
+ await assert.rejects(async()=>store.saveDraft(user,{...resave,version:Number(updated.version),lines:[{...resave.lines[0],candidate:{...resave.lines[0].candidate!,description:'Forged historical description'}}]},String(saved.id)),/snapshot/);
+ const details=await store.catalogCommand(admin,'details',{id:m.id});assert.equal(details.verification,'provisional');assert.match(details.description,/16 to 24/);
+ const history=await store.catalogCommand(admin,'page',{section:'revisions',entityId:m.id});assert.equal(history.total,1);
+ assert.equal((await store.catalogCommand(foreign,'page',{section:'revisions',entityId:m.id})).total,0);
+ const record=await store.catalogCommand(admin,'revision-details',{id:revision.id});assert.equal(record.reason,correction.reason);
+ await assert.rejects(async()=>store.catalogCommand(foreign,'revision-details',{id:revision.id}),/not found/);
+}},
+{name:'specification and part identity changes retain old records and stop purchasing retired references',run:async store=>{
+ const {admin,user}=people();await store.member(user,'riverside');const m=await store.catalogCommand(admin,'material',material());
+ const prod=await store.catalogCommand(admin,'product',product('pvc'));
+ const correction={id:prod.id,reason:'Correct the documented manufacturer part number.',product:product('pvc','Fixture Alpha','TEST-CORRECTED')};
+ const preview=await store.catalogCommand(admin,'preview-product-correction',correction);assert.equal(preview.mode,'replacement');
+ const result=await store.catalogCommand(admin,'apply-product-correction',{...correction,expectedHash:preview.previewHash,approval:'I reviewed the correction and historical impact'});assert.notEqual(result.replacementId,prod.id);
+ assert.equal((await store.catalogCommand(admin,'page',{section:'revisions',entityId:m.id})).total,1);
+ const bad=await store.catalogCommand(user,'validate-lines',{projectId:'riverside',lines:[{id:randomUUID(),candidate:{id:m.id},purchasing:{productId:prod.id,manufacturer:'Fixture Alpha',partNumber:'TEST-1624',noSubstitutions:true}}]});assert.equal(bad.ready,false);
+ const next={id:m.id,reason:'Correct the actual conduit schedule to 80.',material:material('corrected-pvc','80')};
+ const p=await store.catalogCommand(admin,'preview-material-correction',next);assert.equal(p.mode,'replacement');
+ await assert.rejects(async()=>store.catalogCommand(admin,'apply-material-correction',{...next,reason:'Different reason makes the review stale.',expectedHash:p.previewHash,approval:'I reviewed the correction and historical impact'}),/Preview it again/);
+ const fixed=await store.catalogCommand(admin,'apply-material-correction',{...next,expectedHash:p.previewHash,approval:'I reviewed the correction and historical impact'});
+ assert.equal((await store.catalogCommand(admin,'details',{id:m.id})).active,false);assert.equal((await store.catalogCommand(admin,'details',{id:fixed.replacementId})).active,true);
+ assert.equal((await store.catalogCommand(user,'validate-lines',{projectId:'riverside',lines:[{id:randomUUID(),candidate:{id:m.id}}]})).ready,false);
+ await assert.rejects(async()=>store.catalogCommand(admin,'preview-material-correction',{id:fixed.replacementId,reason:'Try to point back to retired original specifications.',material:material('another-key')}),/retired/);
+}},
+{name:'retired product snapshots remain editable drafts and correction targets are reviewed for staleness',run:async store=>{
+ const {admin,user}=people();await store.member(user,'riverside');
+ const original={...bracket(),origin:'ai_import',verification:'provisional'},m=await store.catalogCommand(admin,'material',original),prod=await store.catalogCommand(admin,'product',product('bracket'));
+ const c=(await store.search(user,'Fixture Alpha TEST-1624','riverside'))[0];
+ const body=draftBody.parse({projectId:'riverside',deliveryDate:'2026-11-10',version:0,lines:[{id:randomUUID(),quantity:'2',requestedUnit:'EA',description:c.description,rawInput:{quantity:'2',requestedUnit:'EA',description:'Fixture Alpha bracket'},candidate:c,source:c.source,deliveryMode:'inherit',overrideDate:null,purchasing:{productId:prod.id,manufacturer:'Fixture Alpha',partNumber:'TEST-1624',noSubstitutions:true}}]});
+ const saved=await store.saveDraft(user,body);
+ const next={id:prod.id,reason:'Correct manufacturer part number based on source evidence.',product:product('bracket','Fixture Alpha','CORRECTED')};const preview=await store.catalogCommand(admin,'preview-product-correction',next);
+ const target=await store.catalogCommand(admin,'product',next.product);
+ await assert.rejects(async()=>store.catalogCommand(admin,'apply-product-correction',{...next,expectedHash:preview.previewHash,approval:'I reviewed the correction and historical impact'}),/Preview it again/);
+ const refreshed=await store.catalogCommand(admin,'preview-product-correction',next);const done=await store.catalogCommand(admin,'apply-product-correction',{...next,expectedHash:refreshed.previewHash,approval:'I reviewed the correction and historical impact'});assert.equal(done.replacementId,target.id);
+ const resave=draftBody.parse({projectId:'riverside',deliveryDate:'2026-11-12',version:Number(saved.version),lines:[{...saved.lines[0],quantity:'4'}]});const updated=await store.saveDraft(user,resave,String(saved.id));assert.equal(updated.lines[0].purchasing?.partNumber,'TEST-1624');assert.equal(updated.lines[0].quantity,'4');
+ await assert.rejects(async()=>store.saveDraft(user,{...resave,version:Number(updated.version),lines:[{...resave.lines[0],purchasing:{...resave.lines[0].purchasing!,manufacturer:'Forged maker'}}]},String(saved.id)),/Product|product|snapshot/);
+ await assert.rejects(async()=>store.catalogCommand(admin,'preview-product-correction',{id:target.id,reason:'Do not reuse a retired manufacturer identity.',product:product('bracket')}),/retired/);
+ const fix={id:m.id,reason:'Update source evidence while preserving the AI origin.',material:{...original,origin:'admin_reviewed',sourceUrl:'https://example.invalid/corrected'}};const p=await store.catalogCommand(admin,'preview-material-correction',fix);await store.catalogCommand(admin,'apply-material-correction',{...fix,expectedHash:p.previewHash,approval:'I reviewed the correction and historical impact'});
+ assert.equal((await store.catalogCommand(admin,'details',{id:m.id})).attributes.recordOrigin,'ai_import');
+ const changed={id:m.id,reason:'Correct actual maximum spread to 26 inches.',material:{...original,externalKey:'corrected-span',attributes:{...original.attributes,maxSpanIn:26}}};const cp=await store.catalogCommand(admin,'preview-material-correction',changed);await store.catalogCommand(admin,'apply-material-correction',{...changed,expectedHash:cp.previewHash,approval:'I reviewed the correction and historical impact'});
+ const historical=draftBody.parse({projectId:'riverside',deliveryDate:'2026-11-13',version:Number(updated.version),lines:updated.lines});const kept=await store.saveDraft(user,historical,String(saved.id));assert.deepEqual(kept.lines[0].candidate,saved.lines[0].candidate);
+}},
+{name:'duplicate retirement requires reviewed identical specifications and retains source history',run:async store=>{
+ const {admin,user}=people();const fixture=readFileSync(new URL('../db/fixtures/catalog.csv',import.meta.url),'utf8');const batch=await store.previewImport(admin,fixture);await store.applyImport(admin,batch.id,'I reviewed this batch',true);
+ const legacy=(await store.catalogCommand(admin,'page',{section:'materials'})).records[0];
+ const retained=await store.catalogCommand(admin,'material',{...material('canonical'),verification:'reviewed'});
+ const source=await store.catalogCommand(admin,'details',{id:legacy.id});
+ // The legacy source must have the same unit as the retained structured item.
+ const canonical=await store.catalogCommand(admin,'material',{externalKey:'reviewed-legacy-match',category:'general',attributes:{type:'Reviewed legacy fixture',specification:'Explicitly compared synthetic duplicate specifications'},productUnit:source.productUnit,verification:'reviewed',sourceUrl:'https://example.invalid/fixture',verificationBasis:'Synthetic fixture reviewed for duplicate-retirement test only.'});
+ const spec={externalKey:'reviewed-legacy-match',category:'general',attributes:{type:'Reviewed legacy fixture',specification:'Explicitly compared synthetic duplicate specifications'},productUnit:source.productUnit,verification:'reviewed',sourceUrl:'https://example.invalid/fixture',verificationBasis:'Synthetic fixture reviewed for duplicate-retirement test only.'};
+ const data={sourceId:source.id,targetId:canonical.id,specifications:spec,phrases:[source.description],reason:'Compared the legacy record and verified matching specifications.'};
+ await assert.rejects(async()=>store.catalogCommand(admin,'preview-duplicate-retirement',{...data,phrases:['Invented unsupported phrase']}),/recorded/);
+ const preview=await store.catalogCommand(admin,'preview-duplicate-retirement',data);
+ const done=await store.catalogCommand(admin,'apply-duplicate-retirement',{...data,expectedHash:preview.previewHash,approval:'I reviewed the correction and historical impact'});
+ assert.equal(done.replacementId,canonical.id);assert.equal((await store.catalogCommand(admin,'details',{id:source.id})).active,false);
+ const phrases=await store.catalogCommand(admin,'page',{section:'translations',materialId:canonical.id});assert.ok(phrases.records.some((r:any)=>r.phrase===source.description&&r.origin==='admin_reviewed'));
+ const different=await store.catalogCommand(admin,'material',{...material('different','80'),verification:'reviewed'});
+ await assert.rejects(async()=>store.catalogCommand(admin,'preview-duplicate-retirement',{...data,sourceId:retained.id,targetId:different.id,specifications:{...material('different','80'),verification:'reviewed'},phrases:[]}),/different specifications/);
+ await assert.rejects(async()=>store.catalogCommand(user,'preview-duplicate-retirement',data),/Administrator/);
+}},
+
 {name:'many-material searches preserve frequency priority, ambiguous phrases and exact brand parts',run:async store=>{
  const {admin,user}=people();await store.member(user,'riverside');const ids:string[]=[];
  for(let i=0;i<40;i++)ids.push((await store.catalogCommand(admin,'material',{externalKey:`group-${i}`,category:'general',attributes:{type:`Fictional grouping item ${i}`,specification:`Synthetic attributes ${i}`},productUnit:'EA',verification:'provisional',sourceUrl:'https://example.invalid/spec',verificationBasis:'Synthetic test data, not real specifications.'})).id);

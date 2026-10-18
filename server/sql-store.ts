@@ -1,3 +1,4 @@
+import { historicalSnapshot } from './catalog-history';
 import { catalogAction, searchCatalog, validatePurchase, productForMaterial, type Operation } from './catalog-v2';
 import sql from 'mssql';
 import { createHash, randomUUID } from 'node:crypto';
@@ -80,21 +81,22 @@ export class SqlStore implements Repository {
       const draftId = String(existing?.id ?? randomUUID());
       if (existing) await tx.q('UPDATE dbo.drafts SET delivery_date=@p0,version=version+1,updated_at=@p1 WHERE id=@p2 AND tenant=@p3 AND owner=@p4', body.deliveryDate, now(), draftId, p.tenant, p.oid);
       else await tx.q('INSERT dbo.drafts(id,tenant,owner,project,delivery_date,version,updated_at) VALUES(@p0,@p1,@p2,@p3,@p4,1,@p5)', draftId, p.tenant, p.oid, body.projectId, body.deliveryDate, now());
-      const previous = new Map((await tx.q('SELECT id,material_id,purchasing FROM dbo.draft_lines WHERE draft_id=@p0', draftId)).recordset.map(line => [String(line.id).toLowerCase(), {materialId:String(line.material_id).toLowerCase(),purchasing:line.purchasing}]));
+      const previous = new Map((await tx.q('SELECT id,material_id,purchasing,candidate,source FROM dbo.draft_lines WHERE draft_id=@p0', draftId)).recordset.map(line => [String(line.id).toLowerCase(), {materialId:String(line.material_id).toLowerCase(),purchasing:line.purchasing,candidate:line.candidate,source:line.source}]));
       await tx.q('DELETE dbo.draft_lines WHERE draft_id=@p0', draftId);
       for (const [index, line] of body.lines.entries()) {
         let materialId: string | null = null;
         let snapshot: unknown = line.candidate;
+        const historical = historicalSnapshot(previous.get(line.id.toLowerCase()), line);
         if (line.source === 'verified' || line.source === 'verified_fixture') {
           if (!isGuid(line.candidate!.id)) throw new ApiError(400, 'Invalid catalog candidate.');
           const material = (await tx.q('SELECT * FROM dbo.materials WHERE id=@p0 AND tenant=@p1', line.candidate!.id, p.tenant)).recordset[0];
           if (!material || (!material.active && previous.get(line.id.toLowerCase())?.materialId !== String(material.id).toLowerCase())) throw new ApiError(400, 'Catalog candidate no longer exists. Re-run matching.');
           const details = JSON.parse(material.details);
-          if (line.source !== (material.dataset_kind === 'fixture' ? 'verified_fixture' : 'verified') || line.candidate!.description !== material.description || line.candidate!.productUnit !== material.product_uom
-            || JSON.stringify(line.candidate!.specs) !== JSON.stringify(details.specs) || line.candidate!.category !== details.category) throw new ApiError(400, 'Catalog snapshot does not match its source record.');
+          if (!historical && (line.source !== (material.dataset_kind === 'fixture' ? 'verified_fixture' : 'verified') || line.candidate!.description !== material.description || line.candidate!.productUnit !== material.product_uom
+            || JSON.stringify(line.candidate!.specs) !== JSON.stringify(details.specs) || line.candidate!.category !== details.category)) throw new ApiError(400, 'Catalog snapshot does not match its source record.');
           materialId = material.id;
           const profile=(await tx.q('SELECT verification FROM catalog_profiles WHERE tenant=@p0 AND material_id=@p1',p.tenant,materialId)).recordset[0];
-          snapshot = { ...line.candidate,verification:profile?.verification??'reviewed', provenance: { sourceUrl: details.row.source_url, verificationBasis: details.row.verification_basis, datasetKind: material.dataset_kind } };
+          snapshot = historical ?? { ...line.candidate,verification:profile?.verification??'reviewed', provenance: { sourceUrl: details.row.source_url, verificationBasis: details.row.verification_basis, datasetKind: material.dataset_kind } };
         }
         await tx.catalogRun(validatePurchase(p,body.projectId,materialId?String(materialId).toLowerCase():null,line.purchasing,false,previous.get(line.id.toLowerCase())?.materialId===String(materialId).toLowerCase()&&previous.get(line.id.toLowerCase())?.purchasing===JSON.stringify(line.purchasing)));
         await tx.q('INSERT dbo.draft_lines(id,draft_id,position,material_id,quantity,requested_uom,description,raw_input,candidate,source,delivery_mode,override_date,purchasing) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10,@p11,@p12)',

@@ -1,0 +1,2 @@
+CREATE TABLE catalog_revisions(id TEXT PRIMARY KEY,tenant TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('material','product','merge')),entity_id TEXT NOT NULL,replacement_id TEXT,before_json TEXT NOT NULL,after_json TEXT NOT NULL,reason TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL,request_key TEXT NOT NULL,UNIQUE(tenant,request_key));
+CREATE INDEX catalog_revision_entity ON catalog_revisions(tenant,entity_id,created_at);

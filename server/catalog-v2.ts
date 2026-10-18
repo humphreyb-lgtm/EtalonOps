@@ -139,6 +139,7 @@ export function* validatePurchase(p:Principal,project:string,materialId:string|n
   const value=purchase?purchaseSchema.parse(purchase):undefined;
   if(value?.productId&&!allowHistorical){if(!materialId)throw new ApiError(400,'A linked manufacturer product requires a catalog material.');const product=yield* productForMaterial(p,materialId,value.productId);if(product.manufacturer!==value.manufacturer||product.part_number!==value.partNumber)throw new ApiError(400,'Manufacturer snapshot does not match the selected product.');}
   if(!enforcePolicies)return;
+  if(materialId&&!(yield* materialById(p,materialId)).active)throw new ApiError(400,'This catalog material was retired or corrected. Select its active replacement before purchasing.');
   const profiles=materialId?yield* query('SELECT attributes FROM catalog_profiles WHERE tenant=@p0 AND material_id=@p1',p.tenant,materialId):[];
   let category=profiles[0]?JSON.parse(profiles[0].attributes).category:null;
   if(!category&&materialId){const m=yield* materialById(p,materialId);category=JSON.parse(m.details).category;}
@@ -284,15 +285,90 @@ export function* selectDiscovery(p:Principal,data:unknown):Operation<any>{
   }
   yield* audit(p,'discovery.fingerprint',fingerprint);yield* audit(p,'catalog.discovery_selected',input.eventId);return {materialId:material.id,productId:product.id,selected,provisional:true};
 }
+const correctionBase={reason:z.string().trim().min(10).max(2000),expectedHash:z.string().regex(/^[a-f\d]{64}$/).optional(),approval:z.string().optional()};
+const materialCorrection=z.object({id:z.uuid(),material:materialInput,...correctionBase}).strict();
+const productCorrection=z.object({id:z.uuid(),product:productInput,...correctionBase}).strict();
+const mergeCorrection=z.object({sourceId:z.uuid(),targetId:z.uuid(),specifications:materialInput,phrases:z.array(z.string().trim().min(1).max(500)).max(100).default([]),...correctionBase}).strict();
+function* materialImpact(p:Principal,id:string):Operation<any>{
+ const count=(rows:RecordRow[])=>Number(rows[0].total);
+ return {savedLines:count(yield* query('SELECT COUNT(*) AS total FROM draft_lines l JOIN drafts d ON d.id=l.draft_id WHERE d.tenant=@p0 AND l.material_id=@p1',p.tenant,id)),products:count(yield* query('SELECT COUNT(*) AS total FROM manufacturer_products WHERE tenant=@p0 AND material_id=@p1 AND active=1',p.tenant,id)),activeRules:count(yield* query('SELECT COUNT(*) AS total FROM job_restrictions WHERE tenant=@p0 AND material_id=@p1 AND enabled=1',p.tenant,id)),images:count(yield* query('SELECT COUNT(*) AS total FROM image_associations WHERE tenant=@p0 AND material_id=@p1',p.tenant,id))};
+}
+function* revision(p:Principal,kind:string,entity:string,replacement:string|null,before:unknown,after:unknown,reason:string,requestKey:string):Operation<string>{
+ const id=randomUUID();yield* query('INSERT INTO catalog_revisions(id,tenant,kind,entity_id,replacement_id,before_json,after_json,reason,actor,created_at,request_key) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10)',id,p.tenant,kind,entity,replacement,JSON.stringify(before),JSON.stringify(after),reason,p.oid,new Date().toISOString(),requestKey);yield* audit(p,'catalog.correction_applied',id);return id;
+}
+export function* correctCatalog(p:Principal,kind:'material'|'product'|'merge',data:unknown,apply=false):Operation<any>{
+ admin(p);const input:any=({material:materialCorrection,product:productCorrection,merge:mergeCorrection}[kind]).parse(data);
+ const requestKey=digest(JSON.stringify({kind,input}));
+ if(apply){const prior=(yield* query('SELECT id,replacement_id FROM catalog_revisions WHERE tenant=@p0 AND request_key=@p1',p.tenant,requestKey))[0];if(prior)return {id:String(prior.id).toLowerCase(),replacementId:prior.replacement_id?String(prior.replacement_id).toLowerCase():null,unchanged:true};}
+ let before:any,after:any,impact:any,mode:string;
+ if(kind==='material'){
+  const m=yield* materialById(p,input.id);if(!m.active)throw new ApiError(409,'Retired materials are historical records. Correct their active replacement instead.');
+  const profile=(yield* query('SELECT * FROM catalog_profiles WHERE tenant=@p0 AND material_id=@p1',p.tenant,input.id))[0];
+  const built=describeMaterial(input.material);mode=profile?.identity_key===built.identity?'metadata':'replacement';
+  if(mode==='metadata'&&input.material.externalKey!==m.external_key)throw new ApiError(400,'Keep the stable key for a metadata correction.');
+  if(mode==='replacement'&&key(input.material.externalKey)===key(m.external_key))throw new ApiError(400,'A specification change needs a new stable material key; the old key is retained for history.');
+  const origin=profile?JSON.parse(profile.attributes).recordOrigin??'admin_reviewed':'admin_reviewed';
+  before={material:m,profile:profile??null};after={...input.material,origin,verification:'provisional',description:built.description};impact=yield* materialImpact(p,input.id);
+  const existing=(yield* query('SELECT material_id FROM catalog_profiles WHERE tenant=@p0 AND identity_key=@p1',p.tenant,built.identity))[0];
+  if(existing&&String(existing.material_id).toLowerCase()!==input.id.toLowerCase()){after.existingTarget=yield* materialById(p,String(existing.material_id).toLowerCase());if(!after.existingTarget.active)throw new ApiError(409,'The matching canonical material is retired. Review it separately before correcting this item.');}
+ }else if(kind==='product'){
+  const product=(yield* query('SELECT p.*,m.name AS manufacturer FROM manufacturer_products p JOIN manufacturers m ON m.id=p.manufacturer_id AND m.tenant=p.tenant WHERE p.tenant=@p0 AND p.id=@p1',p.tenant,input.id))[0];if(!product)throw new ApiError(404,'Product not found.');if(!product.active)throw new ApiError(409,'Retired products are historical records.');
+  const material=yield* materialById(p,String(product.material_id).toLowerCase());if(!material.active||material.external_key!==input.product.materialKey)throw new ApiError(400,'This editor retains the current material relationship. Review a wrong material mapping separately.');
+  mode=key(product.manufacturer)===key(input.product.manufacturer)&&key(product.part_number)===key(input.product.partNumber)?'metadata':'replacement';before={product};after={...input.product,origin:'admin_reviewed',verification:'provisional'};impact=yield* materialImpact(p,String(material.id).toLowerCase());
+  if(mode==='replacement'){
+   const existing=(yield* query('SELECT p.* FROM manufacturer_products p JOIN manufacturers m ON m.id=p.manufacturer_id AND m.tenant=p.tenant WHERE p.tenant=@p0 AND m.normalized=@p1 AND p.normalized_part=@p2',p.tenant,key(input.product.manufacturer),key(input.product.partNumber)))[0];
+   if(existing){if(!existing.active)throw new ApiError(409,'The matching manufacturer product is retired. Review it separately.');if(String(existing.material_id).toLowerCase()!==String(material.id).toLowerCase())throw new ApiError(409,'Manufacturer part number is already linked to another material.');after.existingTarget=existing;}
+  }
+ }else{
+  if(input.sourceId.toLowerCase()===input.targetId.toLowerCase())throw new ApiError(400,'Choose two different materials.');
+  const source=yield* materialById(p,input.sourceId),target=yield* materialById(p,input.targetId);if(!source.active||!target.active)throw new ApiError(409,'Choose two active materials.');
+  const profiles=yield* query('SELECT * FROM catalog_profiles WHERE tenant=@p0 AND (material_id=@p1 OR material_id=@p2)',p.tenant,input.sourceId,input.targetId);
+  const sourceProfile=profiles.find(row=>String(row.material_id).toLowerCase()===input.sourceId.toLowerCase()),targetProfile=profiles.find(row=>String(row.material_id).toLowerCase()===input.targetId.toLowerCase()),identity=describeMaterial(input.specifications).identity;
+  if(!targetProfile||targetProfile.verification!=='reviewed'||targetProfile.identity_key!==identity)throw new ApiError(409,'The retained material must have the independently reviewed defining specifications.');
+  if(source.product_uom!==target.product_uom||(sourceProfile&&JSON.parse(sourceProfile.attributes).category&&sourceProfile.identity_key!==identity))throw new ApiError(409,'Meaningfully different specifications or units cannot be merged.');
+  impact=yield* materialImpact(p,input.sourceId);if(impact.products||impact.activeRules)throw new ApiError(409,'Review linked manufacturer products and disable source-specific active restrictions before retiring a duplicate. Nothing was moved.');
+  const sourceDetails=JSON.parse(source.details),available=new Set<string>([source.description,...JSON.parse(sourceDetails.row.aliases_json)]);
+  for(const phrase of input.phrases)if(!available.has(phrase)&&!(yield* query('SELECT id FROM translations WHERE tenant=@p0 AND material_id=@p1 AND phrase=@p2 AND active=1',p.tenant,input.sourceId,phrase)).length)throw new ApiError(400,'Copy only phrases recorded on the duplicate.');
+  before={source,target,sourceProfile:sourceProfile??null,targetProfile};after={targetId:input.targetId,phrases:input.phrases,specifications:input.specifications};mode='retire-duplicate';
+ }
+ const previewHash=digest(JSON.stringify({kind,before,after,impact,reason:input.reason}));
+ if(!apply)return {kind,mode,previewHash,before,after,impact,requiresReview:true};
+ if(input.approval!=='I reviewed the correction and historical impact')throw new ApiError(400,'Explicit correction review is required.');
+ if(input.expectedHash!==previewHash)throw new ApiError(409,'The catalog or correction changed. Preview it again; nothing was changed.');
+ let replacement:string|null=null;
+ if(kind==='material'){
+  if(mode==='replacement'){
+   yield* query('UPDATE materials SET active=0 WHERE tenant=@p0 AND id=@p1',p.tenant,input.id);
+   const {description,existingTarget,...material}=after;const created=yield* createMaterial(p,material);replacement=created.id;
+  }else{
+   const old=JSON.parse(before.material.details),row={...old.row,description:after.description,source_url:after.sourceUrl,verification_basis:after.verificationBasis,specifications_json:JSON.stringify(Object.entries(after.attributes).map(([k,v])=>`${k}: ${v}`))};
+   yield* query('UPDATE materials SET description=@p0,details=@p1 WHERE tenant=@p2 AND id=@p3',after.description,JSON.stringify({...old,row,specs:JSON.parse(row.specifications_json)}),p.tenant,input.id);
+   yield* query("UPDATE catalog_profiles SET attributes=@p0,verification='provisional' WHERE tenant=@p1 AND material_id=@p2",JSON.stringify({category:after.category,...after.attributes,recordOrigin:after.origin}),p.tenant,input.id);
+  }
+ }else if(kind==='product'){
+  if(mode==='replacement'){
+   const {existingTarget,...product}=after;const result=yield* addProduct(p,product);replacement=result.id;const activeTarget=(yield* query('SELECT active FROM manufacturer_products WHERE tenant=@p0 AND id=@p1',p.tenant,replacement))[0];if(!activeTarget?.active)throw new ApiError(409,'The matching manufacturer product is retired. Review it separately.');if(replacement===input.id.toLowerCase())throw new ApiError(409,'The corrected product identity still resolves to the original.');
+   yield* query('UPDATE manufacturer_products SET active=0 WHERE tenant=@p0 AND id=@p1',p.tenant,input.id);
+   yield* query('UPDATE catalog_profiles SET preferred_product_id=@p0 WHERE tenant=@p1 AND material_id=@p2 AND preferred_product_id=@p3',null,p.tenant,before.product.material_id,input.id);
+  }else yield* query("UPDATE manufacturer_products SET title=@p0,source_url=@p1,verification='provisional' WHERE tenant=@p2 AND id=@p3",after.title,after.sourceUrl,p.tenant,input.id);
+ }else{
+  replacement=input.targetId;yield* query('UPDATE materials SET active=0 WHERE tenant=@p0 AND id=@p1',p.tenant,input.sourceId);
+  for(const phrase of input.phrases)yield* addPhrase(p,input.targetId,phrase,'admin_reviewed',null,input.specifications.sourceUrl);
+ }
+ const id=yield* revision(p,kind,input.id??input.sourceId,replacement,before,after,input.reason,requestKey);
+ return {id,replacementId:replacement,mode,unchanged:false};
+}
+
 export function* catalogPage(p:Principal,data:unknown):Operation<any>{
   admin(p);
-  const input=z.object({section:z.enum(['materials','translations','policies','images','batches','manufacturers']),page:z.number().int().min(1).max(100000).default(1),pageSize:z.number().int().min(1).max(100).default(25),text:z.string().trim().max(200).default(''),materialId:z.uuid().optional(),includeInactive:z.boolean().default(false),ruleScope:z.enum(['all','global']).default('all'),manufacturerIds:z.array(z.uuid()).max(100).optional(),ruleId:z.uuid().optional()}).strict().parse(data);
+  const input=z.object({section:z.enum(['materials','translations','policies','images','batches','manufacturers','revisions']),page:z.number().int().min(1).max(100000).default(1),pageSize:z.number().int().min(1).max(100).default(25),text:z.string().trim().max(200).default(''),materialId:z.uuid().optional(),includeInactive:z.boolean().default(false),ruleScope:z.enum(['all','global']).default('all'),manufacturerIds:z.array(z.uuid()).max(100).optional(),ruleId:z.uuid().optional(),entityId:z.uuid().optional()}).strict().parse(data);
   let table='',columns='*',where='tenant=@p0',order='id';const values:unknown[]=[p.tenant];
   switch(input.section){
     case 'materials':table='materials';columns='id,external_key,description,product_uom,active';if(!input.includeInactive)where+=' AND active=1';if(input.text){const pattern='%'+input.text.toLowerCase().replace(/[!%_]/g,c=>'!'+c)+'%';values.push(pattern);where+=" AND (LOWER(description) LIKE @p1 ESCAPE '!' OR LOWER(external_key) LIKE @p1 ESCAPE '!')";}order='external_key,id';break;
     case 'translations':if(!input.materialId)throw new ApiError(400,'Choose a material first.');yield* materialById(p,input.materialId);table='translations';values.push(input.materialId);where+=' AND material_id=@p1';order='created_at DESC,id';break;
     case 'policies':table='job_restrictions';if(input.ruleScope==='global')where+=' AND material_id IS NULL';if(input.materialId){yield* materialById(p,input.materialId);values.push(input.materialId);where+=' AND material_id=@p'+(values.length-1);}if(input.ruleId){values.push(input.ruleId);where+=' AND id=@p'+(values.length-1);}order='project,id';break;
     case 'manufacturers':table='manufacturers';columns='id,name';order='normalized,id';if(input.manufacturerIds){if(!input.manufacturerIds.length)where+=' AND 1=0';else{where+=' AND id IN ('+input.manufacturerIds.map(id=>{values.push(id);return '@p'+(values.length-1);}).join(',')+')';}}else if(input.text){values.push('%'+input.text.toLowerCase().replace(/[!%_]/g,c=>'!'+c)+'%');where+=" AND LOWER(name) LIKE @p1 ESCAPE '!'";}break;
+    case 'revisions':table='catalog_revisions';columns='id,kind,entity_id,replacement_id,reason,actor,created_at';order='created_at DESC,id';if(input.entityId){values.push(input.entityId);where+=' AND (entity_id=@p1 OR replacement_id=@p1 OR entity_id IN (SELECT id FROM manufacturer_products WHERE tenant=@p0 AND material_id=@p1))';}break;
     case 'images':table='image_references';break;
     case 'batches':table='catalog_batches';columns='id,state,report,created_at';order='created_at DESC,id';break;
   }
@@ -308,7 +384,7 @@ export function* batchDetails(p:Principal,data:unknown):Operation<any>{
   const parsed=parseExtendedCsv(row.csv),pages=Math.max(1,Math.ceil(parsed.records.length/25)),page=Math.min(input.page,pages);
   return {id:String(row.id).toLowerCase(),state:row.state,report:JSON.parse(row.report),...(input.includeSource?{sourceCsv:row.csv}:{}),records:parsed.records.slice((page-1)*25,page*25),page,pages};
 }
-export const catalogExportTables=['materials','aliases','catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references','image_associations','import_batches'] as const;
+export const catalogExportTables=['materials','aliases','catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references','image_associations','import_batches','catalog_revisions'] as const;
 export function* catalogExportPage(p:Principal,data:unknown):Operation<any>{
   admin(p);
   const input=z.object({table:z.enum(catalogExportTables),pageSize:z.number().int().min(1).max(500).default(250),cursor:z.object({id:z.uuid(),normalized:z.string().min(1).max(200).optional()}).strict().optional()}).strict().parse(data);
@@ -346,6 +422,13 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
   switch(action){
     case 'export-page':return yield* catalogExportPage(p,data);
+    case 'preview-material-correction':return yield* correctCatalog(p,'material',data);
+    case 'apply-material-correction':return yield* correctCatalog(p,'material',data,true);
+    case 'preview-product-correction':return yield* correctCatalog(p,'product',data);
+    case 'apply-product-correction':return yield* correctCatalog(p,'product',data,true);
+    case 'preview-duplicate-retirement':return yield* correctCatalog(p,'merge',data);
+    case 'apply-duplicate-retirement':return yield* correctCatalog(p,'merge',data,true);
+    case 'revision-details':{admin(p);const id=z.uuid().parse(data.id);const row=(yield* query('SELECT * FROM catalog_revisions WHERE tenant=@p0 AND id=@p1',p.tenant,id))[0];if(!row)throw new ApiError(404,'Revision not found.');return {...row,before:JSON.parse(row.before_json),after:JSON.parse(row.after_json)};}
     case 'page':return yield* catalogPage(p,data);
     case 'batch-details':return yield* batchDetails(p,data);
     case 'export-snapshot':return yield* exportCatalogSnapshot(p);
