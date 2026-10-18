@@ -1,0 +1,11 @@
+import { test,expect } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+test('actual fractional bracket span stays distinct from nominal spacing and manufacturer part numbers',async({page,request})=>{
+ const key=`fraction-${randomUUID()}`;
+ await page.goto('/?database=1&identity=admin');await page.getByRole('button',{name:'Catalog administration',exact:true}).click();const region=page.getByRole('region',{name:'Catalog relationships'});
+ await region.getByText('Create a material from specifications',{exact:true}).click();await region.getByLabel('Stable material key',{exact:true}).fill(key);await region.getByLabel('Material category',{exact:true}).selectOption('bracket');
+ await region.getByLabel('Minimum actual span (inches)',{exact:true}).fill('15 3/4');await region.getByLabel('Maximum actual span (inches)',{exact:true}).fill('25');await region.getByLabel('mounting',{exact:true}).fill(`Synthetic stud fixture ${key}`);await region.getByLabel('material',{exact:true}).fill('steel');await region.getByLabel('Nominal spacing (optional, include unit)',{exact:true}).fill('16–24 in.');await region.getByLabel('Material evidence URL',{exact:true}).fill('https://example.invalid/bracket-spec');await region.getByLabel('Specification evidence / review basis',{exact:true}).fill('Synthetic example only; no manufacturer product claim.');
+ await region.getByRole('button',{name:'Create or find canonical material',exact:true}).click();await expect(region.getByRole('status')).toContainText('Material created');
+ const specifications=region.getByRole('region',{name:'Material source and specifications'});await expect(specifications).toContainText('15.75');await expect(specifications).toContainText('25');await expect(specifications).toContainText('16–24 in.');
+ const {token}=await(await request.post('http://127.0.0.1:3002/api/dev/session',{data:{identity:'admin'}})).json();const headers={Authorization:`Bearer ${token}`};const result=await request.post('http://127.0.0.1:3002/api/catalog/page',{headers,data:{section:'materials',text:key}});const list=await result.json();expect(list.total).toBe(1);expect(list.records[0].description).toContain('15.75–25 in. Adjustable Span');expect(list.records[0].description).toContain('16–24 in. Nominal Spacing');
+});

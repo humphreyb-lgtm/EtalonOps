@@ -110,7 +110,8 @@ export function* materialDetails(p:Principal,id:string,projectId?:string):Operat
   const profile=(yield* query('SELECT * FROM catalog_profiles WHERE material_id=@p0 AND tenant=@p1',id,p.tenant))[0];
   const products=yield* query('SELECT p.*,m.name AS manufacturer FROM manufacturer_products p JOIN manufacturers m ON m.id=p.manufacturer_id AND m.tenant=p.tenant WHERE p.tenant=@p0 AND p.material_id=@p1 AND p.active=1',p.tenant,id);
   for(const product of products){product.allowed=true;if(projectId)try{yield* validatePurchase(p,projectId,id,{productId:String(product.id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,noSubstitutions:false});}catch(error){if(!(error instanceof ApiError))throw error;product.allowed=false;}}
-  return {id,externalKey:material.external_key,description:material.description,attributes:profile?JSON.parse(profile.attributes):{},verification:profile?.verification??'reviewed',highUse:Boolean(profile?.high_use),preferredProductId:profile?.preferred_product_id?String(profile.preferred_product_id).toLowerCase():null,products:products.map(product=>({id:String(product.id).toLowerCase(),manufacturerId:String(product.manufacturer_id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,title:product.title,sourceUrl:product.source_url,verification:product.verification,allowed:product.allowed}))};
+  const evidence=JSON.parse(material.details).row??{};
+  return {id,externalKey:material.external_key,description:material.description,active:Boolean(material.active),productUnit:material.product_uom,sourceUrl:evidence.source_url??'',verificationBasis:evidence.verification_basis??'',attributes:profile?JSON.parse(profile.attributes):{},verification:profile?.verification??'reviewed',highUse:Boolean(profile?.high_use),preferredProductId:profile?.preferred_product_id?String(profile.preferred_product_id).toLowerCase():null,products:products.map(product=>({id:String(product.id).toLowerCase(),manufacturerId:String(product.manufacturer_id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,title:product.title,sourceUrl:product.source_url,verification:product.verification,allowed:product.allowed}))};
 }
 export function* setPriority(p:Principal,data:unknown):Operation<any>{
   admin(p);const input=z.object({materialId:z.uuid(),highUse:z.boolean(),preferredProductId:z.uuid().nullable()}).strict().parse(data);const m=yield* materialById(p,input.materialId);
@@ -120,9 +121,14 @@ export function* setPriority(p:Principal,data:unknown):Operation<any>{
   yield* query('UPDATE catalog_profiles SET high_use=@p0,preferred_product_id=@p1 WHERE tenant=@p2 AND material_id=@p3',Number(input.highUse),input.preferredProductId,p.tenant,input.materialId);yield* audit(p,'catalog.priority_changed',input.materialId);return {updated:true};
 }
 export function* setPolicy(p:Principal,data:unknown):Operation<any>{
-  admin(p);const input=policyInput.parse(data);let materialId:string|null=null;if(input.materialKey)materialId=String((yield* materialByKey(p,input.materialKey)).id).toLowerCase();
+  admin(p);const input=policyInput.parse(data);input.manufacturerIds=input.manufacturerIds.map(id=>id.toLowerCase());input.productIds=input.productIds.map(id=>id.toLowerCase());let materialId:string|null=null;if(input.materialKey)materialId=String((yield* materialByKey(p,input.materialKey)).id).toLowerCase();
   for(const id of input.manufacturerIds)if(!(yield* query('SELECT id FROM manufacturers WHERE tenant=@p0 AND id=@p1',p.tenant,id)).length)throw new ApiError(400,'Unknown manufacturer.');
-  for(const id of input.productIds)if(!(yield* query('SELECT id FROM manufacturer_products WHERE tenant=@p0 AND id=@p1 AND active=1',p.tenant,id)).length)throw new ApiError(400,'Unknown product.');
+  for(const id of input.productIds){
+    const product=(yield* query('SELECT material_id,manufacturer_id FROM manufacturer_products WHERE tenant=@p0 AND id=@p1 AND active=1',p.tenant,id))[0];
+    if(!product)throw new ApiError(400,'Unknown product.');
+    if(materialId&&String(product.material_id).toLowerCase()!==materialId)throw new ApiError(400,'Restricted part belongs to another material.');
+    if(input.manufacturerIds.length&&!input.manufacturerIds.map(value=>value.toLowerCase()).includes(String(product.manufacturer_id).toLowerCase()))throw new ApiError(400,'Restricted part is outside the selected manufacturer list.');
+  }
   const id=input.id??randomUUID();const prior=(yield* query('SELECT id FROM job_restrictions WHERE tenant=@p0 AND id=@p1',p.tenant,id))[0];
   if(input.id&&!prior)throw new ApiError(404,'Restriction not found.');
   if(prior)yield* query('UPDATE job_restrictions SET project=@p0,material_id=@p1,category=@p2,enabled=@p3,manufacturer_ids=@p4,product_ids=@p5 WHERE tenant=@p6 AND id=@p7',input.projectId,materialId,input.category,Number(input.enabled),JSON.stringify(input.manufacturerIds),JSON.stringify(input.productIds),p.tenant,id);
@@ -196,8 +202,15 @@ export function parseExtendedCsv(csv:string){
     const rows:Record<string,string>[]=parse(csv,{bom:true,columns:(header:string[])=>{if(header.length!==2||!header.includes('kind')||!header.includes('data_json'))throw new Error('Use kind and data_json columns.');return header;},skip_empty_lines:true,max_record_size:20000});
     rowCount=rows.length;
     if(!rows.length||rows.length>2000)throw new Error('Use 1–2000 rows per staged file.');
-    const seen=new Set<string>();
-    rows.forEach((row,i)=>{try{const kind=z.enum(importKinds).parse(row.kind),schema={material:materialInput,product:productInput,translation:translationInput,image:imageReferenceInput}[kind],data=schema.parse(JSON.parse(row.data_json));const identifier=JSON.stringify([kind,data]);if(seen.has(identifier))throw new Error('Duplicate row.');seen.add(identifier);records.push({kind,data,row:i+2});}catch(error){errors.push({row:i+2,message:error instanceof z.ZodError?'Invalid row fields.':error instanceof Error?error.message:'Invalid JSON.'});}});
+    const seen=new Set<string>(),identities=new Map<string,number>();
+    rows.forEach((row,i)=>{try{const kind=z.enum(importKinds).parse(row.kind),schema={material:materialInput,product:productInput,translation:translationInput,image:imageReferenceInput}[kind],data=schema.parse(JSON.parse(row.data_json));const identifier=JSON.stringify([kind,data]);if(seen.has(identifier))throw new Error('Duplicate row.');
+      const value=data as any;let identifiers:string[]=[];
+      if(kind==='material')identifiers=['material-key:'+value.externalKey.toLowerCase(),'material-spec:'+describeMaterial(value).identity];
+      if(kind==='product')identifiers=['product:'+JSON.stringify([key(value.manufacturer),key(value.partNumber)])];
+      if(kind==='translation')identifiers=['translation:'+JSON.stringify([value.materialKey.toLowerCase(),phraseKey(value.phrase),value.origin])];
+      if(kind==='image')identifiers=['image:'+JSON.stringify([value.materialKey.toLowerCase(),key(value.manufacturer??''),key(value.partNumber??''),value.sourceUrl])];
+      const duplicate=identifiers.find(identity=>identities.has(identity));if(duplicate)throw new Error(`Repeated catalog identity conflicts with row ${identities.get(duplicate)}. Keep one record per material specification, manufacturer part, or translation origin.`);
+      seen.add(identifier);for(const identity of identifiers)identities.set(identity,i+2);records.push({kind,data,row:i+2});}catch(error){errors.push({row:i+2,message:error instanceof z.ZodError?'Invalid fields: '+error.issues.slice(0,3).map(issue=>`${issue.path.join('.')||'record'}: ${issue.message}`).join('; '):error instanceof Error?error.message:'Invalid JSON.'});}});
     if(new Set(records.map(row=>row.kind)).size>1)errors.push({row:1,message:'Stage one record kind per file: materials first, then products/translations/images.'});
   }catch(error){errors.push({row:1,message:error instanceof Error?error.message:'Malformed CSV.'});}
   return {records,errors,rowCount};
@@ -262,6 +275,30 @@ export function* selectDiscovery(p:Principal,data:unknown):Operation<any>{
   }
   yield* audit(p,'discovery.fingerprint',fingerprint);yield* audit(p,'catalog.discovery_selected',input.eventId);return {materialId:material.id,productId:product.id,selected,provisional:true};
 }
+export function* catalogPage(p:Principal,data:unknown):Operation<any>{
+  admin(p);
+  const input=z.object({section:z.enum(['materials','translations','policies','images','batches','manufacturers']),page:z.number().int().min(1).max(100000).default(1),pageSize:z.number().int().min(1).max(100).default(25),text:z.string().trim().max(200).default(''),materialId:z.uuid().optional(),includeInactive:z.boolean().default(false),ruleScope:z.enum(['all','global']).default('all'),manufacturerIds:z.array(z.uuid()).max(100).optional()}).strict().parse(data);
+  let table='',columns='*',where='tenant=@p0',order='id';const values:unknown[]=[p.tenant];
+  switch(input.section){
+    case 'materials':table='materials';columns='id,external_key,description,product_uom,active';if(!input.includeInactive)where+=' AND active=1';if(input.text){const pattern='%'+input.text.toLowerCase().replace(/[!%_]/g,c=>'!'+c)+'%';values.push(pattern);where+=" AND (LOWER(description) LIKE @p1 ESCAPE '!' OR LOWER(external_key) LIKE @p1 ESCAPE '!')";}order='external_key,id';break;
+    case 'translations':if(!input.materialId)throw new ApiError(400,'Choose a material first.');yield* materialById(p,input.materialId);table='translations';values.push(input.materialId);where+=' AND material_id=@p1';order='created_at DESC,id';break;
+    case 'policies':table='job_restrictions';if(input.ruleScope==='global')where+=' AND material_id IS NULL';order='project,id';break;
+    case 'manufacturers':table='manufacturers';columns='id,name';order='normalized,id';if(input.manufacturerIds){if(!input.manufacturerIds.length)where+=' AND 1=0';else{where+=' AND id IN ('+input.manufacturerIds.map(id=>{values.push(id);return '@p'+(values.length-1);}).join(',')+')';}}else if(input.text){values.push('%'+input.text.toLowerCase().replace(/[!%_]/g,c=>'!'+c)+'%');where+=" AND LOWER(name) LIKE @p1 ESCAPE '!'";}break;
+    case 'images':table='image_references';break;
+    case 'batches':table='catalog_batches';columns='id,state,report,created_at';order='created_at DESC,id';break;
+  }
+  const total=Number((yield* query(`SELECT COUNT(*) AS total FROM ${table} WHERE ${where}`,...values))[0].total);
+  const pages=Math.max(1,Math.ceil(total/input.pageSize)),page=Math.min(input.page,pages),start=(page-1)*input.pageSize;
+  const low=values.length;values.push(start,start+input.pageSize);
+  const records=yield* query(`SELECT * FROM (SELECT ${columns},ROW_NUMBER() OVER(ORDER BY ${order}) AS page_row FROM ${table} WHERE ${where}) paged WHERE page_row>@p${low} AND page_row<=@p${low+1} ORDER BY page_row`,...values);
+  return {records:records.map(({page_row,...row})=>row),total,page,pageSize:input.pageSize,pages};
+}
+export function* batchDetails(p:Principal,data:unknown):Operation<any>{
+  admin(p);const input=z.object({id:z.uuid(),page:z.number().int().min(1).default(1)}).strict().parse(data);
+  const row=(yield* query('SELECT * FROM catalog_batches WHERE tenant=@p0 AND id=@p1',p.tenant,input.id))[0];if(!row)throw new ApiError(404,'Import not found.');
+  const parsed=parseExtendedCsv(row.csv),pages=Math.max(1,Math.ceil(parsed.records.length/25)),page=Math.min(input.page,pages);
+  return {id:String(row.id).toLowerCase(),state:row.state,report:JSON.parse(row.report),records:parsed.records.slice((page-1)*25,page*25),page,pages};
+}
 // A versioned review snapshot preserves inactive records and their provenance.
 // It is intentionally distinct from staged imports and database/blob recovery.
 export function* exportCatalogSnapshot(p:Principal):Operation<any>{
@@ -284,6 +321,8 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
 }
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
   switch(action){
+    case 'page':return yield* catalogPage(p,data);
+    case 'batch-details':return yield* batchDetails(p,data);
     case 'export-snapshot':return yield* exportCatalogSnapshot(p);
     case 'select-discovery':return yield* selectDiscovery(p,data);
     case 'material':return yield* createMaterial(p,data);

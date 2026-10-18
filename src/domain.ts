@@ -1,5 +1,5 @@
 export type Purchasing={productId:string|null;manufacturer:string;partNumber:string;noSubstitutions:boolean};
-export type ManufacturerProduct={id:string;manufacturer:string;partNumber:string;verification?:'provisional'|'reviewed';allowed?:boolean};
+export type ManufacturerProduct={id:string;manufacturerId?:string;title?:string;sourceUrl?:string;manufacturer:string;partNumber:string;verification?:'provisional'|'reviewed';allowed?:boolean};
 export type Unit = 'EA' | 'FT' | 'STICK' | 'BOX' | 'ROLL' | 'PAIR';
 export const units: Unit[] = ['EA', 'FT', 'STICK', 'BOX', 'ROLL', 'PAIR'];
 export type Source = 'verified_fixture' | 'ai_fixture' | 'user_description' | 'verified';

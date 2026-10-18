@@ -10,6 +10,54 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'job-wide and category manufacturer rules preserve scope and default inactive',run:async store=>{
+ const {admin,user,foreign}=people();await store.member(user,'riverside');
+ const pvc=await store.catalogCommand(admin,'material',material()),support=await store.catalogCommand(admin,'material',bracket());
+ const a=await store.catalogCommand(admin,'product',product('pvc')),b=await store.catalogCommand(admin,'product',product('pvc','Fixture Beta','TEST-B'));
+ const bracketB=await store.catalogCommand(admin,'product',product('bracket','Fixture Beta','TEST-BRACKET'));
+ const details=await store.catalogCommand(admin,'details',{id:pvc.id});const maker=details.products.find((row:any)=>row.id===a.id).manufacturerId;
+ const names=await store.catalogCommand(admin,'page',{section:'manufacturers',manufacturerIds:[maker]});assert.equal(names.total,1);assert.equal(names.records[0].name,'Fixture Alpha');
+ assert.equal((await store.catalogCommand(foreign,'page',{section:'manufacturers',manufacturerIds:[maker]})).total,0);
+ const input={projectId:'riverside',materialKey:null,category:null,manufacturerIds:[maker],productIds:[]};const rule=await store.catalogCommand(admin,'policy',input);assert.equal(rule.enabled,false);
+ const validate=(materialId:string,productId:string,partNumber:string)=>store.catalogCommand(user,'validate-lines',{projectId:'riverside',lines:[{id:randomUUID(),candidate:{id:materialId},purchasing:{productId,manufacturer:'Fixture Beta',partNumber,noSubstitutions:true}}]});
+ assert.equal((await validate(support.id,bracketB.id,'TEST-BRACKET')).ready,true);
+ await store.catalogCommand(admin,'policy',{...input,id:rule.id,enabled:true});assert.equal((await validate(support.id,bracketB.id,'TEST-BRACKET')).ready,false);
+ await store.catalogCommand(admin,'policy',{...input,id:rule.id,category:'conduit',enabled:true});assert.equal((await validate(support.id,bracketB.id,'TEST-BRACKET')).ready,true);assert.equal((await validate(pvc.id,b.id,'TEST-B')).ready,false);
+ const rules=await store.catalogCommand(admin,'page',{section:'policies',ruleScope:'global'});assert.equal(rules.total,1);assert.equal(rules.records[0].category,'conduit');
+ await store.catalogCommand(admin,'disable-policy',{id:rule.id});assert.equal((await validate(pvc.id,b.id,'TEST-B')).ready,true);
+}},
+{name:'staged preview detects duplicate identities and contradictory rows before apply',run:async store=>{
+ const {admin}=people();
+ const repeated=await store.catalogCommand(admin,'preview',{csv:csv('material',[material('one'),{...material('two'),attributes:{...material().attributes,material:' pvc '}}])});
+ assert.equal(repeated.report.errors[0].row,3);assert.match(repeated.report.errors[0].message,/row 2/);
+ await assert.rejects(async()=>store.catalogCommand(admin,'apply',{id:repeated.id,approval:'I reviewed this batch'}),/preview errors/);
+ assert.equal((await store.catalogCommand(admin,'page',{section:'materials'})).total,0);
+ const sameKey=await store.catalogCommand(admin,'preview',{csv:csv('material',[material('same'),material('SAME','80')])});assert.equal(sameKey.report.errors[0].row,3);
+ await store.catalogCommand(admin,'material',material('pvc'));
+ const products=await store.catalogCommand(admin,'preview',{csv:csv('product',[product('pvc'),{...product('pvc',' fixture alpha ','test-1624'),title:'Conflicting title'}])});assert.equal(products.report.errors[0].row,3);
+ const translations=await store.catalogCommand(admin,'preview',{csv:csv('translation',[{materialKey:'pvc',phrase:'PVC stock',origin:'ai_import',sourceUrl:'https://example.invalid/one'},{materialKey:'pvc',phrase:' pvc STOCK ',origin:'ai_import',sourceUrl:'https://example.invalid/two'}])});assert.equal(translations.report.errors[0].row,3);
+ const distinct=await store.catalogCommand(admin,'preview',{csv:csv('translation',[{materialKey:'pvc',phrase:'PVC stock',origin:'ai_import',sourceUrl:'https://example.invalid/one'},{materialKey:'pvc',phrase:'PVC stock',origin:'admin_reviewed'}])});assert.equal(distinct.report.errors.length,0);
+}},
+{name:'admin catalog pages and resumable import previews are bounded, stable and tenant isolated',run:async store=>{
+ const {admin,user,foreign}=people();const m=await store.catalogCommand(admin,'material',material());
+ const input=csv('translation',Array.from({length:27},(_,i)=>({materialKey:'pvc',phrase:`paged phrase ${i}`,origin:'ai_import',sourceUrl:'https://example.invalid/phrases'})));
+ const preview=await store.catalogCommand(admin,'preview',{csv:input});assert.equal(preview.report.errors.length,0);
+ const first=await store.catalogCommand(admin,'batch-details',{id:preview.id});assert.equal(first.records.length,25);assert.equal(first.pages,2);
+ const last=await store.catalogCommand(admin,'batch-details',{id:preview.id,page:999});assert.equal(last.page,2);assert.equal(last.records.length,2);assert.equal(last.records[1].row,28);
+ await assert.rejects(async()=>store.catalogCommand(foreign,'batch-details',{id:preview.id}),/not found/);
+ await store.catalogCommand(admin,'apply',{id:preview.id,approval:'I reviewed this batch'});
+ const a=await store.catalogCommand(admin,'page',{section:'translations',materialId:m.id,pageSize:10});const b=await store.catalogCommand(admin,'page',{section:'translations',materialId:m.id,pageSize:10,page:2});
+ assert.equal(a.total,27);assert.equal(a.pages,3);assert.equal(a.records.length,10);assert.equal(new Set([...a.records,...b.records].map(row=>row.id.toLowerCase())).size,20);
+ assert.deepEqual((await store.catalogCommand(admin,'page',{section:'translations',materialId:m.id,pageSize:10})).records,a.records);
+ assert.equal((await store.catalogCommand(admin,'page',{section:'materials',text:'%'})).total,0);
+ assert.equal((await store.catalogCommand(admin,'page',{section:'materials',text:'PVC'})).records.length,1);
+ assert.equal((await store.catalogCommand(foreign,'page',{section:'materials'})).total,0);
+ assert.equal((await store.catalogCommand(admin,'page',{section:'batches'})).records[0].state,'applied');
+ assert.equal('csv' in (await store.catalogCommand(admin,'page',{section:'batches'})).records[0],false);
+ await assert.rejects(async()=>store.catalogCommand(user,'page',{section:'materials'}),/Administrator/);
+ await assert.rejects(async()=>store.catalogCommand(admin,'page',{section:'materials',pageSize:1000}));
+ await store.catalogCommand(admin,'rollback',{id:preview.id});assert.equal((await store.catalogCommand(admin,'batch-details',{id:preview.id})).state,'rolled_back');
+}},
 {name:'relationship snapshot preserves provenance, inactive records and tenant isolation',run:async store=>{
  const {admin,user,foreign}=people();await store.member(user,'riverside');
  const m=await store.catalogCommand(admin,'material',material());
@@ -77,6 +125,14 @@ export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>
  const check=(id:string,maker:string)=>store.catalogCommand(user,'validate-lines',{projectId:'riverside',lines:[{id:randomUUID(),candidate:{id:m.id},purchasing:{productId:id,manufacturer:maker,partNumber:id===a.id?'TEST-1624':'TEST-B',noSubstitutions:true}}]});
  assert.equal((await check(a.id,'Fixture Alpha')).ready,true);assert.equal((await check(b.id,'Fixture Beta')).ready,false);
  await store.catalogCommand(admin,'disable-policy',{id:rule.id});assert.equal((await check(b.id,'Fixture Beta')).ready,true);
+ await assert.rejects(async()=>store.catalogCommand(admin,'policy',{projectId:'riverside',materialKey:'bracket',category:null,manufacturerIds:[manufacturerId],productIds:[b.id]}),/outside/);
+ await store.catalogCommand(admin,'material',material('other-material'));const otherProduct=await store.catalogCommand(admin,'product',product('other-material','Fixture Other','TEST-OTHER'));
+ await assert.rejects(async()=>store.catalogCommand(admin,'policy',{projectId:'riverside',materialKey:'bracket',category:null,manufacturerIds:[],productIds:[otherProduct.id]}),/another material/);
+ await store.catalogCommand(admin,'policy',{id:rule.id,projectId:'riverside',materialKey:'bracket',category:null,manufacturerIds:[manufacturerId.toUpperCase()],productIds:[],enabled:true});
+ await store.catalogCommand(admin,'product',product('bracket','Fixture Alpha','TEST-NEW'));
+ const brandResults=(await store.search(user,'bracket','riverside')).find(row=>row.id===m.id);assert.equal(brandResults.products.length,2);assert.ok(brandResults.products.every((row:any)=>row.manufacturer==='Fixture Alpha'));
+ assert.equal((await store.catalogCommand(admin,'page',{section:'policies'})).total,1);
+ await store.catalogCommand(admin,'disable-policy',{id:rule.id});
  await assert.rejects(async()=>store.catalogCommand(user,'policy',{}),/Administrator/);
 }},
 {name:'MRF manufacturer snapshots and No Substitutions survive saves and reject spoofed product relationships',run:async store=>{

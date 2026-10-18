@@ -1,0 +1,38 @@
+import { test,expect } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+import { stringify } from 'csv-stringify/sync';
+import AxeBuilder from '@axe-core/playwright';
+
+for(const width of [390,1440])test(`structured import records, paging and history survive reload at ${width}px`,async({page,request})=>{
+ const key=`import-${randomUUID()}`;
+ const {token}=await(await request.post('http://127.0.0.1:3002/api/dev/session',{data:{identity:'admin'}})).json();
+ const headers={Authorization:`Bearer ${token}`};
+ const result=await request.post('http://127.0.0.1:3002/api/catalog/material',{headers,data:{externalKey:key,category:'general',attributes:{type:key,specification:'Synthetic browser test only'},productUnit:'EA',verification:'provisional',sourceUrl:'https://example.invalid/spec',verificationBasis:'Fictional data for automated tests.'}});expect(result.ok()).toBe(true);
+ const csv=stringify(Array.from({length:27},(_,i)=>({kind:'translation',data_json:JSON.stringify({materialKey:key,phrase:`${key} phrase ${i}`,origin:'ai_import',sourceUrl:'https://example.invalid/dataset'})})),{header:true});
+ await page.setViewportSize({width,height:1000});await page.goto('/?database=1&identity=admin');
+ await page.getByRole('button',{name:'Catalog administration',exact:true}).click();
+ const region=page.getByRole('region',{name:'Catalog relationships'});
+ await region.getByText('Bulk materials, products, translations and image references',{exact:true}).click();
+ await region.getByLabel('Structured CSV contents',{exact:true}).fill(csv);
+ await region.getByRole('button',{name:'Preview structured import',exact:true}).click();
+ const records=region.getByRole('region',{name:'Structured import records'});
+ await expect(records).toContainText(`${key} phrase 0`);
+ await expect(records.locator('article')).toHaveCount(25);
+ await region.getByRole('button',{name:'Next import records',exact:true}).click();
+ await expect(records.locator('article')).toHaveCount(2);await expect(records).toContainText(`${key} phrase 26`);
+ const apply=region.getByRole('button',{name:'Apply structured import',exact:true});await expect(apply).toBeDisabled();
+ await region.getByLabel('I reviewed this batch. AI origin is preserved; importing does not verify product facts.',{exact:true}).check();await apply.click();
+ await expect(region.getByRole('status')).toContainText('Structured import applied');
+ const batchResponse=await request.post('http://127.0.0.1:3002/api/catalog/preview',{headers,data:{csv}});const batch=await batchResponse.json();expect(batch.state).toBe('applied');
+ await page.reload();await page.getByRole('button',{name:'Catalog administration',exact:true}).click();
+ await region.getByRole('button',{name:'Refresh structured import history',exact:true}).click();
+ await region.getByRole('button',{name:`Review structured batch ${batch.id}`,exact:true}).click();
+ await expect(records).toContainText(`${key} phrase 0`);
+ await region.getByRole('button',{name:'Review structured rollback',exact:true}).click();
+ await region.getByRole('button',{name:'Confirm structured rollback',exact:true}).click();
+ await expect(region.getByRole('status')).toContainText('Batch deactivated');
+ await region.getByRole('button',{name:'Browse catalog materials',exact:true}).click();
+ await expect(region.getByRole('navigation',{name:'materials',exact:true})).toBeVisible();
+ const accessibility=await new AxeBuilder({page}).include('.catalog-modal').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(accessibility.violations).toEqual([]);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
