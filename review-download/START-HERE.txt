@@ -1,10 +1,10 @@
-EtalonOps update v6
+EtalonOps update v7
 
-Existing Azure pilot: use EtalonOps-pilot-update-v6.zip. It includes the prior named-draft milestone, catalog corrections, user administration and catalog starter templates.
-Offline review: extract EtalonOps-preview.zip and open the HTML. User administration needs the database-backed application; the offline file uses fictional data and scripted AI.
-Dataset preparation: EtalonOps-catalog-starter-kit.zip contains templates and AI instructions. Fictional example files must not be imported as real parts.
+Existing Azure pilot: use EtalonOps-pilot-update-v7.zip. It includes prior improvements plus final MRF review, numbered immutable submissions, My Submitted MRFs, revision drafts and manual purchasing CSV/print exports.
+Offline review: EtalonOps-preview.zip demonstrates named drafts with fictional data. Real submission, revisions and user administration require the database-backed pilot.
+Catalog preparation: EtalonOps-catalog-starter-kit.zip contains templates and AI instructions. Fictional example files must not be loaded as real parts.
 
-Update: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/PILOT_UPDATE_V6.md
-User administration: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/USER_ADMINISTRATION.md
-Plan: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/MRF_COMPLETION_PLAN.md
-No paid AI or new services have been activated.
+Update instructions: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/PILOT_UPDATE_V7.md
+Submission walkthrough: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/MRF_SUBMISSION.md
+Completion plan: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/MRF_COMPLETION_PLAN.md
+No paid AI, new services or vendor orders are activated.
