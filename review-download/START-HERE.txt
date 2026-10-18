@@ -1,8 +1,10 @@
-EtalonOps named MRF milestone (v5)
+EtalonOps update v6
 
-For an offline fictional-data demonstration, download EtalonOps-preview.zip, extract it and open EtalonOps-preview.html.
-For the existing Azure pilot, use EtalonOps-pilot-update-v5.zip and the instructions below. No paid AI is enabled.
+Existing Azure pilot: use EtalonOps-pilot-update-v6.zip. It includes the prior named-draft milestone, catalog corrections, user administration and catalog starter templates.
+Offline review: extract EtalonOps-preview.zip and open the HTML. User administration needs the database-backed application; the offline file uses fictional data and scripted AI.
+Dataset preparation: EtalonOps-catalog-starter-kit.zip contains templates and AI instructions. Fictional example files must not be imported as real parts.
 
-Update instructions: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/PILOT_UPDATE_V5.md
-Demonstration walkthrough: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/NAMED_DRAFTS_DEMONSTRATION.md
-Completion plan: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/MRF_COMPLETION_PLAN.md
+Update: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/PILOT_UPDATE_V6.md
+User administration: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/USER_ADMINISTRATION.md
+Plan: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/MRF_COMPLETION_PLAN.md
+No paid AI or new services have been activated.
