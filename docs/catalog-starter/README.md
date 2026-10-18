@@ -2,7 +2,17 @@
 
 Use the empty `*-template.csv` files for real submissions. The `*-FICTIONAL-EXAMPLE.csv` files explain syntax only and must not be loaded into the live catalog. Their dimensions, manufacturer, part number and image rights are deliberately fictional.
 
-Each CSV has exactly `kind,data_json` columns. `data_json` is a valid JSON object; use a CSV writer to quote it, rather than manually escaping nested quotes. One kind per file. Split files above 800 KB or 2,000 rows. Prepare a small representative batch first and preview it in Catalog administration before scaling up.
+Start with **EtalonOps-catalog-template.xlsx** for normal Excel editing. It has separate Conduit, Supports, Boxes, Other Parts, Manufacturer Products, Translations and Image References sheets, plus instructions. Columns are ordinary cells: no JSON, arrays or nested objects are required. Headers have explanatory comments; units/status/origin fields offer dropdowns. The workbook is blank; EtalonOps-catalog-FICTIONAL-EXAMPLE.xlsx is a separate syntax example only.
+
+Keep the master file as **.xlsx**. When ready to import, save each populated data worksheet as **CSV UTF-8 (Comma delimited)**. Upload CSV sheets one at a time through Administration → Catalog and imports. Direct .xlsx upload is not supported; the workbook is for Excel editing. Do not export the Instructions sheet. Completely empty CSV rows are ignored.
+
+The `*-template.csv` files also use ordinary columns. `kind` identifies the record type. Material dimensions have separate columns such as `diameterIn`, `lengthIn`, `minSpanIn` and `maxSpanIn`; the application converts these cells into its internal structured specifications. Additional defining text specifications may use `attribute.fieldName` columns. Do not add notes or arbitrary renamed headers to import files: unknown columns are rejected so data is not silently lost. Legacy `kind,data_json` files remain supported.
+
+One kind per file. Split files above 800 KB or 2,000 populated rows. Prepare a small representative batch first and preview it before scaling up.
+
+**Preserve identifiers:** the workbook formats catalog IDs, manufacturer part numbers and schedules as Text. Keep that formatting so `00001` and `001E02` remain exact. When opening an existing CSV in Excel, use Data → From Text/CSV and set those columns to Text; opening CSVs directly may remove leading zeros or convert part numbers to dates/scientific notation. The importer cannot recover characters Excel has already changed.
+
+**Translations:** use one phrase per row. Repeat `materialKey` for each additional phrase. Do not put several phrases in an array or comma-separated list inside a single cell.
 
 Import in order: **materials → products → translations → image references**. The material's `externalKey` is the stable relationship key; related files use `materialKey`. Canonical identity is determined by category, defining specifications and product unit, rather than the wording of a key or description. Brands/vendors/part numbers never belong in canonical material attributes.
 

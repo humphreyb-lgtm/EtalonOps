@@ -1,3 +1,4 @@
+import { spreadsheetRecord } from './catalog-spreadsheet';
 import { catalogReadiness } from './catalog-readiness';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -210,11 +211,13 @@ const importKinds=['material','product','translation','image'] as const;
 export function parseExtendedCsv(csv:string){
   const errors:{row:number;message:string}[]=[],records:{kind:typeof importKinds[number];data:unknown;row:number}[]=[];let rowCount=0;
   try{
-    const rows:Record<string,string>[]=parse(csv,{bom:true,columns:(header:string[])=>{if(header.length!==2||!header.includes('kind')||!header.includes('data_json'))throw new Error('Use kind and data_json columns.');return header;},skip_empty_lines:true,max_record_size:20000});
-    rowCount=rows.length;
-    if(!rows.length||rows.length>2000)throw new Error('Use 1–2000 rows per staged file.');
+    let legacy=false;
+    const rows:Record<string,string>[]=parse(csv,{bom:true,columns:(header:string[])=>{const columns=header.map(value=>value.trim());if(columns.some(value=>!value)||new Set(columns).size!==columns.length)throw new Error('Use nonempty, unique template column headers.');legacy=columns.length===2&&columns.includes('kind')&&columns.includes('data_json');if(!columns.includes('kind')||(!legacy&&columns.includes('data_json')))throw new Error('Use the Excel-friendly column templates and save as CSV UTF-8 (Comma delimited). Legacy kind,data_json files are also supported.');return columns;},skip_empty_lines:true,max_record_size:20000});
+    const nonempty=(row:Record<string,string>)=>Object.values(row).some(value=>value.trim());
+    rowCount=rows.filter(nonempty).length;
+    if(!rowCount||rowCount>2000)throw new Error('Use 1–2000 rows per staged file.');
     const seen=new Set<string>(),identities=new Map<string,number>();
-    rows.forEach((row,i)=>{try{const kind=z.enum(importKinds).parse(row.kind),schema={material:materialInput,product:productInput,translation:translationInput,image:imageReferenceInput}[kind],data=schema.parse(JSON.parse(row.data_json));const identifier=JSON.stringify([kind,data]);if(seen.has(identifier))throw new Error('Duplicate row.');
+    rows.forEach((row,i)=>{if(!nonempty(row))return;try{const kind=z.enum(importKinds).parse(row.kind.trim().toLowerCase()),schema={material:materialInput,product:productInput,translation:translationInput,image:imageReferenceInput}[kind],data=schema.parse(legacy?JSON.parse(row.data_json):spreadsheetRecord(kind,row));const identifier=JSON.stringify([kind,data]);if(seen.has(identifier))throw new Error('Duplicate row.');
       const value=data as any;let identifiers:string[]=[];
       if(kind==='material')identifiers=['material-key:'+value.externalKey.toLowerCase(),'material-spec:'+describeMaterial(value).identity];
       if(kind==='product')identifiers=['product:'+JSON.stringify([key(value.manufacturer),key(value.partNumber)])];

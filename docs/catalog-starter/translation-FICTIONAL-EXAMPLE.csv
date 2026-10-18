@@ -1,2 +1,2 @@
-kind,data_json
-translation,"{""materialKey"":""EXAMPLE-SUPPORT-001"",""phrase"":""fictional example support bracket"",""origin"":""ai_generated"",""sourceUrl"":""https://example.invalid/fictional-only""}"
+﻿kind,materialKey,phrase,origin,sourceUrl
+translation,EXAMPLE-SUPPORT-001,fictional example support bracket,ai_generated,https://example.invalid/fictional-only

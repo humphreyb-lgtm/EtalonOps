@@ -12,6 +12,20 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'Excel-friendly CSV imports retain linked manufacturer identifiers, phrase text and provisional provenance',run:async store=>{
+ const {admin}=people();
+ const files=[
+ [{kind:'material',externalKey:'00001',category:'bracket',productUnit:'EA',verification:'provisional',origin:'ai_import',sourceUrl:'https://example.invalid/spec',verificationBasis:'Synthetic test specifications only.',minSpanIn:'15.75',maxSpanIn:'25',mounting:'stud',material:'steel'}],
+ [{kind:'product',materialKey:'00001',manufacturer:'Synthetic Maker',partNumber:'001E02',title:'Synthetic support',sourceUrl:'https://example.invalid/part',verification:'provisional',origin:'ai_import'}],
+ [{kind:'translation',materialKey:'00001',phrase:'15 3/4" support, stud bracket',origin:'ai_generated',sourceUrl:'https://example.invalid/part'}],
+ [{kind:'image',materialKey:'00001',manufacturer:'Synthetic Maker',partNumber:'001E02',sourceUrl:'https://example.invalid/photo.png',rightsBasis:'Synthetic placeholder only; not actual image permission.'}],
+ ];
+ for(const rows of files){const preview=await store.catalogCommand(admin,'preview',{csv:stringify(rows,{header:true,bom:true})});assert.deepEqual(preview.report.errors,[]);await store.catalogCommand(admin,'apply',{id:preview.id,approval:'I reviewed this batch'});assert.equal((await store.catalogCommand(admin,'apply',{id:preview.id,approval:'I reviewed this batch'})).unchanged,true);}
+ const materials=await store.catalogCommand(admin,'page',{section:'materials'});assert.equal(materials.total,1);const detail=await store.catalogCommand(admin,'details',{id:materials.records[0].id});assert.equal(detail.externalKey,'00001');assert.equal(detail.attributes.minSpanIn,15.75);assert.equal(detail.verification,'provisional');assert.equal(detail.products[0].partNumber,'001E02');assert.equal(detail.products[0].verification,'provisional');
+ const phrases=await store.catalogCommand(admin,'translations',{id:detail.id});assert.equal(phrases[0].phrase,'15 3/4" support, stud bracket');assert.equal(phrases[0].origin,'ai_generated');const images=await store.catalogCommand(admin,'page',{section:'images'});assert.equal(images.records[0].status,'pending');
+ const invalid=await store.catalogCommand(admin,'preview',{csv:stringify([{...files[0][0],externalKey:'bad-origin',verification:'reviewed'}],{header:true})});assert.ok(invalid.report.errors.length);
+}},
+
 {name:'saved draft filters apply before paging, treat wildcard characters literally and preserve ownership and project boundaries',run:async store=>{
  const {admin,user,foreign}=people();await store.member(user,'riverside');await store.member(user,'northside');await store.member(admin,'riverside');await store.member(foreign,'riverside');
  for(let i=0;i<28;i++)await store.saveDraft(user,draftBody.parse({projectId:'riverside',name:`Lighting ${String(i).padStart(2,'0')}`,deliveryDate:i%2?'2026-11-20':'2026-11-10',lines:[],version:0}));

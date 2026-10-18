@@ -1,2 +1,2 @@
-kind,data_json
-image,"{""materialKey"":""EXAMPLE-SUPPORT-001"",""manufacturer"":""FICTIONAL EXAMPLE MAKER"",""partNumber"":""EXAMPLE-NOT-A-REAL-PART"",""sourceUrl"":""https://example.invalid/fictional-only.png"",""rightsBasis"":""FICTIONAL PLACEHOLDER ONLY. No usage permission exists for an actual image.""}"
+﻿kind,materialKey,manufacturer,partNumber,sourceUrl,rightsBasis
+image,EXAMPLE-SUPPORT-001,FICTIONAL EXAMPLE MAKER,EXAMPLE-NOT-A-REAL-PART,https://example.invalid/fictional-only.png,FICTIONAL PLACEHOLDER ONLY. No usage permission exists for an actual image.

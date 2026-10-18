@@ -4,7 +4,7 @@ Use the existing pilot and its assigned Microsoft accounts. The standalone HTML 
 
 ## Prepare the demonstration
 
-1. Apply the combined v9 source update to the existing pilot. Open Administration → Pilot status and confirm `catalog-readiness-v9`, an Azure SQL connection and Microsoft sign-in. The page reports the installed version; a successful source push alone does not prove deployment.
+1. Apply the combined v10 source update to the existing pilot. Open Administration → Pilot status and confirm `excel-catalog-v10`, an Azure SQL connection and Microsoft sign-in. The page reports the installed version; a successful source push alone does not prove deployment.
 2. Register or review the demonstrators' existing Microsoft identities and project access under Users and access. At least one real foreman and one administrator are needed. Deactivation, role limits and project changes remain subject to the existing safeguards.
 3. Prepare a small source-backed catalog delivery. Run the offline preflight, then preview and explicitly apply each file against the live catalog. Keep imported AI facts provisional until independently reviewed.
 4. Open Catalog readiness. Work through specification, manufacturer-product, phrase and image queues. Use a filtered stable material key to review one item without confusing it with similarly named sizes. Refresh after saving a correction. Missing phrases, images or product links are completeness gaps; they are not all submission blockers. Counts are not a certification of source accuracy.
