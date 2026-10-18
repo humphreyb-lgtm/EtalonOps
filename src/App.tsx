@@ -66,8 +66,8 @@ function SourceTag({ source,verification }: { source: Line['source'];verificatio
 export default function App() {
   const [compliance,setCompliance]=useState<string[]>([]);
   const [productChoices,setProductChoices]=useState<Record<string,string>>({});
-  const [projectId, setProjectId] = useState('riverside');
-  const [initial] = useState<{ draft: Draft; error?: string; restored?: boolean }>(() => databaseMode ? { draft: freshDraft('riverside') } : loadDraft('riverside'));
+  const [projectId, setProjectId] = useState(() => new URLSearchParams(window.location.search).get('project') === 'northside' ? 'northside' : 'riverside');
+  const [initial] = useState<{ draft: Draft; error?: string; restored?: boolean }>(() => databaseMode ? { draft: freshDraft(projectId) } : loadDraft(projectId));
   const [draft, setDraft] = useState<Draft>(initial.draft);
   const [databaseBusy, setDatabaseBusy] = useState(databaseMode);
   const [dirty, setDirty] = useState(false);
@@ -150,8 +150,8 @@ export default function App() {
     if (!databaseMode) return;
     let cancelled = false;
     request<AIStatus>('/lookup/status').then(status=>{if(!cancelled)setAIEnabled(status.enabled);}).catch(()=>{});
-    readDatabaseDraft('riverside').then(saved => {
-      if (!cancelled) { setDraft(saved ?? freshDraft('riverside')); setAnnouncement(cloudMode ? (saved ? 'Draft restored from Azure SQL.' : 'Azure SQL ready. AI discovery is disabled.') : saved ? 'Draft restored from the local database.' : 'Local database ready. Fixture catalog; test session only.'); }
+    readDatabaseDraft(projectId).then(saved => {
+      if (!cancelled) { setDraft(saved ?? freshDraft(projectId)); setAnnouncement(cloudMode ? (saved ? 'Draft restored from Azure SQL.' : 'Azure SQL ready. AI discovery is disabled.') : saved ? 'Draft restored from the local database.' : 'Local database ready. Fixture catalog; test session only.'); }
     }).catch(error => { if (!cancelled) setStorageError(error instanceof Error ? error.message : 'Local database unavailable.'); })
       .finally(() => { if (!cancelled) setDatabaseBusy(false); });
     return () => { cancelled = true; };
@@ -269,9 +269,10 @@ export default function App() {
     try {
       if (databaseMode) setDatabaseBusy(true);
       const loaded = databaseMode ? { draft: await readDatabaseDraft(id) ?? freshDraft(id), error: '', restored: true } : loadDraft(id);
+      const url = new URL(window.location.href); url.searchParams.set('project', id); window.history.replaceState(null, '', url);
       setProjectId(id); setDraft(loaded.draft); setStorageError(loaded.error ?? ''); setDirty(false);
       resetEntry(); setQuantity(''); setDescription(''); setUnit('');
-      setAnnouncement(databaseMode ? 'Local database draft loaded for this test account.' : loaded.restored ? 'Saved local draft restored for this project.' : 'A new local draft is ready for this project.');
+      setAnnouncement(cloudMode ? 'Azure SQL draft loaded for this project.' : databaseMode ? 'Local database draft loaded for this test account.' : loaded.restored ? 'Saved local draft restored for this project.' : 'A new local draft is ready for this project.');
     } catch (error) { setStorageError(error instanceof Error ? error.message : 'Could not load the draft.'); }
     finally { setDatabaseBusy(false); }
   }

@@ -1,18 +1,20 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { PublicClientApplication, InteractionRequiredAuthError, type AccountInfo } from '@azure/msal-browser';
 
 declare global { interface Window { __ETALONOPS_CONFIG__?: { tenant: string; clientId: string }; } }
 export const cloudMode = Boolean(window.__ETALONOPS_CONFIG__);
 let client: PublicClientApplication | undefined;
 let account: AccountInfo | null = null;
+let initialization: Promise<void> | undefined;
 export function cloudDisplayName() { return account?.name ?? 'Assigned user'; }
 const scopes = () => [`api://${window.__ETALONOPS_CONFIG__!.clientId}/access_as_user`];
 async function authClient() {
   if (!client) {
     const config = window.__ETALONOPS_CONFIG__!;
-    client = new PublicClientApplication({ auth: { clientId: config.clientId, authority: `https://login.microsoftonline.com/${config.tenant}`, redirectUri: `${window.location.origin}/auth-callback.html` }, cache: { cacheLocation: 'memoryStorage' } });
-    await client.initialize();
+    client = new PublicClientApplication({ auth: { clientId: config.clientId, authority: `https://login.microsoftonline.com/${config.tenant}`, redirectUri: `${window.location.origin}/auth-callback.html` }, cache: { cacheLocation: 'sessionStorage' } });
+    initialization = client.initialize();
   }
+  await initialization;
   return client;
 }
 export async function cloudToken() {
@@ -26,13 +28,31 @@ export async function cloudSignOut() {
   await auth.logoutRedirect({ account, postLogoutRedirectUri: window.location.origin });
 }
 export function CloudGate({ children }: { children: ReactNode }) {
-  const [signedIn, setSignedIn] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [signedIn, setSignedIn] = useState(false), [busy, setBusy] = useState(cloudMode), [error, setError] = useState('');
+  useEffect(() => {
+    if (!cloudMode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const auth = await authClient();
+        const cached = auth.getActiveAccount() ?? (auth.getAllAccounts().length === 1 ? auth.getAllAccounts()[0] : null);
+        if (!cached) return;
+        account = cached;
+        const response = await fetch('/api/me', { headers: { Authorization: `Bearer ${await cloudToken()}` } });
+        if (!response.ok) throw new Error('Your session could not be restored. Sign in again.');
+        if (!cancelled) setSignedIn(true);
+      } catch (error) { if (!cancelled) setError(error instanceof Error ? error.message : 'Sign in again to continue.'); }
+      finally { if (!cancelled) setBusy(false); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   if (!cloudMode || signedIn) return children;
   async function signIn() {
     setBusy(true); setError('');
     try {
       const result = await (await authClient()).loginPopup({ scopes: scopes() });
       account = result.account;
+      (await authClient()).setActiveAccount(account);
       // The API independently validates issuer, audience, scope, tenant and role.
       const response = await fetch('/api/me', { headers: { Authorization: `Bearer ${result.accessToken}` } });
       if (!response.ok) throw new Error('Access requires an EtalonOps application role. Contact the pilot administrator.');

@@ -10,7 +10,7 @@ for attempt in range(24):
         with urllib.request.urlopen(url+'/api/health',timeout=20) as response: health=json.load(response)
         if health.get('engine')!='Azure SQL' or health.get('microsoftSignIn') is not True: raise ValueError('Unexpected health response')
         break
-    except (urllib.error.URLError,ValueError):
+    except (urllib.error.URLError,TimeoutError,ValueError):
         if attempt==23: raise SystemExit('Cloud health did not become ready. Inspect POC app logs; do not disable authentication/TLS.')
         time.sleep(5)
 for path in ['/api/me','/api/projects/riverside/draft','/api/dev/session']:

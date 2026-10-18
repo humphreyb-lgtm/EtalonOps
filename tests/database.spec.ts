@@ -44,3 +44,20 @@ for (const width of [1440, 390]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
+
+test('Northside date-only draft and selected project survive reload independently of Riverside', async ({ page }) => {
+  await page.goto('/?database=1&identity=foreman-one');
+  await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
+  await page.getByLabel('Project', { exact: true }).selectOption('northside');
+  await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
+  await page.getByLabel('MRF Delivery Date', { exact: true }).fill('2026-12-19');
+  await page.getByRole('button', { name: 'Save as Draft', exact: true }).click();
+  await expect(page.getByText('Saved in local database', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.getByLabel('Project', { exact: true })).toHaveValue('northside');
+  await expect(page.getByLabel('MRF Delivery Date', { exact: true })).toHaveValue('2026-12-19');
+  await page.getByLabel('Project', { exact: true }).selectOption('riverside');
+  await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.getByLabel('MRF Delivery Date', { exact: true })).not.toHaveValue('2026-12-19');
+});
