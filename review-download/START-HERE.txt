@@ -1,21 +1,8 @@
-EtalonOps MRF Builder — local preview
+EtalonOps named MRF milestone (v5)
 
-Download EtalonOps-preview.zip, extract it to a normal folder such as Downloads,
-and double-click EtalonOps-preview.html to open it in Chrome or Edge.
-No administrator/root access, Node.js installation, or Azure account is required.
+For an offline fictional-data demonstration, download EtalonOps-preview.zip, extract it and open EtalonOps-preview.html.
+For the existing Azure pilot, use EtalonOps-pilot-update-v5.zip and the instructions below. No paid AI is enabled.
 
-Try the 1-inch PVC and self tappers examples. Enter a quantity unit, add a result,
-edit the MRF lines, test delivery-date overrides, and Save as Draft.
-The DM button lets you leave/resume the demo using browser-local storage.
-
-All catalog records are fictional fixtures; no live AI calls are made.
-Clarification now retains supplied details and lets you edit the description
-before adding it. Manufacturer / part details and No Substitutions can be edited on MRF lines.
-Catalog and image administration and optional model clarification require the
-API-backed application; these features are absent from this offline demo.
-Do not enter sensitive information. Drafts stay in this browser. Browser policies
-may restrict downloaded HTML or local storage. The PDF provides a static review.
-
-This file does not deploy anything. Azure hosting is separately awaiting quota
-approval; no paid pilot services were deployed and no DNS records were changed.
-The PDF captures the earlier approved visual layout, not the new admin screen.
+Update instructions: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/PILOT_UPDATE_V5.md
+Demonstration walkthrough: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/NAMED_DRAFTS_DEMONSTRATION.md
+Completion plan: https://github.com/humphreyb-lgtm/EtalonOps/blob/main/docs/MRF_COMPLETION_PLAN.md
