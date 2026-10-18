@@ -179,3 +179,10 @@ test('SQL persistent AI reservations are atomic, tenant scoped and not reset by 
 // The same domain scenarios execute against the real restricted SQL connection.
 const { catalogScenarios } = await import('./catalog-scenarios');
 for(const scenario of catalogScenarios)test(`SQL catalog: ${scenario.name}`,async()=>scenario.run(store));
+
+test('SQL runtime client-ID SID encoding matches SQL Server native GUID conversion',async()=>{
+  const {sqlSid}=await import('./sql-principal');
+  const client='10213243-5465-7687-98a9-bacbdcedfe0f';
+  const row=(await store.q('SELECT CONVERT(varchar(34),CONVERT(varbinary(16),CONVERT(uniqueidentifier,@p0)),1) AS sid',client)).recordset[0];
+  assert.equal(String(row.sid).toLowerCase(),sqlSid(client));
+});

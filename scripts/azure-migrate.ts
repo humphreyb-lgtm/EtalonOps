@@ -1,3 +1,4 @@
+import { principalRepair } from '../server/sql-principal';
 // Runs only inside the owner's authenticated Azure Cloud Shell. No token output.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -20,12 +21,6 @@ try {
   await pool.request().batch(migration);
   await pool.request().query('IF OBJECT_ID(\'dbo.migration_checksums\') IS NULL CREATE TABLE dbo.migration_checksums(version int PRIMARY KEY,checksum char(64) NOT NULL)');
   await pool.request().input('checksum', sql.VarChar(64), checksum).query('IF NOT EXISTS(SELECT 1 FROM dbo.migration_checksums WHERE version=1) INSERT dbo.migration_checksums VALUES(1,@checksum)');
-  if (!/^[a-f\d-]{36}$/i.test(state.runtimePrincipal)) throw new Error('Invalid managed identity ID.');
-  // Azure SQL supports contained external users with an explicit object SID.
-  // This avoids giving the SQL server identity directory-wide Graph read access.
-  const hex = state.runtimePrincipal.replaceAll('-', '');
-  const sid = hex.slice(6,8)+hex.slice(4,6)+hex.slice(2,4)+hex.slice(0,2)+hex.slice(10,12)+hex.slice(8,10)+hex.slice(14,16)+hex.slice(12,14)+hex.slice(16);
-  await pool.request().query(`IF USER_ID('etalonops_runtime') IS NULL CREATE USER etalonops_runtime WITH SID=0x${sid}, TYPE=E`);
   for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql']] as const){
     const migration=readFileSync(`db/${file}`,'utf8'), checksum=createHash('sha256').update(migration).digest('hex');
     const prior=(await pool.request().input('version',sql.Int,version).query('SELECT checksum FROM dbo.migration_checksums WHERE version=@version')).recordset[0];
@@ -33,8 +28,33 @@ try {
     await pool.request().batch(migration);
     await pool.request().input('version',sql.Int,version).input('checksum',sql.VarChar(64),checksum).query('IF NOT EXISTS(SELECT 1 FROM dbo.migration_checksums WHERE version=@version) INSERT dbo.migration_checksums VALUES(@version,@checksum)');
   }
-  for (const table of ['memberships', 'import_batches', 'materials', 'aliases', 'drafts', 'draft_lines', 'image_associations', 'catalog_profiles', 'manufacturers', 'manufacturer_products', 'translations', 'selection_events', 'job_restrictions', 'catalog_batches', 'image_references']) await pool.request().query(`GRANT SELECT,INSERT,UPDATE,DELETE ON dbo.${table} TO etalonops_runtime`);
-  await pool.request().query('GRANT SELECT,INSERT ON dbo.audit_events TO etalonops_runtime; GRANT SELECT ON dbo.schema_migrations TO etalonops_runtime;');
+  // Azure RBAC uses the principal OBJECT ID; SQL external SID requires its CLIENT ID.
+  const liveObject=execFileSync('az',['webapp','identity','show','-g',state.resourceGroup,'-n',state.appName,'--query','principalId','-o','tsv'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+  if(liveObject.toLowerCase()!==String(state.runtimePrincipal).toLowerCase())throw new Error('Runtime managed identity changed; stopped before changing SQL permissions.');
+  const identity=JSON.parse(execFileSync('az',['ad','sp','show','--id',liveObject,'-o','json'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}));
+  if(String(identity.id).toLowerCase()!==liveObject.toLowerCase())throw new Error('Managed identity lookup did not match the pilot.');
+  const tables=['memberships','import_batches','materials','aliases','drafts','draft_lines','image_associations','catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references'];
+  const transaction=pool.transaction();await transaction.begin();
+  try{
+    const request=()=>new sql.Request(transaction);
+    await request().query("DECLARE @result int; EXEC @result=sp_getapplock @Resource='EtalonOpsRuntimePrincipal',@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=30000; IF @result<0 THROW 51000,'Runtime principal repair lock unavailable.',1;");
+    const existing=(await request().query("SELECT type,CONVERT(varchar(34),sid,1) AS sid FROM sys.database_principals WHERE name='etalonops_runtime'")).recordset[0];
+    const legacy=(await request().query("SELECT principal_id FROM sys.database_principals WHERE name='etalonops_runtime_legacy_oid'")).recordset[0];
+    const repair=principalRepair(existing,liveObject,identity.appId,Boolean(legacy));
+    if(repair.renameLegacy){
+      const owned=(await request().query("SELECT name FROM sys.schemas WHERE principal_id=USER_ID('etalonops_runtime') UNION ALL SELECT name FROM sys.objects WHERE principal_id=USER_ID('etalonops_runtime') UNION ALL SELECT 'role membership' FROM sys.database_role_members WHERE member_principal_id=USER_ID('etalonops_runtime')")).recordset;
+      if(owned.length)throw new Error('Runtime principal has unexpected ownership or roles; stopped without changing it.');
+      await request().query('ALTER USER etalonops_runtime WITH NAME=etalonops_runtime_legacy_oid');
+    }
+    if(repair.create)await request().query(`CREATE USER etalonops_runtime WITH SID=${repair.sid}, TYPE=E`);
+    for(const table of tables)await request().query(`GRANT SELECT,INSERT,UPDATE,DELETE ON dbo.${table} TO etalonops_runtime`);
+    await request().query('GRANT SELECT,INSERT ON dbo.audit_events TO etalonops_runtime; GRANT SELECT ON dbo.schema_migrations TO etalonops_runtime;');
+    if(repair.renameLegacy){
+      for(const table of [...tables,'audit_events','schema_migrations'])await request().query(`REVOKE SELECT,INSERT,UPDATE,DELETE ON dbo.${table} FROM etalonops_runtime_legacy_oid`);
+    }
+    await transaction.commit();
+    console.log('SQL runtime identity verified against the managed identity client ID; restricted grants preserved.');
+  }catch(error){try{await transaction.rollback();}catch{}throw error;}
   for (const project of ['riverside', 'northside']) await pool.request().input('tenant', state.tenant).input('owner', state.ownerId).input('project', project).query('IF NOT EXISTS(SELECT 1 FROM dbo.memberships WHERE tenant=@tenant AND owner=@owner AND project=@project) INSERT dbo.memberships VALUES(@tenant,@owner,@project)');
   console.log('Cloud schema checksum verified; restricted runtime identity and pilot owner memberships prepared. No fixture catalog imported.');
 } finally { await pool.close(); }
