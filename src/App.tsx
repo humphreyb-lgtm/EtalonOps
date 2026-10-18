@@ -183,7 +183,7 @@ export default function App() {
     finally { setDatabaseBusy(false); }
     setMatches(found);
     setStage(found.length ? 'verified' : 'clarify');
-    setAnnouncement(found.length ? `${found.length} demo catalog matches found.` : 'No demo catalog match found. Clarify the material below or use your description.');
+    setAnnouncement(found.length ? `${found.length} ${cloudMode ? "catalog" : "demo catalog"} matches found.` : cloudMode ? 'No catalog match found. Clarify the material below or use your description.' : 'No demo catalog match found. Clarify the material below or use your description.');
   }
 
   function requireEntry(): boolean {
@@ -314,7 +314,7 @@ export default function App() {
   }
 
   const resultTable = (candidates: Candidate[], isAI = false) => <>
-    <div className="results-table" role="table" aria-label={isAI ? 'Mock AI material suggestions' : 'Demo catalog matches'}>
+    <div className="results-table" role="table" aria-label={isAI ? 'Mock AI material suggestions' : cloudMode ? 'Catalog matches' : 'Demo catalog matches'}>
       <div className="result-head" role="row"><span role="columnheader">Image</span><span role="columnheader">Material description</span><span role="columnheader">Product UOM</span><span role="columnheader">Specifications</span><span role="columnheader">Action</span></div>
       {candidates.map(candidate => <div className={`result-row ${added.includes(candidate.id) ? 'is-added' : ''}`} role="row" key={candidate.id}>
         <div role="cell" className="result-image"><ProductImage category={candidate.category} candidate={candidate} /></div>
@@ -338,7 +338,7 @@ export default function App() {
     <header className="topbar">
       <button className="icon-button menu-button" aria-label="Open navigation" onClick={() => menuRef.current?.showModal()}><Menu size={23} aria-hidden="true" /></button>
       <div className="project-picker"><label htmlFor="project-select" className="sr-only">Project</label><div className="project-select-wrap"><select id="project-select" value={projectId} disabled={aiBusy||databaseBusy} onChange={event => { if (dirty) setPendingProject(event.target.value); else activateProject(event.target.value); }}>{projects.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div><span>Project #{project.number} <span className="project-mock">· Demo</span></span></div>
-      <form className="global-search" onSubmit={event => { event.preventDefault(); if (globalSearch.trim()) { setDescription(globalSearch.trim()); resetEntry(); descriptionRef.current?.focus(); setAnnouncement('Description filled. Enter a quantity, then Find Matches.'); } }}><Search size={17} aria-hidden="true" /><input aria-label="Search demo materials" placeholder="Search demo materials…" value={globalSearch} onChange={event => setGlobalSearch(event.target.value)} /><button className="sr-only" type="submit">Use search as description</button></form>
+      <form className="global-search" onSubmit={event => { event.preventDefault(); if (globalSearch.trim()) { setDescription(globalSearch.trim()); resetEntry(); descriptionRef.current?.focus(); setAnnouncement('Description filled. Enter a quantity, then Find Matches.'); } }}><Search size={17} aria-hidden="true" /><input aria-label={cloudMode ? 'Search materials' : 'Search demo materials'} placeholder={cloudMode ? 'Search materials…' : 'Search demo materials…'} value={globalSearch} onChange={event => setGlobalSearch(event.target.value)} /><button className="sr-only" type="submit">Use search as description</button></form>
       <div className="profile"><button className="avatar" aria-label={cloudMode ? 'Account menu' : 'Demo session menu'} aria-expanded={profileOpen} onClick={() => setProfileOpen(current => !current)}>DM</button>{profileOpen && <div className="profile-menu"><strong>{cloudMode ? cloudDisplayName() : databaseMode ? localIdentity : 'Demo foreman'}</strong><span>{cloudMode ? 'Microsoft work account' : 'Local session · no sign-in'}</span><button className="button text-button" onClick={leaveDemo}><LogOut size={15} aria-hidden="true" />{cloudMode ? 'Sign out' : 'Leave demo'}</button></div>}</div>
     </header>
 
@@ -361,7 +361,7 @@ export default function App() {
         {entryError && <p className="entry-error" id="entry-error" role="alert"><AlertCircle size={15} aria-hidden="true" />{entryError}</p>}
       </section>
 
-      {stage === 'idle' && <section className="panel getting-started"><span className="empty-icon"><Search size={23} strokeWidth={1.5} aria-hidden="true" /></span><div><h2>Start with the material you need.</h2><p>Enter a quantity and description. We’ll check the demo catalog first, then help clarify if there’s no match.</p><div className="try-search"><span>Try a demo:</span><button onClick={() => { setQuantity('1000'); setDescription('1" PVC'); setUnit(''); resetEntry(); descriptionRef.current?.focus(); }}>1" PVC</button><span aria-hidden="true">·</span><button onClick={() => { setQuantity('200'); setDescription('self tappers'); setUnit('EA'); resetEntry(); descriptionRef.current?.focus(); }}>self tappers</button></div></div></section>}
+      {stage === 'idle' && <section className="panel getting-started"><span className="empty-icon"><Search size={23} strokeWidth={1.5} aria-hidden="true" /></span><div><h2>Start with the material you need.</h2><p>{cloudMode ? 'Enter a quantity and description to search your catalog. AI discovery is currently disabled.' : 'Enter a quantity and description. We’ll check the demo catalog first, then help clarify if there’s no match.'}</p><div className="try-search"><span>{cloudMode ? 'Example searches:' : 'Try a demo:'}</span><button onClick={() => { setQuantity('1000'); setDescription('1" PVC'); setUnit(''); resetEntry(); descriptionRef.current?.focus(); }}>1" PVC</button><span aria-hidden="true">·</span><button onClick={() => { setQuantity('200'); setDescription('self tappers'); setUnit('EA'); resetEntry(); descriptionRef.current?.focus(); }}>self tappers</button></div></div></section>}
 
       {stage === 'verified' && <section className="panel results-panel" aria-label="Translation results"><SectionHeading title="Translation matches" aside={<span className="count-badge">{matches.length} matches</span>}>{databaseMode ? 'Local database matches for “' + searchedDescription + '”. Fixture records are labeled.' : 'Demo verified-match layout for “' + searchedDescription + '”. These are fictional catalog fixtures.'}</SectionHeading>{resultTable(matches)}<div className="panel-footer"><button className="button text-button" onClick={clarify}>None of these is what I want <ArrowRight size={15} aria-hidden="true" /></button><span className="muted">Add a match directly from its row.</span></div></section>}
 
