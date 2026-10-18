@@ -9,8 +9,11 @@ import sys
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v7.zip')
+output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v8.zip')
 files = [
+    'README.md',
+    'src/AdminWorkspace.tsx', 'src/ImageAdmin.tsx', 'src/AIUsage.tsx',
+    'docs/ADMIN_WORKSPACE.md', 'docs/PILOT_UPDATE_V8.md',
     'src/SubmissionCenter.tsx', 'server/submissions.ts',
     'db/007-mrf-submissions.sql', 'db/migrations/007-mrf-submissions.sql',
     'docs/MRF_SUBMISSION.md', 'docs/PILOT_UPDATE_V7.md',

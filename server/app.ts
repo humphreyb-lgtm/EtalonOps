@@ -28,7 +28,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   });
   app.use(rateLimit({ windowMs: 60_000, limit: 1800, handler:(_req,res)=>{res.status(429).json({error:'Too many requests. Wait a minute before retrying.'});}, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.use(express.json({ limit: '1mb' }));
-  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'mrf-submission-v7' }); });
+  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'admin-workspace-v8' }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
     const { identity } = z.object({ identity: z.string() }).strict().parse(req.body);
     const token = await auth.issueLocal(identity);

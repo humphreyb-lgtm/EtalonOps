@@ -1,6 +1,6 @@
 # EtalonOps — MRF Builder
 
-MRF Builder proof of concept based on the approved V2 handoff. **Frontend visuals approved; local SQL Server and SQLite implementations tested.** The owner provisioned the approved West US 3 pilot through Cloud Shell. Application startup is under repair for its SQL managed-identity mapping; it is not yet accepted as ready. See [targeted repair](docs/SQL_IDENTITY_REPAIR.md). No DNS records were changed. See [SQL Server setup/validation](docs/SQL_SERVER_MILESTONE.md), [import tools](docs/DATABASE_MILESTONE.md), and [verified retail pricing](docs/COST_UPDATE.md).
+MRF Builder based on the approved V2 handoff, with named drafts, user access management, catalog relationships/imports, immutable MRF submissions and linked revisions. The owner provisioned the approved West US 3 pilot and confirmed its initial form worked after the SQL identity repair. Current source adds a dedicated [Administration workspace](docs/ADMIN_WORKSPACE.md); apply the [combined v8 update](docs/PILOT_UPDATE_V8.md) to use it on the existing pilot. Live Microsoft session restoration and second-user isolation remain acceptance items. No paid AI or new services are activated. See [SQL Server setup](docs/SQL_SERVER_MILESTONE.md), [import tools](docs/DATABASE_MILESTONE.md) and [completion plan](docs/MRF_COMPLETION_PLAN.md).
 
 ## Try the preview
 
@@ -62,6 +62,6 @@ The owner approved the approximately $25/month base pilot and illustrated AI usa
 
 The cloud launcher (`npm start`) requires explicit Entra configuration and Azure SQL managed identity. It never enables mock sign-in or imports fixtures. The local launcher remains `npm run api` with the documented local configuration. Source/build tests do not establish a live Azure deployment or real Microsoft sign-in.
 
-The [lookup/context and catalog administration milestone](docs/LOOKUP_AND_CATALOG_MILESTONE.md) adds context-aware clarification, editable fallback wording, explicit admin CSV review, export and rollback. It is tested with both repositories. The [next milestone](docs/IMAGES_AND_AI_MILESTONE.md) adds image review and optional model clarification, with live AI still disabled. Azure B1 quota support request `2610170040001486` remains the cloud hosting blocker.
+The [lookup/context and catalog administration milestone](docs/LOOKUP_AND_CATALOG_MILESTONE.md) adds context-aware clarification, editable fallback wording, explicit admin CSV review, export and rollback. It is tested with both repositories. The [next milestone](docs/IMAGES_AND_AI_MILESTONE.md) adds image review and optional model clarification, with live AI still disabled. The original East US B1 quota request `2610170040001486` does not block the provisioned West US 3 pilot.
 
 The owner approved [West US 3 deployment at the approximately $25/month base estimate](docs/WEST_US_3_PRICE_CHECK.md). Use the regional package/instructions in [Cloud deployment](docs/CLOUD_DEPLOYMENT.md); the runner preserves the existing group and refuses cross-region relocation. Live cloud readiness is not established by local tests or successful template validation.
