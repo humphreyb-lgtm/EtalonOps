@@ -17,7 +17,7 @@ import type { Repository } from './repository';
 export function createApp(store: Repository, authOptions: AuthOptions, services: { images?: ImageAssets; ai?: AIProvider } = {}) {
   const app = express(), auth = createAuth(authOptions), local = authOptions.mode === 'local';
   app.disable('x-powered-by');
-  app.use(helmet());
+  app.use(helmet({contentSecurityPolicy:{directives:{imgSrc:["'self'",'data:','blob:','https:']}}}));
   app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.use((req, _res, next) => {
     if (local) {
@@ -30,7 +30,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   });
   app.use(rateLimit({ windowMs: 60_000, limit: 1800, handler:(_req,res)=>{res.status(429).json({error:'Too many requests. Wait a minute before retrying.'});}, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.use(express.json({ limit: '1mb' }));
-  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'workbook-publishing-v12' }); });
+  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'compact-catalog-v13' }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
     const { identity } = z.object({ identity: z.string() }).strict().parse(req.body);
     const token = await auth.issueLocal(identity);

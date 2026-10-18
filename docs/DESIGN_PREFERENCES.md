@@ -1,0 +1,7 @@
+# Owner interface preferences
+
+Use dense layouts by default, especially list views. Avoid large cards, excessive whitespace and repeated editing dialogs. Workbook import rows should be at most one quarter of the previous approximately 270px cards; the current normal form rows are 56px tall. Put common fields directly in each row and uncommon fields in compact secondary controls. Keep row selection, batch saves and publication clear. Use compact spacing throughout Administration and MRF lists; preserve keyboard focus and accessible labels. Small screens may horizontally scroll dense tables rather than stacking each field into a tall card.
+
+Show trade inch dimensions as fractions (1/2 in, 3/4 in, 1 1/4 in), including exact physical adjustment ranges. Keep canonical numeric values, identity calculations, units and historical snapshots intact. Never round technical dimensions or infer units from part numbers.
+
+Include imported product images and thumbnails. The owner handles usage permission; record owner-managed image publication without claiming independent verification. Preserve the explicit unpublished/publish lifecycle. Use the current approved image files or published manufacturer-specific source image links and keep API credentials private. Do not introduce new subscriptions or cost commitments without the owner's express approval.

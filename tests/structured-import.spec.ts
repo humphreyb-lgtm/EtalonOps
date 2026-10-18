@@ -20,7 +20,7 @@ for(const width of [390,1440])test(`structured import records, paging and histor
  await expect(records.locator('article')).toHaveCount(25);
  await region.getByRole('button',{name:'Next import records',exact:true}).click();
  await expect(records.locator('article')).toHaveCount(2);await expect(records).toContainText(`${key} phrase 26`);
- const apply=region.getByRole('button',{name:'Apply structured import',exact:true});await expect(apply).toBeDisabled();
+ const apply=region.getByRole('button',{name:'Publish reviewed structured import',exact:true});await expect(apply).toBeDisabled();
  await region.getByLabel('I reviewed this batch. AI origin is preserved; importing does not verify product facts.',{exact:true}).check();await apply.click();
  await expect(region.getByRole('status')).toContainText('Structured import applied');
  const batchResponse=await request.post('http://127.0.0.1:3002/api/catalog/preview',{headers,data:{csv}});const batch=await batchResponse.json();expect(batch.state).toBe('applied');

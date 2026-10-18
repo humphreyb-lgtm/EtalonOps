@@ -47,6 +47,7 @@ export function imageRoutes(app: express.Express,store: Repository,assets?: Imag
     if(!image)throw new ApiError(404,'Image not found.');
     res.set('Cache-Control','private, no-store').type('image/webp').send(await storage().get(imageKey(p.tenant,param(req,'id'),image.contentHash)));
   });
+  app.get('/api/materials/:id/image-reference',async(req,res)=>{const p=principal(res),id=param(req,'id');await store.imageMaterial(p,id);res.json(await store.catalogCommand(p,'external-image',{materialId:id,productId:z.uuid().nullable().parse(req.query.productId??null)}));});
   app.get('/api/materials/:id/image',async(req,res)=>{
     const p=principal(res);const image=await store.approvedImage(p,param(req,'id'),z.uuid().nullable().parse(req.query.productId??null));
     if(!image)throw new ApiError(404,'No approved image.');

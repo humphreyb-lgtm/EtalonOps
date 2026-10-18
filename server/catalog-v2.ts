@@ -432,6 +432,7 @@ export function* catalogAction(p:Principal,action:string,data:any):Operation<any
   switch(action){
     case 'research-preview':return yield* researchAction(p,data);
     case 'research-apply':return yield* researchAction(p,data,true);
+    case 'external-image':{const input=z.object({materialId:z.uuid(),productId:z.uuid().nullable()}).parse(data);const material=yield* materialById(p,input.materialId);if(!material.active)throw new ApiError(404,'Material not found.');const rows=yield* query("SELECT source_url,product_id FROM image_references WHERE tenant=@p0 AND material_id=@p1 AND status='approved'",p.tenant,input.materialId);const match=rows.find(row=>input.productId&&String(row.product_id).toLowerCase()===input.productId)||rows.find(row=>!row.product_id)||(!input.productId?rows[0]:undefined);return {url:match?.source_url??null};}
     case 'export-page':return yield* catalogExportPage(p,data);
     case 'preview-material-correction':return yield* correctCatalog(p,'material',data);
     case 'apply-material-correction':return yield* correctCatalog(p,'material',data,true);
