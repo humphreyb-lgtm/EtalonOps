@@ -9,8 +9,8 @@ test('SQL SID uses client GUID byte order and preserves the distinct RBAC object
  assert.throws(()=>sqlSid("invalid';DROP USER x"));
 });
 test('runtime principal repair is idempotent and only repairs the exact legacy mapping',()=>{
- assert.deepEqual(principalRepair(undefined,objectId,clientId,false),{sid:sqlSid(clientId),create:true,renameLegacy:false});
- assert.equal(principalRepair({type:'E',sid:sqlSid(objectId)},objectId,clientId,false).renameLegacy,true);
+ assert.deepEqual(principalRepair(undefined,objectId,clientId,false),{sid:sqlSid(clientId),create:true,replaceLegacy:false});
+ assert.equal(principalRepair({type:'E',sid:sqlSid(objectId)},objectId,clientId,false).replaceLegacy,true);
  assert.equal(principalRepair({type:'E',sid:sqlSid(clientId)},objectId,clientId,true).create,false);
  assert.throws(()=>principalRepair({type:'S',sid:sqlSid(objectId)},objectId,clientId,false),/external/);
  assert.throws(()=>principalRepair({type:'E',sid:sqlSid('99999999-9999-4999-8999-999999999999')},objectId,clientId,false),/neither/);

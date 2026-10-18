@@ -41,17 +41,16 @@ try {
     const existing=(await request().query("SELECT type,CONVERT(varchar(34),sid,1) AS sid FROM sys.database_principals WHERE name='etalonops_runtime'")).recordset[0];
     const legacy=(await request().query("SELECT principal_id FROM sys.database_principals WHERE name='etalonops_runtime_legacy_oid'")).recordset[0];
     const repair=principalRepair(existing,liveObject,identity.appId,Boolean(legacy));
-    if(repair.renameLegacy){
+    if(repair.replaceLegacy){
       const owned=(await request().query("SELECT name FROM sys.schemas WHERE principal_id=USER_ID('etalonops_runtime') UNION ALL SELECT name FROM sys.objects WHERE principal_id=USER_ID('etalonops_runtime') UNION ALL SELECT 'role membership' FROM sys.database_role_members WHERE member_principal_id=USER_ID('etalonops_runtime')")).recordset;
       if(owned.length)throw new Error('Runtime principal has unexpected ownership or roles; stopped without changing it.');
-      await request().query('ALTER USER etalonops_runtime WITH NAME=etalonops_runtime_legacy_oid');
+      // DROP USER removes only the verified, non-owning security principal.
+      // Recreate and restore restricted grants in this same transaction.
+      await request().query('DROP USER etalonops_runtime');
     }
     if(repair.create)await request().query(`CREATE USER etalonops_runtime WITH SID=${repair.sid}, TYPE=E`);
     for(const table of tables)await request().query(`GRANT SELECT,INSERT,UPDATE,DELETE ON dbo.${table} TO etalonops_runtime`);
     await request().query('GRANT SELECT,INSERT ON dbo.audit_events TO etalonops_runtime; GRANT SELECT ON dbo.schema_migrations TO etalonops_runtime;');
-    if(repair.renameLegacy){
-      for(const table of [...tables,'audit_events','schema_migrations'])await request().query(`REVOKE SELECT,INSERT,UPDATE,DELETE ON dbo.${table} FROM etalonops_runtime_legacy_oid`);
-    }
     await transaction.commit();
     console.log('SQL runtime identity verified against the managed identity client ID; restricted grants preserved.');
   }catch(error){try{await transaction.rollback();}catch{}throw error;}

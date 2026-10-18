@@ -9,10 +9,10 @@ export function sqlSid(clientId:string){
 }
 export function principalRepair(existing:{type:string;sid:string}|undefined,objectId:string,clientId:string,legacyExists:boolean){
   const desired=sqlSid(clientId),legacy=sqlSid(objectId);
-  if(!existing)return {sid:desired,create:true,renameLegacy:false};
+  if(!existing)return {sid:desired,create:true,replaceLegacy:false};
   if(existing.type!=='E')throw new Error('Existing runtime user is not an external principal; stopped.');
-  if(existing.sid.toLowerCase()===desired)return {sid:desired,create:false,renameLegacy:false};
+  if(existing.sid.toLowerCase()===desired)return {sid:desired,create:false,replaceLegacy:false};
   if(existing.sid.toLowerCase()!==legacy)throw new Error('Existing runtime SID matches neither the actual client ID nor the known legacy object ID; stopped.');
   if(legacyExists)throw new Error('Legacy identity alias already exists; stopped without overwriting it.');
-  return {sid:desired,create:true,renameLegacy:true};
+  return {sid:desired,create:true,replaceLegacy:true};
 }
