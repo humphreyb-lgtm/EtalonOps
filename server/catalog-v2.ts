@@ -168,29 +168,38 @@ export function* searchCatalog(p:Principal,input:string,projectId?:string):Opera
   const aliases=yield* query('SELECT * FROM translations WHERE tenant=@p0 AND active=1',p.tenant);
   const products=yield* query('SELECT p.*,m.name AS manufacturer,m.normalized AS manufacturer_normalized FROM manufacturer_products p JOIN manufacturers m ON m.id=p.manufacturer_id AND m.tenant=p.tenant WHERE p.tenant=@p0 AND p.active=1',p.tenant);
   const counts=yield* query('SELECT material_id,COUNT(*) AS uses FROM selection_events WHERE tenant=@p0 GROUP BY material_id',p.tenant);
+  // Group once per request instead of rescanning every relationship for each material.
+  const profilesByMaterial=new Map(profiles.map(row=>[String(row.material_id).toLowerCase(),row]));
+  const phrasesByMaterial=new Map<string,string[]>(),productsByMaterial=new Map<string,RecordRow[]>();
+  for(const row of aliases){const id=String(row.material_id).toLowerCase();const values=phrasesByMaterial.get(id)??[];values.push(row.phrase);phrasesByMaterial.set(id,values);}
+  for(const row of products){const id=String(row.material_id).toLowerCase();const values=productsByMaterial.get(id)??[];values.push(row);productsByMaterial.set(id,values);}
+  const countsByMaterial=new Map(counts.map(row=>[String(row.material_id).toLowerCase(),Number(row.uses)]));
+  const rulesByMaterial=new Map<string,{category:string|null;makers:Set<string>;products:Set<string>}[]>();
+  for(const row of policies){const id=row.material_id?String(row.material_id).toLowerCase():'*';const values=rulesByMaterial.get(id)??[];values.push({category:row.category,makers:new Set(JSON.parse(row.manufacturer_ids)),products:new Set(JSON.parse(row.product_ids))});rulesByMaterial.set(id,values);}
+  const queryWords=searchWords(input);
   const requestedMakers=[...new Set(products.map(product=>product.manufacturer_normalized))].filter(maker=>new RegExp(`(?:^|[^a-z0-9])${String(maker).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?:$|[^a-z0-9])`,'i').test(input));
   const results=materials.map(material=>{
-    const id=String(material.id).toLowerCase(),details=JSON.parse(material.details),profile=profiles.find(row=>String(row.material_id).toLowerCase()===id),attributes=profile?JSON.parse(profile.attributes):{};
-    let choices=products.filter(product=>String(product.material_id).toLowerCase()===id);
+    const id=String(material.id).toLowerCase(),details=JSON.parse(material.details),profile=profilesByMaterial.get(id),attributes=profile?JSON.parse(profile.attributes):{};
+    let choices=[...(productsByMaterial.get(id)??[])];
     if(requestedMakers.length)choices=choices.filter(product=>requestedMakers.includes(product.manufacturer_normalized));
     if(requestedMakers.length&&!choices.length)return null;
-    const applicable=policies.filter(rule=>(!rule.material_id||String(rule.material_id).toLowerCase()===id)&&(!rule.category||rule.category===(attributes.category??details.category)));
-    for(const rule of applicable){const makers:string[]=JSON.parse(rule.manufacturer_ids),allowed:string[]=JSON.parse(rule.product_ids);choices=choices.filter(product=>(!makers.length||makers.includes(String(product.manufacturer_id).toLowerCase()))&&(!allowed.length||allowed.includes(String(product.id).toLowerCase())));}
+    const applicable=[...(rulesByMaterial.get('*')??[]),...(rulesByMaterial.get(id)??[])].filter(rule=>!rule.category||rule.category===(attributes.category??details.category));
+    for(const rule of applicable)choices=choices.filter(product=>(!rule.makers.size||rule.makers.has(String(product.manufacturer_id).toLowerCase()))&&(!rule.products.size||rule.products.has(String(product.id).toLowerCase())));
     if(applicable.length&&!choices.length)return null;
-    const phraseList=[material.description,...JSON.parse(details.row.aliases_json),...aliases.filter(row=>String(row.material_id).toLowerCase()===id).map(row=>row.phrase)];
+    const phraseList=[material.description,...JSON.parse(details.row.aliases_json),...(phrasesByMaterial.get(id)??[])];
     // Convert only a structured length for retrieval, never a requested quantity/UOM.
     if(attributes.lengthIn)phraseList.push(`${attributes.diameterIn} inch ${attributes.material} ${attributes.type} schedule ${attributes.schedule} ${Number(attributes.lengthIn)/12} ft`);
     for(const product of choices)phraseList.push(`${product.manufacturer} ${product.part_number} ${product.title} ${material.description}`);
-    let q=searchWords(input);
+    let q=queryWords;
     const span=q.match(/(?:for\s+(?:a\s+)?)?(\d+(?:\.\d+)?)[ -]*(?:inch|in\b|["″])[ -]*(?:span|spread)/i);
     if(span&&attributes.minSpanIn!=null&&attributes.maxSpanIn!=null){if(Number(span[1])<Number(attributes.minSpanIn)||Number(span[1])>Number(attributes.maxSpanIn))return null;q=q.replace(span[0],'').trim();}
-    let rank=Math.max(...phraseList.map(phrase=>score(q,searchWords(phrase))));
+    let rank=0;for(const phrase of new Set(phraseList))rank=Math.max(rank,score(q,searchWords(phrase)));
     const schedule=q.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1],expectedSchedule=attributes.schedule??material.description.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1];
     const diameter=q.match(/\b(\d+(?:\.\d+|\/\d+)?)\s*(?:inch|in\b|["″])/i)?.[1];
     if((/\bpipe\b/i.test(q)&&attributes.type==='conduit')||(/\bconduit\b/i.test(q)&&attributes.type==='pipe'))rank=0;
     if((schedule&&expectedSchedule&&String(schedule)!==String(expectedSchedule))||(diameter&&attributes.diameterIn&&Number(diameter)!==Number(attributes.diameterIn)))rank=0;
     choices.sort((a,b)=>Number(key(input).includes(key(b.part_number)))-Number(key(input).includes(key(a.part_number)))||Number(String(b.id).toLowerCase()===String(profile?.preferred_product_id).toLowerCase())-Number(String(a.id).toLowerCase()===String(profile?.preferred_product_id).toLowerCase()));
-    const useCount=Number(counts.find(row=>String(row.material_id).toLowerCase()===id)?.uses??0);
+    const useCount=countsByMaterial.get(id)??0;
     return {id,description:material.description,productUnit:material.product_uom,specs:details.specs,category:details.category,source:material.dataset_kind==='fixture'?'verified_fixture':'verified',verification:profile?.verification??'reviewed',score:rank,highUse:Boolean(profile?.high_use)||useCount>=10,useCount,reason:rank===100?'Exact phrase match':'Potential specification match',preferredProductId:profile?.preferred_product_id?String(profile.preferred_product_id).toLowerCase():null,products:choices.map(product=>({id:String(product.id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,verification:product.verification})),provenance:{sourceUrl:details.row.source_url,verificationBasis:details.row.verification_basis,datasetKind:material.dataset_kind}};
   }).filter((row):row is NonNullable<typeof row>=>Boolean(row&&row.score>=85));
   return results.sort((a,b)=>b.score-a.score||Number(b.highUse)-Number(a.highUse)||Math.min(b.useCount,100)-Math.min(a.useCount,100)||a.description.localeCompare(b.description)).slice(0,20);
@@ -277,12 +286,12 @@ export function* selectDiscovery(p:Principal,data:unknown):Operation<any>{
 }
 export function* catalogPage(p:Principal,data:unknown):Operation<any>{
   admin(p);
-  const input=z.object({section:z.enum(['materials','translations','policies','images','batches','manufacturers']),page:z.number().int().min(1).max(100000).default(1),pageSize:z.number().int().min(1).max(100).default(25),text:z.string().trim().max(200).default(''),materialId:z.uuid().optional(),includeInactive:z.boolean().default(false),ruleScope:z.enum(['all','global']).default('all'),manufacturerIds:z.array(z.uuid()).max(100).optional()}).strict().parse(data);
+  const input=z.object({section:z.enum(['materials','translations','policies','images','batches','manufacturers']),page:z.number().int().min(1).max(100000).default(1),pageSize:z.number().int().min(1).max(100).default(25),text:z.string().trim().max(200).default(''),materialId:z.uuid().optional(),includeInactive:z.boolean().default(false),ruleScope:z.enum(['all','global']).default('all'),manufacturerIds:z.array(z.uuid()).max(100).optional(),ruleId:z.uuid().optional()}).strict().parse(data);
   let table='',columns='*',where='tenant=@p0',order='id';const values:unknown[]=[p.tenant];
   switch(input.section){
     case 'materials':table='materials';columns='id,external_key,description,product_uom,active';if(!input.includeInactive)where+=' AND active=1';if(input.text){const pattern='%'+input.text.toLowerCase().replace(/[!%_]/g,c=>'!'+c)+'%';values.push(pattern);where+=" AND (LOWER(description) LIKE @p1 ESCAPE '!' OR LOWER(external_key) LIKE @p1 ESCAPE '!')";}order='external_key,id';break;
     case 'translations':if(!input.materialId)throw new ApiError(400,'Choose a material first.');yield* materialById(p,input.materialId);table='translations';values.push(input.materialId);where+=' AND material_id=@p1';order='created_at DESC,id';break;
-    case 'policies':table='job_restrictions';if(input.ruleScope==='global')where+=' AND material_id IS NULL';order='project,id';break;
+    case 'policies':table='job_restrictions';if(input.ruleScope==='global')where+=' AND material_id IS NULL';if(input.materialId){yield* materialById(p,input.materialId);values.push(input.materialId);where+=' AND material_id=@p'+(values.length-1);}if(input.ruleId){values.push(input.ruleId);where+=' AND id=@p'+(values.length-1);}order='project,id';break;
     case 'manufacturers':table='manufacturers';columns='id,name';order='normalized,id';if(input.manufacturerIds){if(!input.manufacturerIds.length)where+=' AND 1=0';else{where+=' AND id IN ('+input.manufacturerIds.map(id=>{values.push(id);return '@p'+(values.length-1);}).join(',')+')';}}else if(input.text){values.push('%'+input.text.toLowerCase().replace(/[!%_]/g,c=>'!'+c)+'%');where+=" AND LOWER(name) LIKE @p1 ESCAPE '!'";}break;
     case 'images':table='image_references';break;
     case 'batches':table='catalog_batches';columns='id,state,report,created_at';order='created_at DESC,id';break;
@@ -299,13 +308,28 @@ export function* batchDetails(p:Principal,data:unknown):Operation<any>{
   const parsed=parseExtendedCsv(row.csv),pages=Math.max(1,Math.ceil(parsed.records.length/25)),page=Math.min(input.page,pages);
   return {id:String(row.id).toLowerCase(),state:row.state,report:JSON.parse(row.report),...(input.includeSource?{sourceCsv:row.csv}:{}),records:parsed.records.slice((page-1)*25,page*25),page,pages};
 }
+export const catalogExportTables=['materials','aliases','catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references','image_associations','import_batches'] as const;
+export function* catalogExportPage(p:Principal,data:unknown):Operation<any>{
+  admin(p);
+  const input=z.object({table:z.enum(catalogExportTables),pageSize:z.number().int().min(1).max(500).default(250),cursor:z.object({id:z.uuid(),normalized:z.string().min(1).max(200).optional()}).strict().optional()}).strict().parse(data);
+  const alias=input.table==='aliases',profile=input.table==='catalog_profiles';
+  if(input.cursor&&Boolean(input.cursor.normalized)!==alias)throw new ApiError(400,'Invalid export cursor for this table.');
+  const source=alias?'aliases a INNER JOIN materials m ON m.id=a.material_id':input.table;
+  const id=alias?'a.material_id':profile?'material_id':'id',columns=alias?'a.*,m.tenant':'*',scope=alias?'m.tenant':'tenant';
+  const values:unknown[]=[p.tenant];let where=`${scope}=@p0`;
+  if(input.cursor){values.push(input.cursor.id);where+=alias?` AND (${id}>@p1 OR (${id}=@p1 AND a.normalized>@p2))`:` AND ${id}>@p1`;if(alias)values.push(input.cursor.normalized);}
+  const limit=values.length;values.push(input.pageSize);
+  const rows=yield* query(`SELECT * FROM (SELECT ${columns},ROW_NUMBER() OVER(ORDER BY ${id}${alias?',a.normalized':''}) AS export_row FROM ${source} WHERE ${where}) export_page WHERE export_row<=@p${limit} ORDER BY export_row`,...values);
+  const records=rows.map(({export_row,...row})=>row),last=records.at(-1);
+  return {records,nextCursor:records.length===input.pageSize?{id:String(last![alias||profile?'material_id':'id']).toLowerCase(),...(alias?{normalized:last!.normalized}:{})}:null};
+}
 // A versioned review snapshot preserves inactive records and their provenance.
 // It is intentionally distinct from staged imports and database/blob recovery.
 export function* exportCatalogSnapshot(p:Principal):Operation<any>{
   admin(p);
   const tables:Record<string,RecordRow[]>={};
   let count=0;
-  for(const table of ['materials','aliases','catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references','image_associations','import_batches']){
+  for(const table of catalogExportTables){
     const source=table==='aliases'?'aliases a INNER JOIN materials m ON m.id=a.material_id':table;
     const scope=table==='aliases'?'m.tenant':'tenant';
     const columns=table==='aliases'?'a.*,m.tenant':'*';
@@ -321,6 +345,7 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
 }
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
   switch(action){
+    case 'export-page':return yield* catalogExportPage(p,data);
     case 'page':return yield* catalogPage(p,data);
     case 'batch-details':return yield* batchDetails(p,data);
     case 'export-snapshot':return yield* exportCatalogSnapshot(p);

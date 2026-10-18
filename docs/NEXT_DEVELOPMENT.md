@@ -13,7 +13,7 @@ The owner authorizes routine development and fixes for the agreed catalog/MRF po
 
 1. Deploy prepared session/project fix to the existing app and confirm save/reload and office isolation with the owner.
 2. Exercise cloud catalog import preview/apply/rollback and Azure Blob image review with a small owner-approved dataset. Preserve provisional AI provenance and rights review.
-3. Agree the external bulk-data exchange format when the owner's catalog is available; preserve canonical identity and manufacturer relationships. Relationship snapshot export and paged administration are implemented. Structured previews now include records, persisted history, resumable rollback and duplicate-identity validation. Search indexing and paged large snapshot export remain volume-dependent work.
+3. Agree the external bulk-data exchange format when the owner's catalog is available; preserve canonical identity and manufacturer relationships. Relationship snapshot export and paged administration are implemented. Structured previews now include records, persisted history, resumable rollback and duplicate-identity validation. Streaming exports now handle larger catalogs; search indexing remains volume-dependent work.
 4. Build provider-independent discovery integration and source-evidence handling using fixtures, leaving paid providers disabled. Real product specifications must cite a source; do not infer dimensions from part numbers.
 5. Validate cloud recovery and a second authorized account before broader pilot use.
 

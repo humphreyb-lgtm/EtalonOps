@@ -23,7 +23,7 @@ for(const width of [390,1440])test(`manufacturer preference, selection learning 
   await expect(admin.getByLabel(`Allow manufacturer Fixture Maker ${unique}`,{exact:true})).toBeChecked();
   await admin.getByLabel('Activate this restriction for the selected job',{exact:true}).check();
   await admin.getByRole('button',{name:'Save job product restriction',exact:true}).click();await expect(admin.getByRole('status')).toContainText('Job restriction saved');
-  const rules=await command('page',{section:'policies'});expect(rules.records.filter((row:{id:string})=>row.id.toLowerCase()===rule.id.toLowerCase())).toHaveLength(1);
+  const rules=await command('page',{section:'policies',materialId:material.id});expect(rules.records.filter((row:{id:string})=>row.id.toLowerCase()===rule.id.toLowerCase())).toHaveLength(1);
   expect(rules.records.find((row:{id:string})=>row.id.toLowerCase()===rule.id.toLowerCase()).enabled).toBeTruthy();
   await command('disable-policy',{id:rule.id});
   await admin.getByRole('heading',{name:material.description,exact:true}).scrollIntoViewIfNeeded();mkdirSync('artifacts/screenshots',{recursive:true});await page.screenshot({path:`artifacts/screenshots/${width}-manufacturer-admin.png`,fullPage:true});

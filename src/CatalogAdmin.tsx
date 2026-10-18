@@ -1,7 +1,7 @@
 import { CatalogRelationships } from './CatalogRelationships';
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { databaseMode, request, downloadCatalog, downloadCatalogSnapshot, type ImportBatch, type ImportPreview } from './api';
+import { databaseMode, request, downloadCatalog, downloadCatalogSnapshot, downloadLargeCatalog, supportsLargeCatalogExport, type ImportBatch, type ImportPreview } from './api';
 import { AIUsage } from './AIUsage';
 import { ImageAdmin } from './ImageAdmin';
 import { cloudMode } from './cloud-auth';
@@ -36,6 +36,7 @@ export function CatalogAdmin() {
       <p>Import a reviewed initial dataset. Searches, conversations and foreman selections never create verified mappings. Image approvals are separate.</p>
       {!cloudMode && <p className="muted">Local test database. Fictional fixtures are permitted here only.</p>}
       {error && <p className="error-message" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
+      <div className="catalog-actions"><button className="button" disabled={busy||!supportsLargeCatalogExport()} onClick={()=>void run(async()=>{const saved=await downloadLargeCatalog(count=>setNotice(`Exporting catalog: ${count} records…`));setNotice(saved?'Large catalog export saved. Image files are separate.':'Catalog export canceled.');})}>Export large catalog to file</button></div><p className="muted">Large exports save directly to disk in desktop Chrome or Edge. The regular JSON snapshot is also available. Catalog exports contain image metadata; image files are separate.</p>
       {cloudMode&&<div className="catalog-actions"><button className="button" disabled={busy} onClick={()=>void run(async()=>{await downloadCatalogSnapshot();setNotice('Catalog relationships downloaded. Image files are separate.');})}>Export catalog relationships</button></div>}
       {!cloudMode&&<><fieldset disabled={busy} className="catalog-fields"><legend>Review a CSV batch</legend>
         <label htmlFor="catalog-file">Choose CSV file (maximum 500 KB)</label><input id="catalog-file" type="file" accept=".csv,text/csv" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setPreview(null); setReviewed(false); void run(async () => { if (file.size > 500000) throw new Error('CSV file exceeds 500 KB. Split it into reviewed batches.'); changeCsv(await file.text()); }); }} />

@@ -463,3 +463,5 @@ dialog::backdrop { background: #14203c55; }
 .result-product {display:block; margin-top:8px; font-size:12px; } .result-product select {display:block; width:100%; max-width:100%; margin-top:4px; }
 .line-manufacturer { font-size:12px; line-height:1.5; margin:6px 0; overflow-wrap:anywhere; }
 @media(max-width:600px){.purchasing-fields input,.purchasing-fields select,.result-product select { min-height:44px; }.catalog-relationships {overflow-wrap:anywhere;} }
+.product-photo-slot { display:inline-flex; max-width:100%; vertical-align:middle; }
+.image-review-photo .product-photo-slot { display:flex; width:100%; }

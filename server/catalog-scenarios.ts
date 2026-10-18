@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { stringify } from 'csv-stringify/sync';
 import type { Repository } from './repository';
 import { draftBody,type Principal } from './contracts';
@@ -10,6 +11,34 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+{name:'many-material searches preserve frequency priority, ambiguous phrases and exact brand parts',run:async store=>{
+ const {admin,user}=people();await store.member(user,'riverside');const ids:string[]=[];
+ for(let i=0;i<40;i++)ids.push((await store.catalogCommand(admin,'material',{externalKey:`group-${i}`,category:'general',attributes:{type:`Fictional grouping item ${i}`,specification:`Synthetic attributes ${i}`},productUnit:'EA',verification:'provisional',sourceUrl:'https://example.invalid/spec',verificationBasis:'Synthetic test data, not real specifications.'})).id);
+ const phrases=csv('translation',ids.flatMap((_,i)=>[{materialKey:`group-${i}`,phrase:'common stock phrase',origin:'admin_reviewed'},{materialKey:`group-${i}`,phrase:`grouping search ${i}`,origin:'admin_reviewed'}]));
+ const batch=await store.catalogCommand(admin,'preview',{csv:phrases});await store.catalogCommand(admin,'apply',{id:batch.id,approval:'I reviewed this batch'});
+ await store.catalogCommand(admin,'priority',{materialId:ids[39],highUse:true,preferredProductId:null});
+ for(let i=0;i<12;i++)await store.catalogCommand(user,'selection',{eventId:randomUUID(),projectId:'riverside',materialId:ids[7],productId:null,phrase:'common stock phrase'});
+ const results=await store.search(user,'common stock phrase','riverside');assert.equal(results.length,20);assert.equal(results[0].id,ids[7]);assert.equal(results[0].useCount,12);assert.equal(results[1].id,ids[39]);assert.ok(results.every(row=>row.score===100));
+ const prod=await store.catalogCommand(admin,'product',product('group-37','Fixture A','SCALE-37'));
+ const exact=await store.search(user,'Fixture A SCALE-37','riverside');assert.equal(exact.length,1);assert.equal(exact[0].id,ids[37]);assert.equal(exact[0].products[0].id,prod.id);
+ assert.equal((await store.search(user,'grouping search 18','riverside'))[0].id,ids[18]);
+}},
+{name:'export cursor pages preserve composite aliases and SQL GUID ordering without overlap',run:async store=>{
+ const {admin,user,foreign}=people();
+ const fixture=readFileSync(new URL('../db/fixtures/catalog.csv',import.meta.url),'utf8');const batch=await store.previewImport(admin,fixture);await store.applyImport(admin,batch.id,'I reviewed this batch',true);
+ await store.catalogCommand(admin,'material',material('canonical'));await store.catalogCommand(admin,'material',bracket());
+ for(const table of ['materials','aliases','catalog_profiles']){
+  let cursor:unknown=undefined;const rows:any[]=[];
+  do{const page=await store.catalogCommand(admin,'export-page',{table,pageSize:2,...(cursor?{cursor}:{})});assert.ok(page.records.length<=2);rows.push(...page.records);cursor=page.nextCursor;}while(cursor);
+  const snapshot=(await store.catalogCommand(admin,'export-snapshot',{})).tables[table];assert.equal(rows.length,snapshot.length);
+  const identities=rows.map(row=>table==='aliases'?row.material_id.toLowerCase()+'|'+row.normalized:(row.id??row.material_id).toLowerCase());assert.equal(new Set(identities).size,rows.length);
+  assert.ok(rows.every(row=>row.tenant===admin.tenant));assert.equal((await store.catalogCommand(foreign,'export-page',{table})).records.length,0);
+ }
+ await assert.rejects(async()=>store.catalogCommand(user,'export-page',{table:'materials'}),/Administrator/);
+ await assert.rejects(async()=>store.catalogCommand(admin,'export-page',{table:'memberships'}));
+ await assert.rejects(async()=>store.catalogCommand(admin,'export-page',{table:'aliases',cursor:{id:randomUUID()}}),/cursor/);
+ await assert.rejects(async()=>store.catalogCommand(admin,'export-page',{table:'materials',pageSize:501}));
+}},
 {name:'job-wide and category manufacturer rules preserve scope and default inactive',run:async store=>{
  const {admin,user,foreign}=people();await store.member(user,'riverside');
  const pvc=await store.catalogCommand(admin,'material',material()),support=await store.catalogCommand(admin,'material',bracket());
@@ -23,6 +52,7 @@ export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>
  assert.equal((await validate(support.id,bracketB.id,'TEST-BRACKET')).ready,true);
  await store.catalogCommand(admin,'policy',{...input,id:rule.id,enabled:true});assert.equal((await validate(support.id,bracketB.id,'TEST-BRACKET')).ready,false);
  await store.catalogCommand(admin,'policy',{...input,id:rule.id,category:'conduit',enabled:true});assert.equal((await validate(support.id,bracketB.id,'TEST-BRACKET')).ready,true);assert.equal((await validate(pvc.id,b.id,'TEST-B')).ready,false);
+ assert.equal((await store.catalogCommand(admin,'page',{section:'policies',ruleId:rule.id})).total,1);assert.equal((await store.catalogCommand(foreign,'page',{section:'policies',ruleId:rule.id})).total,0);
  const rules=await store.catalogCommand(admin,'page',{section:'policies',ruleScope:'global'});assert.equal(rules.total,1);assert.equal(rules.records[0].category,'conduit');
  await store.catalogCommand(admin,'disable-policy',{id:rule.id});assert.equal((await validate(pvc.id,b.id,'TEST-B')).ready,true);
 }},

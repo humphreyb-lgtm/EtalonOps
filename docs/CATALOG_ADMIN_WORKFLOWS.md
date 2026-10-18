@@ -27,3 +27,13 @@ No migrations, additional services, paid AI requests or new costs are introduced
 ## Explicit inch measurements
 
 Manual specification entry accepts positive decimal inches and explicit fractions, including common Unicode fractions. For example, `15 3/4`, `15¾` and `15.75` all produce 15.75 inches. Measurements are not extracted from manufacturer part numbers, and other units are rejected rather than converted. Actual bracket spread and optional nominal spacing remain separately recorded. Structured imports retain their explicit numeric inch contract.
+
+## Search relationship grouping
+
+Search now groups profiles, translations, products, usage counts and applicable rules once per request rather than repeatedly scanning all those arrays for each material. It preserves exact phrase ranking, specification constraints, brand/part filtering, job rules, frequency-derived high use and administrator priority. Duplicate phrase scoring and spread-argument limits are avoided. This reduces repeated CPU work but still loads tenant catalog data; it is not a database full-text index or a claim of enterprise-scale latency. Multi-material regression scenarios run on both SQLite and SQL Server.
+
+Restriction history follows the selected material. After a job/category manufacturer rule is saved, its history view focuses that rule until the administrator refreshes the full list. This keeps newly saved rules discoverable after the catalog has accumulated more than one page of history; editing still updates the existing ID.
+
+## Long MRF photo loading
+
+Product photos now begin loading when they approach the viewport, including inside scrollable review dialogs. Offscreen MRF rows retain placeholders until needed. Object URLs and observers are released on unmount or scope change. This prevents long saved drafts from consuming the account request budget merely by opening or reloading a page; request limits and image authorization remain unchanged. An 80-line browser regression checks request counts before and after scrolling, and approved/pending/rejected image workflows remain covered.

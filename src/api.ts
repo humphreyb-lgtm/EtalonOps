@@ -1,3 +1,4 @@
+import { catalogStreamValidator } from './catalog-stream';
 import type { Candidate, Draft } from './domain';
 import { cloudMode, cloudToken } from './cloud-auth';
 
@@ -48,6 +49,26 @@ export async function downloadCatalogSnapshot() {
   const url=URL.createObjectURL(await response.blob());
   const link=document.createElement('a');link.href=url;link.download='etalonops-catalog-snapshot.json';link.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+type ExportWriter={write(chunk:Uint8Array):Promise<void>;close():Promise<void>;abort():Promise<void>};
+type ExportPicker={showSaveFilePicker?:(options:unknown)=>Promise<{createWritable():Promise<ExportWriter>}>};
+export function supportsLargeCatalogExport(){return typeof (window as unknown as ExportPicker).showSaveFilePicker==='function';}
+export async function downloadLargeCatalog(progress:(count:number)=>void=()=>{}):Promise<boolean>{
+ const picker=(window as unknown as ExportPicker).showSaveFilePicker;
+ if(!picker)throw new Error('Large exports require a desktop browser with direct file saving, such as Chrome or Edge.');
+ let handle:Awaited<ReturnType<NonNullable<ExportPicker['showSaveFilePicker']>>>;
+ try{handle=await picker.call(window,{suggestedName:'etalonops-catalog-stream.jsonl',types:[{description:'Catalog records (JSON Lines)',accept:{'application/x-ndjson':['.jsonl']}}]});}
+ catch(error){if(error instanceof DOMException&&error.name==='AbortError')return false;throw error;}
+ const controller=new AbortController();let writer:ExportWriter|undefined;
+ try{
+  const response=await fetch('/api/admin/catalog-stream.jsonl',{headers:{Authorization:`Bearer ${await accessToken()}`},signal:controller.signal});
+  if(!response.ok){const error=await response.json();throw new Error(error.error??'Catalog export failed.');}
+  if(!response.body)throw new Error('Streaming downloads are unavailable in this browser.');
+  writer=await handle.createWritable();const reader=response.body.getReader(),validate=catalogStreamValidator();let reported=0;
+  while(true){const part=await reader.read();if(part.done)break;const count=validate.push(part.value);await writer.write(part.value);if(count-reported>=250){progress(count);reported=count;}}
+  const count=validate.finish();await writer.close();writer=undefined;progress(count);return true;
+ }catch(error){controller.abort();if(writer)try{await writer.abort();}catch{}throw error;}
 }
 
 export type ImageRecord = { id: string; materialId: string; productId?:string|null; contentHash: string; sourceUrl: string; rightsBasis: string; status: 'pending'|'approved'|'rejected'; reviewer: string|null; reviewedAt: string|null };

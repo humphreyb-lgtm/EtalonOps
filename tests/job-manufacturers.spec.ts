@@ -17,6 +17,6 @@ for(const width of [390,1440])test(`job manufacturer rules are prepared inactive
  await expect(region.getByRole('button',{name:`Remove allowed manufacturer ${name}`,exact:true})).toBeVisible();
  await region.getByLabel('Manufacturer rule scope',{exact:true}).selectOption('category');await region.getByLabel('Restricted material category',{exact:true}).selectOption('box');
  await region.getByRole('button',{name:'Save job manufacturer rule',exact:true}).click();await expect(region.getByRole('status')).toContainText('Manufacturer rule saved');
- const history=await command('page',{section:'policies',ruleScope:'global'});const saved=history.records.filter((r:{id:string})=>r.id.toLowerCase()===rule.id.toLowerCase());expect(saved).toHaveLength(1);expect(saved[0].category).toBe('box');expect(Boolean(saved[0].enabled)).toBe(false);
+ const history=await command('page',{section:'policies',ruleScope:'global',ruleId:rule.id});const saved=history.records.filter((r:{id:string})=>r.id.toLowerCase()===rule.id.toLowerCase());expect(saved).toHaveLength(1);expect(saved[0].category).toBe('box');expect(Boolean(saved[0].enabled)).toBe(false);
  const accessibility=await new AxeBuilder({page}).include('.catalog-modal').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(accessibility.violations).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

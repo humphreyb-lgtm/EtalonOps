@@ -1,3 +1,4 @@
+import { catalogExportRoutes } from './catalog-export';
 import express from 'express';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
@@ -45,6 +46,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   });
   app.use('/api',rateLimit({windowMs:60_000,limit:600,standardHeaders:'draft-8',legacyHeaders:false,keyGenerator:(_req,res)=>`${res.locals.principal.tenant}/${res.locals.principal.oid}`,handler:(_req,res)=>{res.status(429).json({error:'Account request limit reached. Wait a minute before retrying.'});}}));
   const principal = (res: express.Response): Principal => res.locals.principal;
+  catalogExportRoutes(app,store);
   imageRoutes(app,store,services.images);
   aiRoutes(app,store,services.ai);
   app.post('/api/catalog/:action',async(req,res)=>res.json(await store.catalogCommand(principal(res),z.string().parse(req.params.action),req.body)));
