@@ -1,0 +1,10 @@
+CREATE TABLE companies(tenant TEXT NOT NULL,id TEXT NOT NULL,name TEXT NOT NULL,active INTEGER NOT NULL,details TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(tenant,id));
+CREATE TABLE jobs(tenant TEXT NOT NULL,id TEXT NOT NULL,company_id TEXT NOT NULL,number TEXT NOT NULL,name TEXT NOT NULL,status TEXT NOT NULL,details TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(tenant,id),UNIQUE(tenant,company_id,number));
+CREATE TABLE user_profiles(tenant TEXT NOT NULL,oid TEXT NOT NULL,company_id TEXT NOT NULL,access_role TEXT NOT NULL,details TEXT NOT NULL,PRIMARY KEY(tenant,oid));
+ALTER TABLE memberships ADD COLUMN job_role TEXT;
+ALTER TABLE memberships ADD COLUMN supervisor_oid TEXT;
+ALTER TABLE memberships ADD COLUMN top_level INTEGER;
+CREATE TABLE site_credentials(tenant TEXT NOT NULL,oid TEXT NOT NULL,email TEXT NOT NULL,password_hash TEXT,version INTEGER NOT NULL,PRIMARY KEY(tenant,oid),UNIQUE(tenant,email));
+CREATE TABLE account_tokens(tenant TEXT NOT NULL,token_hash TEXT NOT NULL,oid TEXT NOT NULL,kind TEXT NOT NULL,expires_at TEXT NOT NULL,PRIMARY KEY(tenant,token_hash));
+CREATE TABLE account_sessions(tenant TEXT NOT NULL,token_hash TEXT NOT NULL,oid TEXT NOT NULL,credential_version INTEGER NOT NULL,expires_at TEXT NOT NULL,PRIMARY KEY(tenant,token_hash));
+CREATE TABLE account_limits(tenant TEXT NOT NULL,email TEXT NOT NULL,attempts INTEGER NOT NULL,expires_at TEXT NOT NULL,PRIMARY KEY(tenant,email));

@@ -1,0 +1,13 @@
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+IF EXISTS(SELECT 1 FROM dbo.schema_migrations WHERE version=12) BEGIN COMMIT; RETURN; END;
+CREATE TABLE dbo.companies(tenant nvarchar(64) NOT NULL,id nvarchar(64) NOT NULL,name nvarchar(200) NOT NULL,active bit NOT NULL,details nvarchar(max) NOT NULL,version int NOT NULL,PRIMARY KEY(tenant,id));
+CREATE TABLE dbo.jobs(tenant nvarchar(64) NOT NULL,id nvarchar(64) NOT NULL,company_id nvarchar(64) NOT NULL,number nvarchar(80) NOT NULL,name nvarchar(200) NOT NULL,status varchar(16) NOT NULL,details nvarchar(max) NOT NULL,version int NOT NULL,PRIMARY KEY(tenant,id),UNIQUE(tenant,company_id,number));
+CREATE TABLE dbo.user_profiles(tenant nvarchar(64) NOT NULL,oid nvarchar(64) NOT NULL,company_id nvarchar(64) NOT NULL,access_role varchar(24) NOT NULL,details nvarchar(max) NOT NULL,PRIMARY KEY(tenant,oid));
+ALTER TABLE dbo.memberships ADD job_role varchar(24) NULL,supervisor_oid nvarchar(64) NULL,top_level bit NULL;
+CREATE TABLE dbo.site_credentials(tenant nvarchar(64) NOT NULL,oid nvarchar(64) NOT NULL,email nvarchar(254) NOT NULL,password_hash nvarchar(300) NULL,version int NOT NULL,PRIMARY KEY(tenant,oid),UNIQUE(tenant,email));
+CREATE TABLE dbo.account_tokens(tenant nvarchar(64) NOT NULL,token_hash char(64) NOT NULL,oid nvarchar(64) NOT NULL,kind varchar(16) NOT NULL,expires_at nvarchar(30) NOT NULL,PRIMARY KEY(tenant,token_hash));
+CREATE TABLE dbo.account_sessions(tenant nvarchar(64) NOT NULL,token_hash char(64) NOT NULL,oid nvarchar(64) NOT NULL,credential_version int NOT NULL,expires_at nvarchar(30) NOT NULL,PRIMARY KEY(tenant,token_hash));
+CREATE TABLE dbo.account_limits(tenant nvarchar(64) NOT NULL,email nvarchar(254) NOT NULL,attempts int NOT NULL,expires_at nvarchar(30) NOT NULL,PRIMARY KEY(tenant,email));
+INSERT dbo.schema_migrations(version) VALUES(12);
+COMMIT;
