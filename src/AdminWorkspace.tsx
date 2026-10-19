@@ -56,7 +56,7 @@ export function AdminWorkspace() {
   if (!allowed) return null;
   return <><button ref={trigger} className="button" onClick={() => void enter()}><Settings size={18} aria-hidden="true"/> Administration</button>
     {!open && error && <p role="alert">{error}</p>}
-    <dialog ref={dialog} className="admin-workspace" aria-labelledby="admin-workspace-title" onCancel={event => {event.preventDefault();close();}}>
+    <dialog ref={dialog} className={`admin-workspace ${section==='materials'?'material-table-workspace':''}`} aria-labelledby="admin-workspace-title" onCancel={event => {event.preventDefault();close();}}>
       <header className="modal-heading"><div><h2 id="admin-workspace-title" ref={heading} tabIndex={-1}>Administration</h2><p>EtalonOps management</p></div><button className="button" onClick={close}><X size={18} aria-hidden="true"/> Return to MRF</button></header>
       <nav aria-label="Administration sections" className="admin-sections">{sections.map(([id,label]) => <button key={id} className={`button ${section===id?'primary':''}`} aria-current={section===id?'page':undefined} onClick={() => choose(id)}>{label}</button>)}</nav>
       {error && <p role="alert">{error}</p>}
