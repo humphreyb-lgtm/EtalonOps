@@ -27,7 +27,7 @@ const reference = z.string().trim().min(1).max(100);
 const https = z.url().max(2000).refine(v=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password;}catch{return false;}},'Use a public HTTPS evidence URL.');
 const verification = z.enum(['provisional','reviewed']);
 const attributeValue = z.union([z.string().trim().min(1).max(200),z.number().finite().nonnegative()]);
-export const materialInput = z.object({externalKey:reference,category:z.string().regex(/^[a-z][a-z0-9-]{0,59}$/),attributes:z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9]{0,39}$/),attributeValue).refine(v=>Object.keys(v).length>0&&Object.keys(v).length<=25),productUnit:z.enum(['EA','FT','STICK','BOX','ROLL','PAIR']),verification,origin:z.enum(['admin_reviewed','ai_import','ai_discovery']).default('admin_reviewed'),sourceUrl:z.union([https,z.literal('')]),verificationBasis:z.string().trim().min(10).max(2000)}).strict().refine(value=>Boolean(value.sourceUrl)||value.origin==='admin_reviewed','AI-origin materials require a source URL.');
+export const materialInput = z.object({externalKey:reference,displayDescription:z.string().trim().min(1).max(2000).nullable().optional(),category:z.string().regex(/^[a-z][a-z0-9-]{0,59}$/),attributes:z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9]{0,39}$/),attributeValue).refine(v=>Object.keys(v).length>0&&Object.keys(v).length<=25),productUnit:z.enum(['EA','FT','STICK','BOX','ROLL','PAIR']),verification,origin:z.enum(['admin_reviewed','ai_import','ai_discovery']).default('admin_reviewed'),sourceUrl:z.union([https,z.literal('')]),verificationBasis:z.string().trim().min(10).max(2000)}).strict().refine(value=>Boolean(value.sourceUrl)||value.origin==='admin_reviewed','AI-origin materials require a source URL.');
 export type MaterialInput=z.infer<typeof materialInput>;
 export const productInput=z.object({materialKey:reference,manufacturer:name,partNumber:name,title:z.string().trim().min(1).max(500),details:productDetailsSchema.optional(),sourceUrl:https,verification,origin:z.enum(['admin_reviewed','ai_import','ai_discovery']).default('admin_reviewed')}).strict();
 export const translationInput=z.object({materialKey:reference,phrase:z.string().trim().min(1).max(500),origin:z.enum(['admin_reviewed','ai_import','ai_generated']),sourceUrl:https.optional()}).strict().superRefine((v,c)=>{if(v.origin!=='admin_reviewed'&&!v.sourceUrl)c.addIssue({code:'custom',message:'AI phrases need source evidence.'});});
@@ -81,14 +81,15 @@ export function* createMaterial(p:Principal,data:unknown,dry=false):Operation<an
   // Legacy materials are not blindly merged based on wording. Identical descriptions
   // require an explicit profile review before adding another record.
   if((yield* query('SELECT id FROM materials WHERE tenant=@p0 AND description=@p1 AND active=1',p.tenant,built.description)).length)throw new ApiError(409,'Matching legacy description requires identity review.');
-  if(dry)return {description:built.description};
+  if(dry)return {description:input.displayDescription??built.description};
   let batch=(yield* query('SELECT id FROM import_batches WHERE tenant=@p0 AND hash=@p1',p.tenant,digest('catalog-v2-materials')))[0];
   if(!batch){batch={id:randomUUID()};yield* query("INSERT INTO import_batches(id,tenant,hash,state,[file],report) VALUES(@p0,@p1,@p2,'applied',@p3,@p4)",batch.id,p.tenant,digest('catalog-v2-materials'),'',JSON.stringify({rows:0,errors:[],kind:'structured'}));}
   const id=randomUUID();
-  const row={schema_version:'1',external_key:input.externalKey,description:built.description,aliases_json:JSON.stringify([built.description]),requested_uom:input.productUnit,product_uom:input.productUnit,manufacturer:'',manufacturer_part_number:'',specifications_json:JSON.stringify(Object.entries(input.attributes).map(([k,v])=>`${k}: ${v}`)),conversion_basis_json:'null',source_url:input.sourceUrl,verification_basis:input.verificationBasis,dataset_kind:'reviewed'};
-  yield* query('INSERT INTO materials(id,tenant,external_key,description,product_uom,details,dataset_kind,batch_id,active) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,1)',id,p.tenant,input.externalKey,built.description,input.productUnit,JSON.stringify({row,specs:JSON.parse(row.specifications_json),category:input.category==='conduit'?'conduit':'general'}),'reviewed',batch.id);
+  const displayDescription=input.displayDescription??built.description;
+  const row={schema_version:'1',external_key:input.externalKey,description:displayDescription,aliases_json:JSON.stringify([...new Set([built.description,displayDescription])]),requested_uom:input.productUnit,product_uom:input.productUnit,manufacturer:'',manufacturer_part_number:'',specifications_json:JSON.stringify(Object.entries(input.attributes).map(([k,v])=>`${k}: ${v}`)),conversion_basis_json:'null',source_url:input.sourceUrl,verification_basis:input.verificationBasis,dataset_kind:'reviewed'};
+  yield* query('INSERT INTO materials(id,tenant,external_key,description,product_uom,details,dataset_kind,batch_id,active) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,1)',id,p.tenant,input.externalKey,displayDescription,input.productUnit,JSON.stringify({displayDescription:input.displayDescription??null,row,specs:JSON.parse(row.specifications_json),category:input.category==='conduit'?'conduit':'general'}),'reviewed',batch.id);
   yield* query('INSERT INTO catalog_profiles(material_id,tenant,identity_key,attributes,verification,high_use) VALUES(@p0,@p1,@p2,@p3,@p4,0)',id,p.tenant,built.identity,JSON.stringify({category:input.category,...input.attributes,recordOrigin:input.origin}),input.verification);
-  yield* audit(p,input.origin==='admin_reviewed'?'catalog.material_created':'catalog.material_ai_created',id);return {id,description:built.description,unchanged:false};
+  yield* audit(p,input.origin==='admin_reviewed'?'catalog.material_created':'catalog.material_ai_created',id);return {id,description:displayDescription,unchanged:false};
 }
 // Brand spelling and legal suffix variations are not new manufacturers. Ambiguous aliases require review.
 export function manufacturerIdentity(value:string){return key(value).replace(/[^\p{L}\p{N}]+/gu,' ').trim().replace(/(?:\s+(?:inc|incorporated|corp|corporation|llc|ltd|limited))+$/,'').trim();}
@@ -134,8 +135,11 @@ export function* materialDetails(p:Principal,id:string,projectId?:string):Operat
   const profile=(yield* query('SELECT * FROM catalog_profiles WHERE material_id=@p0 AND tenant=@p1',id,p.tenant))[0];
   const products=yield* query('SELECT p.*,m.name AS manufacturer FROM manufacturer_products p JOIN manufacturers m ON m.id=p.manufacturer_id AND m.tenant=p.tenant WHERE p.tenant=@p0 AND p.material_id=@p1 AND p.active=1',p.tenant,id);
   for(const product of products){product.allowed=true;if(projectId)try{yield* validatePurchase(p,projectId,id,{productId:String(product.id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,noSubstitutions:false});}catch(error){if(!(error instanceof ApiError))throw error;product.allowed=false;}}
-  const evidence=JSON.parse(material.details).row??{};
-  return {id,externalKey:material.external_key,description:material.description,active:Boolean(material.active),productUnit:material.product_uom,sourceUrl:evidence.source_url??'',verificationBasis:evidence.verification_basis??'',attributes:profile?JSON.parse(profile.attributes):{},verification:profile?.verification??'reviewed',highUse:Boolean(profile?.high_use),preferredProductId:profile?.preferred_product_id?String(profile.preferred_product_id).toLowerCase():null,products:products.map(product=>({id:String(product.id).toLowerCase(),manufacturerId:String(product.manufacturer_id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,title:product.title,sourceUrl:product.source_url,details:JSON.parse(product.details_json??'{}'),verification:product.verification,allowed:product.allowed}))};
+  const storedDetails=JSON.parse(material.details),evidence=storedDetails.row??{},attributes=profile?JSON.parse(profile.attributes):{};
+  let generatedDescription=material.description;
+  if(attributes.category)try{generatedDescription=describeMaterial({externalKey:material.external_key,category:attributes.category,productUnit:material.product_uom,attributes:Object.fromEntries(Object.entries(attributes).filter(([key])=>!['category','recordOrigin'].includes(key))) as Record<string,string|number>,sourceUrl:evidence.source_url??'',verificationBasis:evidence.verification_basis??'',verification:profile?.verification??'provisional',origin:'admin_reviewed'}).description;}catch{/* Legacy records retain their existing description until structured review. */}
+
+  return {id,externalKey:material.external_key,description:material.description,generatedDescription,displayDescription:storedDetails.displayDescription??null,active:Boolean(material.active),productUnit:material.product_uom,sourceUrl:evidence.source_url??'',verificationBasis:evidence.verification_basis??'',attributes:profile?JSON.parse(profile.attributes):{},verification:profile?.verification??'reviewed',highUse:Boolean(profile?.high_use),preferredProductId:profile?.preferred_product_id?String(profile.preferred_product_id).toLowerCase():null,products:products.map(product=>({id:String(product.id).toLowerCase(),manufacturerId:String(product.manufacturer_id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,title:product.title,sourceUrl:product.source_url,details:JSON.parse(product.details_json??'{}'),verification:product.verification,allowed:product.allowed}))};
 }
 export function* setPriority(p:Principal,data:unknown):Operation<any>{
   admin(p);const input=z.object({materialId:z.uuid(),highUse:z.boolean(),preferredProductId:z.uuid().nullable()}).strict().parse(data);const m=yield* materialById(p,input.materialId);
@@ -336,7 +340,11 @@ export function* correctCatalog(p:Principal,kind:'material'|'product'|'merge',da
   if(mode==='metadata'&&input.material.externalKey!==m.external_key)throw new ApiError(400,'Keep the stable key for a metadata correction.');
   if(mode==='replacement'&&key(input.material.externalKey)===key(m.external_key))throw new ApiError(400,'A specification change needs a new stable material key; the old key is retained for history.');
   const origin=profile?JSON.parse(profile.attributes).recordOrigin??'admin_reviewed':'admin_reviewed';
-  before={material:m,profile:profile??null};after={...input.material,origin,verification:'provisional',description:built.description};impact=yield* materialImpact(p,input.id);
+  const previousDetails=JSON.parse(m.details),oldAttributes=profile?JSON.parse(profile.attributes):{};
+  const ordered=(value:Record<string,unknown>)=>JSON.stringify(Object.entries(value).filter(([key])=>!['category','recordOrigin'].includes(key)).sort(([a],[b])=>a.localeCompare(b)));
+  const descriptionOnly=mode==='metadata'&&input.material.displayDescription!==undefined&&input.material.category===oldAttributes.category&&input.material.productUnit===m.product_uom&&ordered(input.material.attributes)===ordered(oldAttributes)&&input.material.sourceUrl===(previousDetails.row?.source_url??'')&&input.material.verificationBasis===(previousDetails.row?.verification_basis??'');
+  const override=input.material.displayDescription!==undefined?input.material.displayDescription:mode==='metadata'?(previousDetails.displayDescription??null):null;
+  before={material:m,profile:profile??null};after={...input.material,origin,displayDescription:override,verification:descriptionOnly?(profile?.verification??'provisional'):'provisional',description:override??built.description,descriptionOnly};impact=yield* materialImpact(p,input.id);
   let existing=(yield* query('SELECT material_id FROM catalog_profiles WHERE tenant=@p0 AND identity_key=@p1',p.tenant,built.identity))[0];
   if(!existing){const profiles=yield* query('SELECT p.material_id,p.attributes FROM catalog_profiles p JOIN materials m ON m.id=p.material_id AND m.tenant=p.tenant WHERE p.tenant=@p0 AND m.product_uom=@p1',p.tenant,input.material.productUnit);const matches=profiles.filter(row=>{const attributes=JSON.parse(row.attributes);return attributes.category===input.material.category&&materialIdentity(input.material.category,input.material.productUnit,attributes)===built.identity;});if(matches.length>1)throw new ApiError(409,'Several existing materials share these specifications. Resolve duplicate material records before importing.');existing=matches[0];}
   if(existing&&String(existing.material_id).toLowerCase()!==input.id.toLowerCase()){after.existingTarget=yield* materialById(p,String(existing.material_id).toLowerCase());if(!after.existingTarget.active)throw new ApiError(409,'The matching canonical material is retired. Review it separately before correcting this item.');}
@@ -361,18 +369,18 @@ export function* correctCatalog(p:Principal,kind:'material'|'product'|'merge',da
   before={source,target,sourceProfile:sourceProfile??null,targetProfile};after={targetId:input.targetId,phrases:input.phrases,specifications:input.specifications};mode='retire-duplicate';
  }
  const previewHash=digest(JSON.stringify({kind,before,after,impact,reason:input.reason}));
- if(!apply)return {kind,mode,previewHash,before,after,impact,requiresReview:true};
+ if(!apply)return {kind,mode,previewHash,before,after,impact,description:after.description,descriptionOnly:after.descriptionOnly??false,requiresReview:true};
  if(input.approval!=='I reviewed the correction and historical impact')throw new ApiError(400,'Explicit correction review is required.');
  if(input.expectedHash!==previewHash)throw new ApiError(409,'The catalog or correction changed. Preview it again; nothing was changed.');
  let replacement:string|null=null;
  if(kind==='material'){
   if(mode==='replacement'){
    yield* query('UPDATE materials SET active=0 WHERE tenant=@p0 AND id=@p1',p.tenant,input.id);
-   const {description,existingTarget,...material}=after;const created=yield* createMaterial(p,material);replacement=created.id;
+   const {description,existingTarget,descriptionOnly,...material}=after;const created=yield* createMaterial(p,material);replacement=created.id;
   }else{
    const old=JSON.parse(before.material.details),row={...old.row,description:after.description,source_url:after.sourceUrl,verification_basis:after.verificationBasis,specifications_json:JSON.stringify(Object.entries(after.attributes).map(([k,v])=>`${k}: ${v}`))};
-   yield* query('UPDATE materials SET description=@p0,details=@p1 WHERE tenant=@p2 AND id=@p3',after.description,JSON.stringify({...old,row,specs:JSON.parse(row.specifications_json)}),p.tenant,input.id);
-   yield* query("UPDATE catalog_profiles SET attributes=@p0,verification='provisional' WHERE tenant=@p1 AND material_id=@p2",JSON.stringify({category:after.category,...after.attributes,recordOrigin:after.origin}),p.tenant,input.id);
+   yield* query('UPDATE materials SET description=@p0,details=@p1 WHERE tenant=@p2 AND id=@p3',after.description,JSON.stringify({...old,displayDescription:after.displayDescription,row,specs:JSON.parse(row.specifications_json)}),p.tenant,input.id);
+   yield* query("UPDATE catalog_profiles SET attributes=@p0,verification=@p1 WHERE tenant=@p2 AND material_id=@p3",JSON.stringify({category:after.category,...after.attributes,recordOrigin:after.origin}),after.verification,p.tenant,input.id);
   }
  }else if(kind==='product'){
   if(mode==='replacement'){

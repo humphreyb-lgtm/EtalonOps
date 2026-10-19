@@ -631,3 +631,6 @@ dialog::backdrop { background: #14203c55; }
 .material-table-filters label,.material-categories-admin label { font-size:11px; }
 .admin-workspace .material-table-filters input,.admin-workspace .material-table-filters select,.admin-workspace .material-categories-admin input:not([type=checkbox]),.admin-workspace .material-categories-admin select { min-height:27px; height:27px; padding:2px 5px; font-size:12px; }
 .material-table-filters .button,.material-categories-admin .button { min-height:27px; padding:3px 6px; font-size:12px; }
+
+.admin-workspace .material-editor-table .material-description-input { min-height:48px; height:48px; width:100%; padding:2px 4px; font-size:12px; line-height:15px; resize:vertical; }
+.material-editor-table .material-description-reset { font-size:10px; padding:1px 3px; min-height:20px; margin:1px 0; }
