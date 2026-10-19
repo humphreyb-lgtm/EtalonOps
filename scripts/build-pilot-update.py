@@ -9,8 +9,9 @@ import sys
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v21.1.zip')
+output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v22.zip')
 files = [
+    'docs/PILOT_UPDATE_V22.md',
     'docs/PILOT_UPDATE_V21.md',
     'docs/PILOT_UPDATE_V20.md', 'docs/CHATGPT_RESEARCH_IMPORT.md', 'server/prepared-research.ts',
     'docs/PILOT_UPDATE_V19.md', 'scripts/sql-init.ts', 'src/research-attributes.ts', 'db/008-product-details.sql', 'db/migrations/008-product-details.sql',
