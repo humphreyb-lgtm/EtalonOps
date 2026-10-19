@@ -1,0 +1,1 @@
+CREATE TABLE material_categories(tenant TEXT NOT NULL,id TEXT NOT NULL,name TEXT NOT NULL,normalized TEXT NOT NULL,fields_json TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(tenant,id),UNIQUE(tenant,normalized));

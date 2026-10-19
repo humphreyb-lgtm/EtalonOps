@@ -616,3 +616,18 @@ dialog::backdrop { background: #14203c55; }
 .material-editor-table .material-table-review > td { background:#fff8de; padding:5px 8px; }
 .material-editor-table .material-table-review p { margin:2px 0; font-size:12px; }
 .material-editor-table .material-table-review label { display:inline-flex; gap:4px; align-items:center; margin-right:8px; }
+
+.material-table-filters { margin:4px 0; }
+.material-filter-row { display:flex; flex-wrap:wrap; gap:4px; margin:3px 0; align-items:center; }
+.material-filter-row input { min-width:130px; }
+.material-draft-notice { padding:3px 6px; background:#fff5d0; border-left:3px solid #b97a00; font-size:12px; }
+.material-categories-admin { margin:4px 0; }
+.material-categories-admin p { font-size:12px; margin:3px 0; }
+.category-fields-table { border-collapse:collapse; font-size:12px; width:100%; table-layout:fixed; }
+.category-fields-table td,.category-fields-table th { text-align:left; padding:2px; }
+.category-fields-table input:not([type=checkbox]),.category-fields-table select { width:100%; min-width:0; font-size:12px; padding:2px 4px; min-height:25px; }
+.category-fields-table .button { font-size:11px; padding:2px; min-height:25px; }
+.material-table-filters select { max-width:230px; }
+.material-table-filters label,.material-categories-admin label { font-size:11px; }
+.admin-workspace .material-table-filters input,.admin-workspace .material-table-filters select,.admin-workspace .material-categories-admin input:not([type=checkbox]),.admin-workspace .material-categories-admin select { min-height:27px; height:27px; padding:2px 5px; font-size:12px; }
+.material-table-filters .button,.material-categories-admin .button { min-height:27px; padding:3px 6px; font-size:12px; }

@@ -1,3 +1,4 @@
+import {validateMaterialCategory} from './material-categories';
 import {materialTable} from './material-table';
 import {preparedResearchAction} from './prepared-research';
 import {isProductDetail} from '../src/research-attributes';
@@ -26,7 +27,7 @@ const reference = z.string().trim().min(1).max(100);
 const https = z.url().max(2000).refine(v=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password;}catch{return false;}},'Use a public HTTPS evidence URL.');
 const verification = z.enum(['provisional','reviewed']);
 const attributeValue = z.union([z.string().trim().min(1).max(200),z.number().finite().nonnegative()]);
-export const materialInput = z.object({externalKey:reference,category:z.enum(['conduit','bracket','box','general']),attributes:z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9]{0,39}$/),attributeValue).refine(v=>Object.keys(v).length>0&&Object.keys(v).length<=25),productUnit:z.enum(['EA','FT','STICK','BOX','ROLL','PAIR']),verification,origin:z.enum(['admin_reviewed','ai_import','ai_discovery']).default('admin_reviewed'),sourceUrl:z.union([https,z.literal('')]),verificationBasis:z.string().trim().min(10).max(2000)}).strict().refine(value=>Boolean(value.sourceUrl)||value.origin==='admin_reviewed','AI-origin materials require a source URL.');
+export const materialInput = z.object({externalKey:reference,category:z.string().regex(/^[a-z][a-z0-9-]{0,59}$/),attributes:z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9]{0,39}$/),attributeValue).refine(v=>Object.keys(v).length>0&&Object.keys(v).length<=25),productUnit:z.enum(['EA','FT','STICK','BOX','ROLL','PAIR']),verification,origin:z.enum(['admin_reviewed','ai_import','ai_discovery']).default('admin_reviewed'),sourceUrl:z.union([https,z.literal('')]),verificationBasis:z.string().trim().min(10).max(2000)}).strict().refine(value=>Boolean(value.sourceUrl)||value.origin==='admin_reviewed','AI-origin materials require a source URL.');
 export type MaterialInput=z.infer<typeof materialInput>;
 export const productInput=z.object({materialKey:reference,manufacturer:name,partNumber:name,title:z.string().trim().min(1).max(500),details:productDetailsSchema.optional(),sourceUrl:https,verification,origin:z.enum(['admin_reviewed','ai_import','ai_discovery']).default('admin_reviewed')}).strict();
 export const translationInput=z.object({materialKey:reference,phrase:z.string().trim().min(1).max(500),origin:z.enum(['admin_reviewed','ai_import','ai_generated']),sourceUrl:https.optional()}).strict().superRefine((v,c)=>{if(v.origin!=='admin_reviewed'&&!v.sourceUrl)c.addIssue({code:'custom',message:'AI phrases need source evidence.'});});
@@ -70,7 +71,7 @@ function* materialById(p:Principal,id:string):Operation<RecordRow>{
 function* audit(p:Principal,action:string,target:string):Operation<void>{yield* query('INSERT INTO audit_events(id,tenant,actor,action,target,at) VALUES(@p0,@p1,@p2,@p3,@p4,@p5)',randomUUID(),p.tenant,p.oid,action,target,new Date().toISOString());}
 function admin(p:Principal){if(!p.roles.includes('Admin'))throw new ApiError(403,'Administrator role required.');}
 export function* createMaterial(p:Principal,data:unknown,dry=false):Operation<any>{
-  admin(p);const input=materialInput.parse(data),built=describeMaterial(input);
+  admin(p);const input=materialInput.parse(data),built=describeMaterial(input);yield* validateMaterialCategory(p,input);
   if(input.origin!=='admin_reviewed'&&input.verification==='reviewed')throw new ApiError(400,'AI-origin material records must enter as provisional.');
   let existing=(yield* query('SELECT material_id FROM catalog_profiles WHERE tenant=@p0 AND identity_key=@p1',p.tenant,built.identity))[0];
   if(!existing){const profiles=yield* query('SELECT p.material_id,p.attributes FROM catalog_profiles p JOIN materials m ON m.id=p.material_id AND m.tenant=p.tenant WHERE p.tenant=@p0 AND m.product_uom=@p1',p.tenant,input.productUnit);const matches=profiles.filter(row=>{const attributes=JSON.parse(row.attributes);return attributes.category===input.category&&materialIdentity(input.category,input.productUnit,attributes)===built.identity;});if(matches.length>1)throw new ApiError(409,'Several existing materials share these specifications. Resolve duplicate material records before importing.');existing=matches[0];}
@@ -328,6 +329,7 @@ export function* correctCatalog(p:Principal,kind:'material'|'product'|'merge',da
  if(apply){const prior=(yield* query('SELECT id,replacement_id FROM catalog_revisions WHERE tenant=@p0 AND request_key=@p1',p.tenant,requestKey))[0];if(prior)return {id:String(prior.id).toLowerCase(),replacementId:prior.replacement_id?String(prior.replacement_id).toLowerCase():null,unchanged:true};}
  let before:any,after:any,impact:any,mode:string;
  if(kind==='material'){
+  yield* validateMaterialCategory(p,input.material);
   const m=yield* materialById(p,input.id);if(!m.active)throw new ApiError(409,'Retired materials are historical records. Correct their active replacement instead.');
   const profile=(yield* query('SELECT * FROM catalog_profiles WHERE tenant=@p0 AND material_id=@p1',p.tenant,input.id))[0];
   const built=describeMaterial(input.material);mode=profile&&materialIdentity(input.material.category,m.product_uom,JSON.parse(profile.attributes))===built.identity?'metadata':'replacement';
@@ -412,7 +414,7 @@ export function* batchDetails(p:Principal,data:unknown):Operation<any>{
   const parsed=parseExtendedCsv(row.csv),pages=Math.max(1,Math.ceil(parsed.records.length/25)),page=Math.min(input.page,pages);
   return {id:String(row.id).toLowerCase(),state:row.state,report:JSON.parse(row.report),...(input.includeSource?{sourceCsv:row.csv}:{}),records:parsed.records.slice((page-1)*25,page*25),page,pages};
 }
-export const catalogExportTables=['materials','aliases','catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references','image_associations','import_batches','catalog_revisions'] as const;
+export const catalogExportTables=['material_categories','materials','aliases','catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references','image_associations','import_batches','catalog_revisions'] as const;
 export function* catalogExportPage(p:Principal,data:unknown):Operation<any>{
   admin(p);
   const input=z.object({table:z.enum(catalogExportTables),pageSize:z.number().int().min(1).max(500).default(250),cursor:z.object({id:z.uuid(),normalized:z.string().min(1).max(200).optional()}).strict().optional()}).strict().parse(data);
@@ -448,7 +450,7 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
   return snapshot;
 }
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
-  if(['material-table-page','material-table-row','material-table-preview','material-table-save'].includes(action))return yield* materialTable(p,action,data);
+  if(['material-table-page','material-table-row','material-table-preview','material-table-save','material-categories','material-category-save'].includes(action))return yield* materialTable(p,action,data);
   if(action.startsWith('inbox-'))return yield* inboxAction(p,action,data);
   switch(action){
     case 'prepared-preview':return yield* preparedResearchAction(p,data);

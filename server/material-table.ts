@@ -1,12 +1,32 @@
+import {materialCategories,saveCategory} from './material-categories';
+import {parseInches,formatInches} from '../src/measurements';
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {ApiError,type Principal} from './contracts';
-import {catalogPage,materialDetails,materialInput,createMaterial,correctCatalog,describeMaterial,type Operation} from './catalog-v2';
+import {materialDetails,materialInput,createMaterial,correctCatalog,describeMaterial,type Operation} from './catalog-v2';
 const withHash=(record:any)=>({...record,editHash:createHash('sha256').update(JSON.stringify([record.externalKey,record.description,record.productUnit,record.attributes,record.sourceUrl,record.verificationBasis,record.active,record.verification])).digest('hex')});
 export function* materialTable(p:Principal,action:string,data:unknown):Operation<any>{
  if(!p.roles.includes('Admin'))throw new ApiError(403,'Administrator role required.');
  if(action==='material-table-row'){const {id}=z.object({id:z.uuid()}).strict().parse(data);return withHash(yield* materialDetails(p,id));}
- if(action==='material-table-page'){const input=z.object({text:z.string().max(200).default(''),page:z.number().int().positive().default(1)}).strict().parse(data);const page=yield* catalogPage(p,{...input,section:'materials',pageSize:25});const records=[];for(const row of page.records)records.push(withHash(yield* materialDetails(p,String(row.id).toLowerCase())));return {...page,records};}
+ if(action==='material-categories')return {categories:yield* materialCategories(p)};
+ if(action==='material-category-save')return yield* saveCategory(p,data);
+ if(action==='material-table-page'){
+  const input=z.object({text:z.string().max(200).default(''),page:z.number().int().positive().default(1),category:z.string().max(60).default(''),sort:z.string().max(60).default('description'),direction:z.enum(['asc','desc']).default('asc'),filters:z.array(z.object({field:z.string().regex(/^[a-zA-Z][a-zA-Z0-9]{0,39}$/),op:z.enum(['contains','eq','gte','lte']),value:z.string().max(200)}).strict()).max(25).default([])}).strict().parse(data);
+  const categories=yield* materialCategories(p);if(input.category&&!categories.some(category=>category.id===input.category))throw new ApiError(400,'Choose an existing material category.');
+  const rows=yield {text:'SELECT m.id,m.external_key,m.description,m.product_uom,p.attributes FROM materials m LEFT JOIN catalog_profiles p ON p.material_id=m.id AND p.tenant=m.tenant WHERE m.tenant=@p0 AND m.active=1',values:[p.tenant]};
+  const indexed:Record<string,any>[]=rows.map(row=>({...row,attributes:row.attributes?JSON.parse(row.attributes):{}})),norm=(value:unknown)=>String(value??'').normalize('NFKC').trim().toLowerCase();
+  const inCategory=indexed.filter(row=>!input.category||(row.attributes.category??'general')===input.category);
+  const definition=categories.find(category=>category.id===input.category);const schema=definition?.fields??[];
+  const fields=[...schema];for(const row of inCategory)for(const [key,value] of Object.entries(row.attributes))if(!['category','recordOrigin'].includes(key)&&!fields.some(field=>field.key===key))fields.push({key,label:key,type:key.endsWith('In')?'inches':typeof value==='number'?'number':'text',required:false});
+  const cell=(row:any,field:string)=>field==='unit'?row.product_uom:field==='category'?(categories.find(category=>category.id===(row.attributes.category??'general'))?.name??'general'):field==='description'?row.description:field==='externalKey'?row.external_key:row.attributes[field];
+  const filters=input.filters.filter(filter=>filter.value.trim()).map(filter=>{const type=fields.find(field=>field.key===filter.field)?.type;let numeric:number|undefined;if(type==='inches'){try{numeric=parseInches(filter.value);}catch{throw new ApiError(400,'Use an inch measurement such as 1/2 for '+filter.field+'.');}}else if(type==='number'||['gte','lte'].includes(filter.op)){numeric=Number(filter.value);if(!Number.isFinite(numeric))throw new ApiError(400,'Use a number for '+filter.field+'.');}return {...filter,numeric};});
+  const matched=inCategory.filter(row=>(!input.text||norm(row.description+' '+row.external_key).includes(norm(input.text)))&&filters.every(filter=>{const value=cell(row,filter.field);if(value===undefined||value===null)return false;if(filter.numeric!==undefined){const number=Number(value);return Number.isFinite(number)&&(filter.op==='gte'?number>=filter.numeric:filter.op==='lte'?number<=filter.numeric:number===filter.numeric);}return filter.op==='contains'?norm(value).includes(norm(filter.value)):norm(value)===norm(filter.value);}));
+  const sort=input.sort.startsWith('attr.')?input.sort.slice(5):input.sort;if(!['description','externalKey','category','unit',...fields.map(field=>field.key)].includes(sort))throw new ApiError(400,'Choose an available sort field.');
+  matched.sort((a,b)=>{const av=cell(a,sort),bv=cell(b,sort);if(av===undefined&&bv!==undefined)return 1;if(bv===undefined&&av!==undefined)return -1;let order=typeof av==='number'&&typeof bv==='number'?av-bv:norm(av).localeCompare(norm(bv),undefined,{numeric:true});if(input.direction==='desc')order=-order;return order||norm(a.external_key).localeCompare(norm(b.external_key))||String(a.id).localeCompare(String(b.id));});
+  const total=matched.length,pages=Math.max(1,Math.ceil(total/25)),page=Math.min(input.page,pages),records=[];for(const row of matched.slice((page-1)*25,page*25))records.push(withHash(yield* materialDetails(p,String(row.id).toLowerCase())));
+  return {records,total,page,pages,categories,fields:fields.map(field=>({...field,values:[...new Set(inCategory.map(row=>row.attributes[field.key]).filter(value=>value!==undefined).map(value=>field.type==='inches'?formatInches(String(value)):String(value)))].slice(0,50)}))};
+ }
+
  const editable=z.object({category:materialInput.shape.category,attributes:materialInput.shape.attributes,productUnit:materialInput.shape.productUnit,sourceUrl:materialInput.shape.sourceUrl,verificationBasis:materialInput.shape.verificationBasis}).strict();
  const input=z.object({id:z.uuid().optional(),editHash:z.string().optional(),material:editable,reason:z.string().trim().min(10).max(2000),expectedHash:z.string().optional(),approval:z.string().optional()}).strict().parse(data);
  const material={...input.material,externalKey:'pending',origin:'admin_reviewed' as const,verification:'provisional' as const};const built=describeMaterial(material);material.externalKey='MAT-'+built.identity.slice(0,32);
