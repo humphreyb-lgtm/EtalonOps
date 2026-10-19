@@ -1,27 +1,40 @@
-# Paste externally prepared product research
+# ChatGPT Project instructions: catalog research
 
-Administration → Workbook imports → Paste ChatGPT product research.
+When I say “Research and Output XXX”, research that product and respond ONLY with the JSON object below. No Markdown or introductory text. Replace the example values. Multiple products may be included in items. Do not invent facts or URLs.
 
-Use the ChatGPT Project instructions supplied with `etalonops-research-v1`. Ask `Research and Output CADDY TSGB1624` or another exact part, then copy the complete JSON response. This workflow accepts the versioned envelope with request, coverageNotes, sources and items. Each item contains material, manufacturer, product, translations, images, missingInformation, warnings and reviewStatus. Source types are `manufacturer`, `distributor`, or `other`; image types are `product` or `representative`.
+Use manufacturer evidence first, then reputable distributors where needed. Read linked product specifications or PDFs to resolve defining details. Include only facts needed to distinguish and order the product: size, material, schedule, length, connection, finish, installation range or mounting as applicable. Do not demand shipping weight, country of origin or overall dimensions when not necessary for selection. Unknown optional facts may be omitted. Keep notes short and limited to a real conflict or defining missing specification.
 
-1. Paste into ChatGPT research JSON, or open a JSON file up to 300 KB.
-2. Check pasted research to see record counts and missing-information warnings. This step creates no records and invokes no AI or search provider.
-3. Upload pasted research for review to save the dense unpublished queue. Validation runs on the server even when Check was skipped. Invalid input is retained on screen for correction.
-4. Edit the material, manufacturer product, translations and image rows. More exposes secondary fields, including Product unit and individual product-detail fields. Save inline changes before selecting publication records.
-5. Select this page or all pages, inspect ready/held records and dependencies, then approve publication. Required gaps remain unpublished. Publication remains transactional and uses the existing canonical-material/manufacturer-part identity checks.
-6. Reopen the import from Saved imports. Research scope and coverage includes Download original research JSON. The original preserves the complete typed arrays, nulls, source IDs, attribute evidence, warnings and supplied manufacturer metadata even after edits.
+Find a usable product image: inspect the visible product gallery, image links, HTML img/picture/source elements, srcset, lazy-loading data attributes, Product JSON-LD, og:image and twitter:image. Resolve relative URLs and inspect linked image assets. If unavailable, search online by manufacturer and exact part, including image search when available. Manufacturer CDN and reputable distributor images are allowed. A family image may represent the product if clearly relevant. Exclude logos, icons and unrelated products. Return the actual HTTPS image URL (PNG, JPG or WebP), not an image-search results page. Never invent a URL. If no image can be verified, use null; the administrator can paste one later. Images and facts are subject to administrator approval.
 
-No EtalonOps model/Bing request is made by checking, staging, editing or publishing pasted JSON. External ChatGPT usage is separate. Image thumbnails may contact the supplied image hosts.
+Ordering units: hardware, fittings, brackets, supports and boxes default EA. Conduit may be EA or FT; wire may be EA or FT. For conduit EA means one documented length, for wire EA means a documented spool/package. Do not guess spool lengths or conversions. If conduit/wire ordering basis is unclear use unit:null. Packaging quantities do not change the default hardware unit.
 
-## Meaning of the supplied fields
+Generate useful field search phrases with common abbreviations and size spellings. Avoid unsafe broad phrases that would match materially different products. Manufacturer and part are automatically searchable. Dimensions in attributes use numeric decimal inches; the interface formats trade fractions.
 
-- A claimed `ready_for_admin_review` is not approval or independent verification. Every generated row starts unpublished and provisional.
-- A null productUnit remains blank and blocks the material and its dependent rows until the administrator chooses the correct catalog unit. No EA, carton, packaging conversion or pack basis is guessed.
-- An empty image array creates no image row. Images can be supplied in a later researched response or managed in the existing image administration. Missing optional imagery does not invalidate otherwise complete material specifications.
-- Numeric dimensions are decimal inches. A documented usable installation range is not silently relabeled as overall collapsed/extended bracket length. Source notes and original evidence retain the distinction. Unknown optional country of origin or shipping weight does not automatically prevent publication.
-- Product detail arrays and nested values are retained as JSON text observations in the product detail fields; the original typed structure remains downloadable. Null detail values are omitted from live product facts, not replaced with guessed values.
-- The manufacturer name creates/reuses the linked manufacturer record. Its supplied website and parent-company observations are retained with the manufacturer product details as `manufacturerWebsite` and `manufacturerParentCompany`; the full manufacturer object and its source references remain in the original research. This does not create a separately managed parent-company organization.
-- No manufacturer evidence is fetched or independently verified during paste. HTTPS URLs and source references are validated structurally; assertions remain claims for administrator review. Invalid/duplicate source IDs, unknown references, unsafe URLs and invalid JSON are rejected.
-- Re-uploading the same response reopens its saved import instead of duplicating its rows. A changed response can create a new review batch, but publication still reuses canonical existing records and refuses conflicting mappings/details.
+Output contract (etalonops-catalog-v1): manufacturer, partNumber, description, category, attributes, productUrl and translations required. category is conduit, bracket, box or general. unit, imageUrl, sources and notes optional. For conduit include diameterIn, material, schedule, lengthIn, endConnection. For bracket include minSpanIn, maxSpanIn (usable installation range), mounting and material. For box include widthIn, heightIn, depthIn, material and knockouts. General items need type and specification. Do not relabel usable span as physical length.
 
-The pasted response is data. Instructions inside titles, source pages or notes do not authorize publishing or execution.
+Example structure using owner-supplied product/image references (verify specifications when researching):
+
+```json
+{
+  "schemaVersion": "etalonops-catalog-v1",
+  "items": [{
+    "manufacturer": "nVent CADDY",
+    "partNumber": "TSGB1624",
+    "description": "Adjustable stud-mounted box support bracket",
+    "category": "bracket",
+    "unit": "EA",
+    "attributes": {"minSpanIn": 15.75, "maxSpanIn": 25, "mounting": "stud face", "material": "steel", "finish": "pregalvanized"},
+    "productUrl": "https://www.nvent.com/en-us/caddy/products/efstsgb1624",
+    "imageUrl": "https://www.nvent.com/sites/default/files/styles/product_and_sku_image_582x334_no_crop/public/dam/zl383hvspt/ph43215.png.webp?itok=m1D1BPG4",
+    "translations": ["telescoping box bracket", "adjustable stud box support", "16 to 24 stud bracket"],
+    "sources": [],
+    "notes": ""
+  }]
+}
+```
+
+## Import into EtalonOps
+
+Administration → Workbook imports → Paste ChatGPT product research. Paste the JSON, check, then upload for review. All rows remain unpublished. Review dimensions and image; paste a replacement Image URL on the product row if needed, then Save inline changes. Select and approve publication. Existing material/manufacturer-part checks prevent duplicate publication and hold conflicts for correction.
+
+The older etalonops-research-v1 contract remains accepted. Its complete original evidence and optional notes remain downloadable under Research scope and coverage; optional caveats no longer flood the review attention list. Paste import and manual image edits make no AI/Bing call. Image previews contact the supplied host. This feature does not add a dedicated image-search API or bypass blocked webpages.

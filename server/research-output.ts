@@ -22,7 +22,7 @@ export function decodeResearchOutput(raw:unknown,scope:string,sources:ResearchSo
   const unique=new Map<string,string>();for(const phrase of [...candidate.phrases,`${candidate.manufacturer} ${candidate.partNumber}`,candidate.partNumber]){const key=normalize(phrase);if(!unique.has(key))unique.set(key,phrase);}candidate.phrases=[...unique.values()].slice(0,40);
   const missingFields=researchGaps(candidate);
   let imageUrl:string|undefined;
-  if(imageIndex!==null){const observed=source.imageUrls[imageIndex];if(observed){try{if(publicSourceUrl(observed).origin===new URL(source.url).origin)imageUrl=observed;}catch{ /* Invalid optional image cannot invalidate a complete product. */ }}if(!imageUrl)coverageNotes+=' A missing or external-host image was omitted; product specifications were retained.';}
+  if(imageIndex!==null){const observed=source.imageUrls[imageIndex];if(observed){try{imageUrl=publicSourceUrl(observed).href;}catch{ /* Invalid optional image cannot invalidate a complete product. */ }}if(!imageUrl)coverageNotes+=' A missing or invalid image was omitted; product specifications were retained.';}
   return {...candidate,missingFields,...(imageUrl?{imageUrl}:{})};
  });
  return {scope,coverageNotes:coverageNotes.slice(0,4000),items};

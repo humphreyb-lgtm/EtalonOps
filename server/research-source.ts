@@ -11,7 +11,8 @@ export function publicSourceIp(address:string){return isIP(address)===4&&!blocke
 export type ResearchSource={url:string;text:string;imageUrls:string[];linkedDocuments?:string[]};
 function decode(text:string){return text.replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');}
 export function sourceText(url:string,html:string):ResearchSource{
- const images=[...html.matchAll(/(?:src|content)=["']([^"']+)["']/gi)].map(match=>{try{return new URL(decode(match[1]),url).href;}catch{return '';}}).filter(value=>/^https:\/\//.test(value)&&/\.(?:png|jpe?g|webp|gif)(?:\?|$)/i.test(value));
+ const images=[...html.matchAll(/(?:src|data-src|data-original|data-lazy-src|href|content)=["']([^"']+)["']/gi)].map(match=>{try{return new URL(decode(match[1]),url).href;}catch{return '';}}).filter(value=>/^https:\/\//.test(value)&&/\.(?:png|jpe?g|webp|gif)(?:\?|$)/i.test(value));
+ for(const match of html.matchAll(/(?:srcset|data-srcset)=["']([^"']+)["']/gi))for(const candidate of match[1].split(',')){try{const link=publicSourceUrl(new URL(decode(candidate.trim().split(/\s+/)[0]),url).href);if(/\.(?:png|jpe?g|webp|gif)(?:\?|$)/i.test(link.href))images.push(link.href);}catch{/* Ignore unusable gallery candidates. */}}
  const structuredBlocks=[...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].slice(0,10).map(match=>match[1].slice(0,20000));
  const structured=structuredBlocks.join('\n');
  const productImages:string[]=[];

@@ -20,3 +20,5 @@ test('manufacturer source loading decodes gzip/Brotli, enforces decoded limits a
 test('JSON-LD product images are observed for manual review without adopting unrelated structured image claims',()=>{
  const source=sourceText('https://maker.example/product','<script type="application/ld+json">{"@type":"Product","name":"Synthetic part","image":"https://cdn.example/part.jpg"}</script>');assert.deepEqual(source.imageUrls,['https://cdn.example/part.jpg']);
 });
+
+test('page image extraction handles lazy galleries and responsive images across hosts',()=>{const source=sourceText('https://maker.example/part','<meta property="og:image" content="https://cdn.example/hero.webp"><img data-original="/lazy.png"><source data-srcset="/small.jpg 300w, https://cdn.example/large.jpg 900w"><a href="/gallery.png">Photo</a>');for(const url of ['https://cdn.example/hero.webp','https://maker.example/lazy.png','https://maker.example/small.jpg','https://cdn.example/large.jpg','https://maker.example/gallery.png'])assert.ok(source.imageUrls.includes(url));});
