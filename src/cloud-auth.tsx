@@ -1,5 +1,5 @@
 import {LoginPage,accountRequest} from './LoginPage';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState,useRef, type ReactNode } from 'react';
 import { PublicClientApplication, InteractionRequiredAuthError, type AccountInfo } from '@azure/msal-browser';
 
 declare global { interface Window { __ETALONOPS_CONFIG__?: { tenant: string; clientId: string }; } }
@@ -15,7 +15,8 @@ async function authClient() {
   if (!client) {
     const config = window.__ETALONOPS_CONFIG__!;
     client = new PublicClientApplication({ auth: { clientId: config.clientId, authority: `https://login.microsoftonline.com/${config.tenant}`, redirectUri: `${window.location.origin}/auth-callback.html` }, cache: { cacheLocation: 'sessionStorage' } });
-    initialization = client.initialize();
+    const current=client;
+    initialization = current.initialize().then(async()=>{const result=await current.handleRedirectPromise();if(result?.account){account=result.account;current.setActiveAccount(account);}});
   }
   await initialization;
   return client;
@@ -35,6 +36,8 @@ export async function cloudSignOut() {
 export function CloudGate({ children }: { children: ReactNode }) {
   const [explicitAccountLink]=useState(()=>/^#(?:register|reset)=[A-Za-z0-9_-]{43}$/.test(location.hash));
   useEffect(()=>{const openAccountLink=()=>{if(/^#(?:register|reset)=[A-Za-z0-9_-]{43}$/.test(location.hash))location.reload();};window.addEventListener('hashchange',openAccountLink);return()=>window.removeEventListener('hashchange',openAccountLink);},[]);
+  const signingIn=useRef(false);
+  const [canReset,setCanReset]=useState(false);
   const [signedIn, setSignedIn] = useState(false), [busy, setBusy] = useState(cloudMode), [error, setError] = useState('');
   useEffect(() => {
     if (!cloudMode&&!new URLSearchParams(location.search).has('auth')) return;
@@ -58,8 +61,9 @@ export function CloudGate({ children }: { children: ReactNode }) {
   }, []);
   if ((!cloudMode&&!new URLSearchParams(location.search).has('auth')) || signedIn) return children;
   async function signIn() {
+    if(signingIn.current)return;
     if(!cloudMode){setError('Microsoft sign-in is available in the deployed environment.');return;}
-    setBusy(true); setError('');
+    signingIn.current=true;setCanReset(false);setBusy(true); setError('');
     try {
       const result = await (await authClient()).loginPopup({ scopes: scopes() });
       account = result.account;
@@ -68,8 +72,9 @@ export function CloudGate({ children }: { children: ReactNode }) {
       const response = await fetch('/api/me', { headers: { Authorization: `Bearer ${result.accessToken}` } });
       if (!response.ok) throw new Error('Access requires an EtalonOps application role. Contact the pilot administrator.');
       setSignedIn(true);
-    } catch (error) { setError(error instanceof Error ? error.message : 'Sign-in could not be completed.'); }
-    finally { setBusy(false); }
+    } catch (error) {const code=(error as {errorCode?:string})?.errorCode;if(code==='interaction_in_progress'){setCanReset(true);setError('Microsoft sign-in is already running or was interrupted. Close any Microsoft sign-in popup, then select Reset Microsoft sign-in below.');}else setError(error instanceof Error ? error.message : 'Sign-in could not be completed.'); }
+    finally { signingIn.current=false;setBusy(false); }
   }
-  return <LoginPage microsoft={signIn} onSite={user=>{siteAccount=user;setSignedIn(true);}} busy={busy} error={error}/>;
+  async function resetMicrosoft(){if(signingIn.current)return;setBusy(true);setError('');try{const auth=await authClient();await auth.clearCache();account=null;auth.setActiveAccount(null);setCanReset(false);}catch{setError('Could not reset Microsoft sign-in. Open EtalonOps in a private browser window and try again.');}finally{setBusy(false);}}
+  return <LoginPage resetMicrosoft={canReset?resetMicrosoft:undefined} microsoft={signIn} onSite={user=>{siteAccount=user;setSignedIn(true);}} busy={busy} error={error}/>;
 }
