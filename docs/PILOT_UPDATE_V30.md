@@ -1,0 +1,7 @@
+# Task codes and compact MRF lines v30
+
+Add MRF Item has an optional Task Code text field after Description, with a 16-character maximum enforced by the form and API. Each added line captures the current code. Task Code belongs only to that MRF line; catalog materials, manufacturer products and translations are never changed by it. Edit material can change it. Codes survive browser/database drafts, reordering, reload, submission review and immutable snapshots, purchasing CSV (task_code), and revision drafts. Existing lines have blank codes. Migration 11 adds a nullable task_code column to draft_lines.
+
+Item rows use reduced vertical padding. Manufacturer and part number share a line with “or equivalent” when substitutions are allowed, or the red “No Substitutions — exact product required” warning when prohibited. Description and manufacturer text are red for exact-product requests. Original input and reorder controls are collapsed together under Original input, preserving their functionality without reserving default row space. Task codes are shown on applicable items.
+
+Extract the cumulative source update and run update-cloud-app.sh. No Azure resources, SKUs, keys or paid AI calls are changed. Health reports task-code-v30. Owner acceptance: enter a task code, add a product, save/reload, edit the code, and review/export the request. Compare substitutions allowed and No Substitutions rows on desktop and mobile.

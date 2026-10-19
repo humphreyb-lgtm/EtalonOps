@@ -16,6 +16,7 @@ export type Candidate = {
   category: 'conduit' | 'screw' | 'tape' | 'general';
 };
 export type Line = {
+  taskCode?:string;
   id: string;
   quantity: string;
   requestedUnit: Unit;
@@ -121,7 +122,7 @@ export function loadDraft(projectId: string, id?:string): { draft: Draft; error?
       || (value.foreman!==undefined&&(!value.foreman||typeof value.foreman.id!=='string'||value.foreman.id.length>64||typeof value.foreman.name!=='string'||value.foreman.name.length>200))
       || !isDate(value.deliveryDate) || !Array.isArray(value.lines) || value.lines.length > 500
       || (value.savedAt !== null && (typeof value.savedAt !== 'string' || Number.isNaN(Date.parse(value.savedAt))))
-      || !value.lines.every((line: Line) => line && typeof line.id === 'string' && typeof line.description === 'string'
+      || !value.lines.every((line: Line) => line && (line.taskCode===undefined||(typeof line.taskCode==='string'&&line.taskCode.length<=16)) && typeof line.id === 'string' && typeof line.description === 'string'
         && line.description.trim() && line.description.length <= 2000 && positiveQuantity(line.quantity)
         && isUnit(line.requestedUnit) && ['verified_fixture', 'ai_fixture', 'user_description'].includes(line.source)
         && (!line.purchasing || (typeof line.purchasing.manufacturer==='string' && typeof line.purchasing.partNumber==='string' && typeof line.purchasing.noSubstitutions==='boolean' && (line.purchasing.productId===null||typeof line.purchasing.productId==='string') && (!line.purchasing.noSubstitutions||Boolean(line.purchasing.manufacturer.trim()&&line.purchasing.partNumber.trim()))))

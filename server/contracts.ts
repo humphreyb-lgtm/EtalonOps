@@ -12,7 +12,7 @@ export const candidate = z.object({
   category: z.enum(['conduit', 'screw', 'tape', 'general']),
 });
 export const line = z.object({
-  id: z.uuid(), quantity, requestedUnit: unit, description: text,
+  id: z.uuid(), taskCode:z.string().trim().max(16).optional(), quantity, requestedUnit: unit, description: text,
   rawInput: z.object({ quantity, description: text, requestedUnit: unit }).strict(),
   candidate: candidate.nullable(), source: z.enum(['verified_fixture', 'ai_fixture', 'user_description', 'verified']),
   purchasing: purchaseSchema.optional(),

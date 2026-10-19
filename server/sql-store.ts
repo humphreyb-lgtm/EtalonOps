@@ -62,7 +62,7 @@ export class SqlStore implements Repository {
   async mapDraft(row: Row) {
     const submission=(await this.q('SELECT id,mrf_number,revision,submitted_at FROM dbo.mrf_submissions WHERE draft_id=@p0 AND tenant=@p1 AND owner=@p2',row.id,row.tenant,row.owner)).recordset[0];
     const result = await this.q('SELECT * FROM dbo.draft_lines WHERE draft_id=@p0 ORDER BY position', row.id);
-    const lines = result.recordset.map(line => ({ id: String(line.id).toLowerCase(), quantity: String(line.quantity), requestedUnit: line.requested_uom, description: line.description,
+    const lines = result.recordset.map(line => ({ id: String(line.id).toLowerCase(), quantity: String(line.quantity), requestedUnit: line.requested_uom, taskCode:String(line.task_code??''), description: line.description,
       rawInput: JSON.parse(line.raw_input), candidate: line.candidate ? JSON.parse(line.candidate) : null, source: line.source, purchasing:line.purchasing?JSON.parse(line.purchasing):undefined,
       deliveryMode: line.delivery_mode, overrideDate: dateOnly(line.override_date) }));
     return { ...(submission?{submitted:{id:String(submission.id).toLowerCase(),number:submissionLabel(Number(submission.mrf_number),Number(submission.revision)),revision:Number(submission.revision),submittedAt:String(submission.submitted_at)}}:{}),foreman:{id:String(row.foreman_oid??row.owner).toLowerCase(),name:String(row.foreman_name??row.owner)},revisionOf:row.revision_of?String(row.revision_of).toLowerCase():null,id: String(row.id).toLowerCase(), projectId: row.project, name: row.name, deliveryDate: String(dateOnly(row.delivery_date)), version: Number(row.version), savedAt: new Date(row.updated_at).toISOString(), lines };
@@ -117,6 +117,7 @@ export class SqlStore implements Repository {
         await tx.catalogRun(validatePurchase(p,body.projectId,materialId?String(materialId).toLowerCase():null,line.purchasing,false,previous.get(line.id.toLowerCase())?.materialId===String(materialId).toLowerCase()&&previous.get(line.id.toLowerCase())?.purchasing===JSON.stringify(line.purchasing)));
         await tx.q('INSERT dbo.draft_lines(id,draft_id,position,material_id,quantity,requested_uom,description,raw_input,candidate,source,delivery_mode,override_date,purchasing) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7,@p8,@p9,@p10,@p11,@p12)',
           line.id, draftId, index, materialId, line.quantity, line.requestedUnit, line.description, JSON.stringify(line.rawInput), snapshot ? JSON.stringify(snapshot) : null, line.source, line.deliveryMode, line.overrideDate,line.purchasing?JSON.stringify(line.purchasing):null);
+        await tx.q('UPDATE dbo.draft_lines SET task_code=@p0 WHERE id=@p1 AND draft_id=@p2',line.taskCode??'',line.id,draftId);
       }
       await tx.audit(p, 'draft.saved', draftId);
       return tx.getDraft(p, draftId);
