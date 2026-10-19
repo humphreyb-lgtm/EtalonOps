@@ -644,3 +644,18 @@ dialog::backdrop { background: #14203c55; }
 .admin-workspace.material-table-workspace { width:calc(100vw - 24px); padding:12px; }
 .material-table-workspace .admin-content > section { padding:10px; }
 .material-editor-table .material-table-fields select { width:100%; height:25px; }
+
+/* One aligned MRF header; compact actions stay with the fields they affect. */
+.mrf-navigation{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:8px 0}
+.mrf-navigation>span,.mrf-header-actions .catalog-actions>span{display:contents}
+.mrf-header{display:grid;grid-template-columns:minmax(220px,2fr) minmax(170px,1fr) minmax(165px,1fr) auto;align-items:start;gap:12px;padding:12px 16px;margin-bottom:12px}
+.mrf-header>label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:13px;color:var(--muted)}
+.mrf-header>label>input,.mrf-header>label>select{box-sizing:border-box;width:100%;min-width:0;height:40px;padding:7px 10px;border:1px solid #ccd6e8;border-radius:3px;background:#fff;color:#102343;font:inherit;font-size:14px}
+.mrf-header-actions{padding-top:20px;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.mrf-header-actions .catalog-actions{display:flex;gap:6px;margin:0;flex-wrap:wrap}
+.mrf-header-actions .button{min-height:40px;padding:8px 12px}
+.submission-center.embedded{margin:0}.submission-center.embedded:empty{display:none}
+.entry-panel>.section-heading{margin-bottom:10px}.entry-panel>.section-heading h2{font-size:20px}
+.item-list-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.item-list-tools .button{font-size:12px;min-height:30px;padding:5px 8px}
+@media(max-width:1200px){.mrf-header{grid-template-columns:minmax(200px,2fr) minmax(160px,1fr) minmax(160px,1fr)}.mrf-header-actions{grid-column:1/-1;padding-top:0}.mrf-navigation{flex-wrap:wrap}}
+@media(max-width:640px){.mrf-header{grid-template-columns:minmax(0,1fr);gap:10px;padding:12px}.mrf-header-actions{align-items:stretch}.mrf-header-actions .catalog-actions{justify-content:flex-end}.mrf-navigation{justify-content:flex-start}.item-list-tools{justify-content:flex-start}}

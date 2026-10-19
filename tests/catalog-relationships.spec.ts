@@ -19,7 +19,7 @@ for(const width of [390,1440])test(`manufacturer preference, selection learning 
   const savedRule=page.waitForResponse(response=>response.url().endsWith('/api/catalog/policy')&&response.request().method()==='POST');
   await admin.getByRole('button',{name:'Save job product restriction',exact:true}).click();const rule=await(await savedRule).json();expect(rule.enabled).toBe(false);
   await expect(admin.getByRole('status')).toContainText('Job restriction saved');
-  await admin.getByRole('button',{name:`Edit restriction ${rule.id}`,exact:true}).click();
+  await admin.getByRole('button',{name:new RegExp(`^Edit restriction ${rule.id}$`,'i')}).click();
   await expect(admin.getByLabel(`Allow manufacturer Fixture Maker ${unique}`,{exact:true})).toBeChecked();
   await admin.getByLabel('Activate this restriction for the selected job',{exact:true}).check();
   await admin.getByRole('button',{name:'Save job product restriction',exact:true}).click();await expect(admin.getByRole('status')).toContainText('Job restriction saved');

@@ -184,7 +184,7 @@ test('keyboard-only search and addition work', async ({ page }) => {
 
 test('empty and edit states pass automated accessibility checks', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Start with the material you need.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Add MRF Item' })).toBeVisible();
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   await addPVC(page);
   await page.getByRole('button', { name: 'Edit item 1', exact: true }).click();
@@ -197,7 +197,9 @@ test.describe('Touch interaction', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   test('conversation stays usable with limited vertical space', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'self tappers', exact: true }).tap();
+    await page.getByLabel('Quantity',{exact:true}).fill('200');
+    await page.getByLabel('Unit',{exact:true}).selectOption('EA');
+    await page.getByLabel('Description',{exact:true}).fill('self tappers');
     await page.getByRole('button', { name: 'Find Matches' }).tap();
     await page.getByLabel(/Other \/ none of these/).tap();
     // A shorter viewport checks obstruction/reflow; it does not claim to

@@ -1,3 +1,4 @@
+import {foremanRoster} from './mrf-foreman';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { ApiError,type Principal } from './contracts';
@@ -25,6 +26,7 @@ export function* admitUser(p:Principal,localBootstrap=false):Operation<Principal
  return {...p,roles};
 }
 export function* userAccess(p:Principal,action:string,data:unknown):Operation<any>{
+ if(action==='foremen'){const {projectId}=z.object({projectId:z.enum(['riverside','northside'])}).strict().parse(data);return yield* foremanRoster(p,projectId);}
  admin(p);
  if(action==='list'){
   const v=z.object({page:z.number().int().min(1).max(100000).default(1),text:z.string().trim().max(200).default('')}).strict().parse(data);

@@ -1,3 +1,4 @@
+import {resolveForeman} from './mrf-foreman';
 import {selectResearchedProduct} from './research-selection';
 import {researchLedger} from './research-ledger';
 import { listSavedDrafts } from './draft-list';
@@ -64,7 +65,7 @@ export class SqlStore implements Repository {
     const lines = result.recordset.map(line => ({ id: String(line.id).toLowerCase(), quantity: String(line.quantity), requestedUnit: line.requested_uom, description: line.description,
       rawInput: JSON.parse(line.raw_input), candidate: line.candidate ? JSON.parse(line.candidate) : null, source: line.source, purchasing:line.purchasing?JSON.parse(line.purchasing):undefined,
       deliveryMode: line.delivery_mode, overrideDate: dateOnly(line.override_date) }));
-    return { ...(submission?{submitted:{id:String(submission.id).toLowerCase(),number:submissionLabel(Number(submission.mrf_number),Number(submission.revision)),revision:Number(submission.revision),submittedAt:String(submission.submitted_at)}}:{}),revisionOf:row.revision_of?String(row.revision_of).toLowerCase():null,id: String(row.id).toLowerCase(), projectId: row.project, name: row.name, deliveryDate: String(dateOnly(row.delivery_date)), version: Number(row.version), savedAt: new Date(row.updated_at).toISOString(), lines };
+    return { ...(submission?{submitted:{id:String(submission.id).toLowerCase(),number:submissionLabel(Number(submission.mrf_number),Number(submission.revision)),revision:Number(submission.revision),submittedAt:String(submission.submitted_at)}}:{}),foreman:{id:String(row.foreman_oid??row.owner).toLowerCase(),name:String(row.foreman_name??row.owner)},revisionOf:row.revision_of?String(row.revision_of).toLowerCase():null,id: String(row.id).toLowerCase(), projectId: row.project, name: row.name, deliveryDate: String(dateOnly(row.delivery_date)), version: Number(row.version), savedAt: new Date(row.updated_at).toISOString(), lines };
   }
   async getDraft(p: Principal, id: string): Promise<Awaited<ReturnType<SqlStore['mapDraft']>>> {
     if (!this.session) return this.transaction(tx => tx.getDraft(p, id), sql.ISOLATION_LEVEL.READ_COMMITTED);
@@ -91,9 +92,11 @@ export class SqlStore implements Repository {
       if ((existing && existing.version !== body.version) || (!existing && body.version !== 0)) throw new ApiError(409, 'This draft changed elsewhere. Reload before saving; your on-screen items are preserved.');
       if(existing?.submitted)throw new ApiError(409,'Submitted MRFs cannot be changed. Create a revision from the submitted record.');
       if (existing && existing.projectId !== body.projectId) throw new ApiError(409, 'A draft cannot be moved between projects.');
+      const foreman=await tx.catalogRun(resolveForeman(p,body.projectId,body.foremanId===undefined?(existing?.foreman?.id??p.oid):(body.foremanId??p.oid)));
       const draftId = String(existing?.id ?? randomUUID());
       if (existing) await tx.q('UPDATE dbo.drafts SET delivery_date=@p0,version=version+1,updated_at=@p1,name=@p5 WHERE id=@p2 AND tenant=@p3 AND owner=@p4', body.deliveryDate, now(), draftId, p.tenant, p.oid, body.name??existing?.name??'Untitled MRF');
       else await tx.q('INSERT dbo.drafts(id,tenant,owner,project,delivery_date,version,updated_at,name) VALUES(@p0,@p1,@p2,@p3,@p4,1,@p5,@p6)', draftId, p.tenant, p.oid, body.projectId, body.deliveryDate, now(), body.name??'Untitled MRF');
+      await tx.q('UPDATE dbo.drafts SET foreman_oid=@p0,foreman_name=@p1 WHERE id=@p2 AND tenant=@p3 AND owner=@p4',foreman.id,foreman.name,draftId,p.tenant,p.oid);
       const previous = new Map((await tx.q('SELECT id,material_id,purchasing,candidate,source FROM dbo.draft_lines WHERE draft_id=@p0', draftId)).recordset.map(line => [String(line.id).toLowerCase(), {materialId:String(line.material_id).toLowerCase(),purchasing:line.purchasing,candidate:line.candidate,source:line.source}]));
       await tx.q('DELETE dbo.draft_lines WHERE draft_id=@p0', draftId);
       for (const [index, line] of body.lines.entries()) {

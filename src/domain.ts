@@ -28,6 +28,7 @@ export type Line = {
   overrideDate: string | null;
 };
 export type Draft = {
+  foreman?:{id:string;name:string};
   submitted?:{id:string;number:string;revision:number;submittedAt:string};
   revisionOf?:string|null;
   name?: string;
@@ -117,6 +118,7 @@ export function loadDraft(projectId: string, id?:string): { draft: Draft; error?
         && ['conduit', 'screw', 'tape'].includes(c.category) && ['verified_fixture', 'ai_fixture'].includes(c.source);
     };
     if (value.schemaVersion !== 1 || value.ownerId !== 'local-demo-foreman' || value.projectId !== projectId
+      || (value.foreman!==undefined&&(!value.foreman||typeof value.foreman.id!=='string'||value.foreman.id.length>64||typeof value.foreman.name!=='string'||value.foreman.name.length>200))
       || !isDate(value.deliveryDate) || !Array.isArray(value.lines) || value.lines.length > 500
       || (value.savedAt !== null && (typeof value.savedAt !== 'string' || Number.isNaN(Date.parse(value.savedAt))))
       || !value.lines.every((line: Line) => line && typeof line.id === 'string' && typeof line.description === 'string'

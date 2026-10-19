@@ -33,7 +33,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   });
   app.use(rateLimit({ windowMs: 60_000, limit: 1800, handler:(_req,res)=>{res.status(429).json({error:'Too many requests. Wait a minute before retrying.'});}, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.use(express.json({ limit: '1mb' }));
-  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'compact-materials-v26' }); });
+  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'mrf-foreman-v27' }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
     const { identity } = z.object({ identity: z.string() }).strict().parse(req.body);
     const token = await auth.issueLocal(identity);
@@ -59,6 +59,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   app.post('/api/admin/users/:action',async(req,res)=>res.json(await store.users(principal(res),req.params.action,req.body)));
   app.post('/api/submissions/:action',async(req,res)=>res.json(await store.submissions(principal(res),req.params.action,req.body)));
   app.post('/api/catalog/:action',async(req,res)=>res.json(await store.catalogCommand(principal(res),z.string().parse(req.params.action),req.body)));
+  app.get('/api/projects/:projectId/foremen',async(req,res)=>res.json(await store.users(principal(res),'foremen',{projectId:req.params.projectId})));
   app.get('/api/me', async (_req, res) => res.json({ ...principal(res), mode: authOptions.mode }));
   app.get('/api/materials', async (req, res) => {
     const query = z.string().trim().min(1).max(2000).parse(req.query.q);
