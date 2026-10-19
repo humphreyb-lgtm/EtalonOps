@@ -662,3 +662,8 @@ dialog::backdrop { background: #14203c55; }
 .item-list-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.item-list-tools .button{font-size:12px;min-height:30px;padding:5px 8px}
 @media(max-width:1200px){.mrf-header{grid-template-columns:minmax(200px,2fr) minmax(160px,1fr) minmax(160px,1fr)}.mrf-header-actions{grid-column:1/-1;grid-row:auto;display:flex;flex-direction:column;align-items:flex-end;gap:4px}.mrf-navigation{flex-wrap:wrap}}
 @media(max-width:640px){.mrf-header{grid-template-columns:minmax(0,1fr);gap:10px;padding:12px}.mrf-header>label{grid-column:1!important;grid-row:auto;grid-template-rows:auto auto}.mrf-header-actions{align-items:stretch}.mrf-header-actions .catalog-actions{justify-content:flex-end}.mrf-navigation{justify-content:flex-start}.item-list-tools{justify-content:flex-start}}
+
+/* Compact material search results: substitutions have a dedicated column. */
+@media(min-width:701px){.result-head,.result-row{grid-template-columns:55px minmax(130px,1.6fr) 75px minmax(100px,1.3fr) 110px 75px}.result-row>div{padding:6px 8px}.result-head>span{padding:5px 8px}.result-substitutions .entry-purchasing>label{justify-content:center}.result-substitutions .exact-product-fields{grid-template-columns:minmax(0,1fr)}}
+.result-substitutions .entry-purchasing{margin:0}.specs>.source-tag{display:flex;margin-top:4px}
+@media(max-width:700px){.result-substitutions{grid-column:1/-1;padding-top:8px!important}.result-substitutions .sr-only{position:static;width:auto;height:auto;clip:auto;clip-path:none;overflow:visible;white-space:normal}}

@@ -153,7 +153,7 @@ test('corrupt local data is not silently deleted', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('has not been deleted');
   expect(await page.evaluate(() => localStorage.getItem('etalonops:demo:v1:riverside'))).toBe('{invalid json');
   await search(page);
-  await expect(page.getByRole('heading', { name: 'Translation matches' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Material matches' })).toBeVisible();
 });
 
 test('mobile navigation is keyboard accessible and returns focus', async ({ page }) => {

@@ -30,3 +30,18 @@ export function formatInchText(text:string):string {
 }
 
 export function formatSpecification(text:string):string {return text.replace(/\b(diameterIn|lengthIn|minSpanIn|maxSpanIn|widthIn|heightIn|depthIn):\s*(\d+(?:\.\d+)?)/g,(_all,key:string,value:string)=>`${({diameterIn:'Diameter',lengthIn:'Length',minSpanIn:'Minimum span',maxSpanIn:'Maximum span',widthIn:'Width',heightIn:'Height',depthIn:'Depth'} as Record<string,string>)[key]}: ${formatInches(value)} in`);}
+
+/** Display only: conduit stock lengths use feet from four feet upward. */
+export function formatConduitLength(inches:number):string {
+ if(inches<48)return `${formatInches(inches)} in`;
+ const feet=Math.floor(inches/12),remainder=inches-feet*12;
+ return `${feet}'${remainder>1e-8?` ${formatInches(remainder)}"`:''}`;
+}
+export function formatMaterialText(text:string,category?:string):string {
+ if(category!=='conduit')return formatInchText(text);
+ return formatInchText(text.replace(/\b(\d+(?:\.\d+)?)\s*(?:inches|inch|in\.?|["″])\s+Length\b/gi,(_all,value:string)=>`${formatConduitLength(Number(value))} Length`).replace(/(\blength\s*:\s*|[x×]\s*)(\d+(?:\.\d+)?)\s*(?:inches|inch|in\.?|["″])(?=\s|$|[,.;)])/gi,(_all,prefix:string,value:string)=>prefix+formatConduitLength(Number(value))));
+}
+export function formatMaterialSpecification(text:string,category?:string):string {
+ if(category==='conduit')text=text.replace(/\blengthIn:\s*(\d+(?:\.\d+)?)/g,(_all,value:string)=>`Length: ${formatConduitLength(Number(value))}`);
+ return formatSpecification(text);
+}
