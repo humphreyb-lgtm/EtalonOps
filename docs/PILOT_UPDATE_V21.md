@@ -5,3 +5,7 @@ Accepts the compact etalonops-catalog-v1 JSON contract alongside the original re
 Hardware/brackets/boxes default EA; ambiguous wire and conduit units still require review. Product rows in unpublished imports include an Image URL field and thumbnail preview. Save inline changes to replace/add/remove pending image references, then approve publication. Existing published references are preserved. Version checks, administrator authorization, duplicate checks and publication approval remain enforced. Image hosts receive preview requests; no AI/Bing call is made by manual image edits.
 
 Page extraction adds lazy-loading, responsive srcset and gallery links; observed CDN images are accepted for review. ChatGPT instructions permit verified manufacturer/distributor images and image search where ChatGPT supports it. No dedicated image-search service was added; blocked pages still require another source or a manually supplied URL.
+
+## v21.1 compatibility correction
+
+Compact attribute lists are accepted. compatibleBoxDepthsIn is retained as manufacturer product detail; other bounded lists retain their values as JSON text. Original typed lists remain downloadable. Validation errors now identify the offending field path and retain pasted text. This fixes valid external research with compatibleBoxDepthsIn arrays being rejected.
