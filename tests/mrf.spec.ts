@@ -58,8 +58,7 @@ for (const width of [1440, 390, 320]) {
       await page.getByRole('button', { name: 'Save item changes' }).click();
       await expect(page.getByRole('button', { name: 'Edit item 1', exact: true })).toBeFocused();
       await expect(page.getByTestId('mrf-line')).toContainText('250');
-      await page.getByText('Original input', { exact: true }).click();
-      await expect(page.getByTestId('mrf-line')).toContainText('1000 FT · 1" PVC');
+      await expect(page.getByText('Original input',{exact:true})).toHaveCount(0);
       await page.getByRole('button', { name: 'Remove item 1', exact: true }).click();
       await page.getByRole('button', { name: 'Keep item' }).click();
       await expect(page.getByTestId('mrf-line')).toHaveCount(1);

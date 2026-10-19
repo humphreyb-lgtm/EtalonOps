@@ -3,6 +3,10 @@
 set -euo pipefail
 umask 077
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+if [[ ! -f .runtime/azure-deployment.json ]]; then
+  echo "Local deployment settings are missing; recovering from existing Azure resources."
+  bash scripts/recover-cloud-workspace.sh
+fi
 source scripts/node-cloud.sh
 python3 - <<'PY'
 import json,subprocess

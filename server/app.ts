@@ -1,3 +1,5 @@
+import {accountRoutes,managedAccountRoutes,sessionCookie} from './account-routes';
+import {tokenHash} from './site-accounts';
 import {researchRoutes} from './research-routes';
 import type {ProductResearchProvider} from './azure-research';
 import type {ResearchSource} from './research-source';
@@ -33,7 +35,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   });
   app.use(rateLimit({ windowMs: 60_000, limit: 1800, handler:(_req,res)=>{res.status(429).json({error:'Too many requests. Wait a minute before retrying.'});}, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.use(express.json({ limit: '1mb' }));
-  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'task-code-v30' }); });
+  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'workforce-accounts-v31' }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
     const { identity } = z.object({ identity: z.string() }).strict().parse(req.body);
     const token = await auth.issueLocal(identity);
@@ -41,16 +43,20 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
     await store.admit(principal,true);
     res.json({ token, identity, warning: 'Local test session only. Not Microsoft sign-in.' });
   });
+  accountRoutes(app,store,authOptions.mode==='entra'?authOptions.tenant:'local-development',authOptions.mode==='entra');
   app.use('/api', async (req, res, next) => {
     try {
       const header = req.get('authorization');
-      if (!header?.startsWith('Bearer ')) throw new ApiError(401, 'Sign in to access the API.');
-      res.locals.principal = await store.admit(await auth.verify(header.slice(7)));
+      const cookie=sessionCookie(req);
+      if(header?.startsWith('Bearer '))res.locals.principal=await store.admit(await auth.verify(header.slice(7)));
+      else if(cookie){if(!['GET','HEAD'].includes(req.method)&&req.get('x-etalonops-request')!=='1')throw new ApiError(403,'Request header required.');res.locals.principal=await store.admit(await store.account(authOptions.mode==='entra'?authOptions.tenant:'local-development','session',{hash:tokenHash(cookie)}));}
+      else throw new ApiError(401,'Sign in to access the API.');
       next();
     } catch (error) { next(error); }
   });
   app.use('/api',rateLimit({windowMs:60_000,limit:600,standardHeaders:'draft-8',legacyHeaders:false,keyGenerator:(_req,res)=>`${res.locals.principal.tenant}/${res.locals.principal.oid}`,handler:(_req,res)=>{res.status(429).json({error:'Account request limit reached. Wait a minute before retrying.'});}}));
   const principal = (res: express.Response): Principal => res.locals.principal;
+  managedAccountRoutes(app,store);
   catalogExportRoutes(app,store);
   imageRoutes(app,store,services.images);
   aiRoutes(app,store,services.ai);
@@ -60,13 +66,14 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   app.post('/api/submissions/:action',async(req,res)=>res.json(await store.submissions(principal(res),req.params.action,req.body)));
   app.post('/api/catalog/:action',async(req,res)=>res.json(await store.catalogCommand(principal(res),z.string().parse(req.params.action),req.body)));
   app.get('/api/projects/:projectId/foremen',async(req,res)=>res.json(await store.users(principal(res),'foremen',{projectId:req.params.projectId})));
+  app.get('/api/jobs',async(_req,res)=>res.json(await store.users(principal(res),'assigned-jobs',{})));
   app.get('/api/me', async (_req, res) => res.json({ ...principal(res), mode: authOptions.mode }));
   app.get('/api/materials', async (req, res) => {
     const query = z.string().trim().min(1).max(2000).parse(req.query.q);
-    res.json({ matches: await store.search(principal(res), query,z.enum(['riverside','northside']).optional().parse(req.query.projectId)) });
+    res.json({ matches: await store.search(principal(res), query,z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/).optional().parse(req.query.projectId)) });
   });
   app.get('/api/projects/:project/draft', async (req, res) => res.json({ draft: await store.getProjectDraft(principal(res), req.params.project) }));
-  app.get('/api/projects/:project/drafts',async(req,res)=>res.json(await store.listDrafts(principal(res),z.enum(['riverside','northside']).parse(req.params.project),z.coerce.number().int().min(1).max(100000).default(1).parse(req.query.page),draftFilters.parse({text:req.query.text,deliveryFrom:req.query.deliveryFrom,deliveryTo:req.query.deliveryTo}))));
+  app.get('/api/projects/:project/drafts',async(req,res)=>res.json(await store.listDrafts(principal(res),z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/).parse(req.params.project),z.coerce.number().int().min(1).max(100000).default(1).parse(req.query.page),draftFilters.parse({text:req.query.text,deliveryFrom:req.query.deliveryFrom,deliveryTo:req.query.deliveryTo}))));
   app.get('/api/drafts/:id', async (req, res) => res.json({ draft: await store.getDraft(principal(res), req.params.id) }));
   app.post('/api/drafts', async (req, res) => {
     const body = draftBody.parse(req.body);
@@ -96,10 +103,9 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
     res.set('Cache-Control','no-store').type('application/json').attachment('etalonops-catalog-snapshot.json').send(JSON.stringify(snapshot,null,2));
   });
   app.get('/api/admin/catalog.csv', async (_req, res) => res.type('text/csv').attachment('etalonops-catalog.csv').send(await store.exportCsv(principal(res))));
-  app.post('/api/admin/memberships', async (req, res) => {
+  app.post('/api/admin/memberships', async (_req, res) => {
     const p = principal(res); await store.requireAdmin(p);
-    const body = z.object({ objectId: z.string().min(1).max(100), projectId: z.enum(['riverside', 'northside']) }).strict().parse(req.body);
-    await store.member({ ...p, oid: body.objectId }, body.projectId); await store.audit(p, 'membership.granted', body.objectId); res.status(204).end();
+    throw new ApiError(409,'Use User administration to assign job roles and reporting relationships.');
   });
   app.use((_req, _res, next) => next(new ApiError(404, 'Not found.')));
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -1,3 +1,4 @@
+import {accountAction} from './site-accounts';
 import {resolveForeman} from './mrf-foreman';
 import {selectResearchedProduct} from './research-selection';
 import {researchLedger} from './research-ledger';
@@ -32,7 +33,7 @@ export class Store {
     if (!exists) this.transaction(() => { this.db.exec(migration); this.db.prepare('INSERT INTO schema_migrations(version,checksum) VALUES(1,?)').run(hash(migration)); });
     const applied = this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=1').get();
     if (applied?.checksum !== hash(migration)) throw new Error('Applied migration checksum changed. Create a new migration instead.');
-    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql'],[7,'007-mrf-submissions.sql'],[8,'008-product-details.sql'],[9,'009-material-categories.sql'],[10,'010-mrf-foreman.sql'],[11,'011-line-task-code.sql']] as const){
+    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql'],[7,'007-mrf-submissions.sql'],[8,'008-product-details.sql'],[9,'009-material-categories.sql'],[10,'010-mrf-foreman.sql'],[11,'011-line-task-code.sql'],[12,'012-workforce-accounts.sql']] as const){
       const next=readFileSync(new URL(`../db/migrations/${file}`,import.meta.url),'utf8');
       const prior=this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=?').get(version);
       if(prior&&prior.checksum!==hash(next))throw new Error('Applied catalog migration checksum changed.');
@@ -56,7 +57,7 @@ export class Store {
   requireProject(p: Principal, project: string) {
     if (!this.db.prepare('SELECT 1 FROM memberships WHERE tenant=? AND owner=? AND project=?').get(p.tenant, p.oid, project)) throw new ApiError(404, 'Project not found.');
   }
-  member(p: Principal, project: string) { this.db.prepare('INSERT OR IGNORE INTO memberships VALUES(?,?,?)').run(p.tenant, p.oid, project); }
+  member(p: Principal, project: string) { this.db.prepare('INSERT OR IGNORE INTO memberships(tenant,owner,project) VALUES(?,?,?)').run(p.tenant, p.oid, project); }
   getDraft(p: Principal, id: string) {
     const row = this.db.prepare('SELECT * FROM drafts WHERE id=? AND tenant=? AND owner=?').get(id, p.tenant, p.oid);
     if (!row) throw new ApiError(404, 'Draft not found.');
@@ -85,6 +86,7 @@ export class Store {
       if ((existing && existing.version !== body.version) || (!existing && body.version !== 0)) throw new ApiError(409, 'This draft changed elsewhere. Reload before saving; your on-screen items are preserved.');
       if(existing?.submitted)throw new ApiError(409,'Submitted MRFs cannot be changed. Create a revision from the submitted record.');
       if (existing && existing.projectId !== body.projectId) throw new ApiError(409, 'A draft cannot be moved between projects.');
+      const job=this.db.prepare('SELECT status FROM jobs WHERE tenant=? AND id=?').get(p.tenant,body.projectId);if(job&&job.status!=='active')throw new ApiError(409,'This job is archived. Its MRF history is retained.');
       const foreman=this.catalogRun(resolveForeman(p,body.projectId,body.foremanId===undefined?(existing?.foreman?.id??p.oid):(body.foremanId??p.oid)));
       const draftId = String(existing?.id ?? randomUUID());
       if (existing) this.db.prepare('UPDATE drafts SET delivery_date=?,version=version+1,updated_at=?,name=? WHERE id=? AND tenant=? AND owner=?').run(body.deliveryDate, now(), body.name??existing?.name??'Untitled MRF', draftId, p.tenant, p.oid);
@@ -129,6 +131,7 @@ export class Store {
   }
   submissions(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(submissions(p,action,data)));}
   admit(p:Principal,localBootstrap=false){return this.transaction(()=>this.catalogRun(admitUser(p,localBootstrap)));}
+  account(tenant:string,action:string,data:unknown,p?:Principal){return this.transaction(()=>this.catalogRun(accountAction(tenant,action,data,p)));}
   users(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(userAccess(p,action,data)));}
   selectResearch(p:Principal,data:unknown){return this.transaction(()=>this.catalogRun(selectResearchedProduct(p,data)));}
   paidResearch(p:Principal,action:string,data:unknown){return this.transaction(()=>this.catalogRun(researchLedger(p,action,data)));}

@@ -62,7 +62,7 @@ export function researchRoutes(app:express.Express,store:Repository,provider?:Pr
   res.json(reply);
  });
  app.post('/api/research/select',async(req,res)=>{
-  const p=res.locals.principal;await store.requireAdmin(p);const input=z.object({researchId:z.uuid(),index:z.number().int().min(0).max(researchPolicy.maxItems-1),eventId:z.uuid(),projectId:z.enum(['riverside','northside'])}).strict().parse(req.body);
+  const p=res.locals.principal;await store.requireAdmin(p);const input=z.object({researchId:z.uuid(),index:z.number().int().min(0).max(researchPolicy.maxItems-1),eventId:z.uuid(),projectId:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/)}).strict().parse(req.body);
   const session=normalizeSaved(await store.paidResearch(p,'get',{id:input.researchId})),item=(session.results as LiveResearch).items[input.index];if(item&&researchGaps(item).length)throw new ApiError(400,'Complete the missing specifications in admin review before adding this product to an MRF.');if(!item||!session.searchPhrase)throw new ApiError(400,'Select a saved research candidate with an original search phrase.');
   const {missingFields:_missing,imageChoices:_choices,...candidate}=item;res.json(await store.selectResearch(p,{eventId:input.eventId,projectId:input.projectId,phrase:session.searchPhrase,item:candidate}));
  });

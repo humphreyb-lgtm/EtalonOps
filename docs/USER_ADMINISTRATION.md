@@ -1,5 +1,8 @@
 # Application user administration
 
+> Current v31 documentation: [People, jobs and sign-in](SITE_ACCOUNTS_AND_JOBS.md). The Microsoft-only behavior below describes earlier releases.
+
+
 Administrators can open **User administration** beside Catalog administration. This directory contains users who have signed into EtalonOps and existing Microsoft users explicitly registered by an administrator. It is not a directory of every person in the Microsoft tenant.
 
 Microsoft remains the sign-in authority. Users still require the EtalonOps Microsoft application assignment/role. The screen does not create Microsoft accounts, invite people, assign Microsoft roles, change subscriptions or require Microsoft Graph permissions. Use the correct Microsoft object ID from the existing tenant when registering an account before its first sign-in. Do not use an email address as the object ID.
@@ -33,3 +36,7 @@ Automated tests exercise token denial, re-login behavior, tenant isolation, stal
 Development validation: production/type build, 54 backend tests, 31 SQL Server tests and 54 browser tests passed. Tests cover the actual staged-import contracts for the starter template examples as well as the new access controls. The fictional CSV examples were applied only in an isolated in-memory test database.
 
 The additional SQL-backed browser walkthrough passed for registration, project assignment, deactivation and history at phone and desktop widths. The first-registration history format is covered explicitly on both database engines. Nine deployment checks also passed.
+
+## Current release: v31
+
+The original Microsoft-only editor described above is replaced by the People / Jobs / Companies administration interface. See [People, jobs and sign-in](SITE_ACCOUNTS_AND_JOBS.md) for current account, invitation, reporting hierarchy, company isolation and email configuration instructions. Microsoft sign-in is retained; invitation-only site accounts are now supported. Job-specific roles and supervisors are managed separately from company administrator authority.

@@ -61,3 +61,9 @@ V9 verification: production and standalone builds, 64 backend tests, 37 actual S
 ## Excel catalog preparation
 
 V10 replaces the starter files' JSON cells with ordinary CSV columns and includes a blank native Excel workbook with category-specific material sheets, manufacturer products, one-phrase-per-row translations and optional image references. The workbook preserves identifiers as text and offers filters, header guidance and dropdowns. Export populated sheets as CSV UTF-8 for the reviewed import workflow; direct XLSX upload is not implemented. The importer accepts the column format and retains previous JSON batch compatibility. No new application dependency, migration, paid service or AI call is introduced.
+
+## Workforce/account milestone — v31
+
+Implemented: responsive Microsoft/site login, invited registration, password reset, company-scoped administration, managed active/archived jobs, multi-job assignments, per-job roles/reporting supervisors, contact fields, account suspension, audit history, site session/link revocation and assigned-job switching. Original Input and Move are removed from the builder item list. Mail delivery uses the optional authenticated HTTPS adapter described in SITE_ACCOUNTS_AND_JOBS.md; administrator-delivered links work without it.
+
+Next approval milestone: configure per-job MRF approval rules independently of reporting hierarchy, delegates and effective dates, self-approval prevention, immutable approval-route snapshots, decisions/comments/history, reapproval after edits, and release to purchasing. Submission behavior has not been changed into approval or order placement by v31.

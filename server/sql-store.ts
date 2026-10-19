@@ -1,3 +1,4 @@
+import {accountAction} from './site-accounts';
 import {resolveForeman} from './mrf-foreman';
 import {selectResearchedProduct} from './research-selection';
 import {researchLedger} from './research-ledger';
@@ -51,7 +52,7 @@ export class SqlStore implements Repository {
   requireAdmin(p: Principal) { if (!p.roles.includes('Admin')) throw new ApiError(403, 'Administrator role required.'); }
   async member(p: Principal, project: string) {
     if (!this.session) { await this.transaction(tx => tx.member(p, project)); return; }
-    await this.q('IF NOT EXISTS(SELECT 1 FROM dbo.memberships WITH(UPDLOCK,HOLDLOCK) WHERE tenant=@p0 AND owner=@p1 AND project=@p2) INSERT dbo.memberships VALUES(@p0,@p1,@p2)', p.tenant, p.oid, project);
+    await this.q('IF NOT EXISTS(SELECT 1 FROM dbo.memberships WITH(UPDLOCK,HOLDLOCK) WHERE tenant=@p0 AND owner=@p1 AND project=@p2) INSERT dbo.memberships(tenant,owner,project) VALUES(@p0,@p1,@p2)', p.tenant, p.oid, project);
   }
   async requireProject(p: Principal, project: string) {
     if (!(await this.q('SELECT 1 FROM dbo.memberships WHERE tenant=@p0 AND owner=@p1 AND project=@p2', p.tenant, p.oid, project)).recordset.length) throw new ApiError(404, 'Project not found.');
@@ -92,6 +93,7 @@ export class SqlStore implements Repository {
       if ((existing && existing.version !== body.version) || (!existing && body.version !== 0)) throw new ApiError(409, 'This draft changed elsewhere. Reload before saving; your on-screen items are preserved.');
       if(existing?.submitted)throw new ApiError(409,'Submitted MRFs cannot be changed. Create a revision from the submitted record.');
       if (existing && existing.projectId !== body.projectId) throw new ApiError(409, 'A draft cannot be moved between projects.');
+      const job=(await tx.q('SELECT status FROM jobs WHERE tenant=@p0 AND id=@p1',p.tenant,body.projectId)).recordset[0];if(job&&job.status!=='active')throw new ApiError(409,'This job is archived. Its MRF history is retained.');
       const foreman=await tx.catalogRun(resolveForeman(p,body.projectId,body.foremanId===undefined?(existing?.foreman?.id??p.oid):(body.foremanId??p.oid)));
       const draftId = String(existing?.id ?? randomUUID());
       if (existing) await tx.q('UPDATE dbo.drafts SET delivery_date=@p0,version=version+1,updated_at=@p1,name=@p5 WHERE id=@p2 AND tenant=@p3 AND owner=@p4', body.deliveryDate, now(), draftId, p.tenant, p.oid, body.name??existing?.name??'Untitled MRF');
@@ -130,7 +132,8 @@ export class SqlStore implements Repository {
   }
   async submissions(p:Principal,action:string,data:unknown){return this.transaction(async tx=>{const id=(data as {draftId?:unknown})?.draftId;if((action==='review'||action==='submit')&&typeof id==='string')await tx.getDraft(p,id);return tx.catalogRun(submissions(p,action,data));});}
   async admit(p:Principal,localBootstrap=false){return this.transaction(tx=>tx.catalogRun(admitUser(p,localBootstrap)));}
-  async users(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(userAccess(p,action,data)));}
+  async account(tenant:string,action:string,data:unknown,p?:Principal){return this.transaction(async tx=>{await tx.catalogLock({tenant,oid:p?.oid??'site-auth',roles:[]});return tx.catalogRun(accountAction(tenant,action,data,p));});}
+  async users(p:Principal,action:string,data:unknown){return this.transaction(async tx=>{await tx.catalogLock(p);return tx.catalogRun(userAccess(p,action,data));});}
   async selectResearch(p:Principal,data:unknown){return this.transaction(async tx=>{await tx.catalogLock(p);return tx.catalogRun(selectResearchedProduct(p,data));});}
   async paidResearch(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(researchLedger(p,action,data)));}
   async catalogLock(p:Principal){const resource='etalonops-catalog:'+createHash('sha256').update(p.tenant).digest('hex');const lock=await this.q("DECLARE @result int; EXEC @result=sys.sp_getapplock @Resource=@p0,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000; SELECT @result AS lock_result",resource);if(Number(lock.recordset[0].lock_result)<0)throw new ApiError(409,'Another catalog update is still running. Try again after it finishes.');}

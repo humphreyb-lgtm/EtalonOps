@@ -24,9 +24,11 @@ function* prepare(p:Principal,v:z.infer<typeof reviewInput>):Operation<any>{
  const lines=stored.map(l=>({id:guid(l.id),quantity:String(l.quantity),requestedUnit:l.requested_uom,taskCode:String(l.task_code??''),description:l.description,rawInput:JSON.parse(l.raw_input),candidate:l.candidate?JSON.parse(l.candidate):null,source:l.source,deliveryMode:l.delivery_mode,overrideDate:l.override_date?day(l.override_date):null,...(l.purchasing?{purchasing:JSON.parse(l.purchasing)}:{})}));
  const person=(yield* q('SELECT display_name FROM application_users WHERE tenant=@p0 AND oid=@p1',p.tenant,p.oid))[0];
  let foreman={id:String(d.foreman_oid??p.oid).toLowerCase(),name:String(d.foreman_name??p.displayName??person?.display_name??p.oid)},foremanError='';try{foreman=yield* resolveForeman(p,String(d.project),foreman.id);}catch(error){if(!(error instanceof ApiError))throw error;foremanError=error.message;}
- const snapshot={id:guid(d.id),version:Number(d.version),projectId:String(d.project),name:d.name,deliveryDate:day(d.delivery_date),foreman,preparedBy:{id:p.oid,name:p.displayName??person?.display_name??p.oid},lines};
+ const jobMeta=(yield* q('SELECT name,number,status FROM jobs WHERE tenant=@p0 AND id=@p1',p.tenant,d.project))[0];
+ const snapshot={id:guid(d.id),version:Number(d.version),projectId:String(d.project),projectName:String(jobMeta?.name??d.project),projectNumber:String(jobMeta?.number??''),name:d.name,deliveryDate:day(d.delivery_date),foreman,preparedBy:{id:p.oid,name:p.displayName??person?.display_name??p.oid},lines};
  const errors:{lineId:string|null;message:string}[]=[],warnings:{lineId:string;message:string}[]=[],evidence:unknown[]=[];
  if(foremanError)errors.push({lineId:null,message:foremanError});
+ const job=jobMeta;if(job&&job.status!=='active')errors.push({lineId:null,message:'This job is archived.'});
  if(!String(d.name).trim())errors.push({lineId:null,message:'An MRF name is required.'});if(!lines.length)errors.push({lineId:null,message:'Add at least one material before submitting.'});
  for(const [i,line] of lines.entries()){
   const id=stored[i].material_id?guid(stored[i].material_id):null;
@@ -47,7 +49,7 @@ function* prepare(p:Principal,v:z.infer<typeof reviewInput>):Operation<any>{
 }
 export function* submissions(p:Principal,action:string,data:unknown):Operation<any>{
  if(action==='list'){
-  const v=z.object({projectId:z.enum(['riverside','northside']),page:z.number().int().min(1).max(100000).default(1)}).strict().parse(data);yield* member(p,v.projectId);
+  const v=z.object({projectId:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/),page:z.number().int().min(1).max(100000).default(1)}).strict().parse(data);yield* member(p,v.projectId);
   const total=Number((yield* q('SELECT COUNT(*) AS total FROM mrf_submissions WHERE tenant=@p0 AND owner=@p1 AND project=@p2',p.tenant,p.oid,v.projectId))[0].total),pages=Math.max(1,Math.ceil(total/25)),page=Math.min(v.page,pages);
   const rows=yield* q('SELECT * FROM (SELECT id,draft_id,draft_version,mrf_number,revision,previous_id,project,submitted_at,snapshot,ROW_NUMBER() OVER(ORDER BY submitted_at DESC,mrf_number DESC,revision DESC,id) AS n FROM mrf_submissions WHERE tenant=@p0 AND owner=@p1 AND project=@p2) s WHERE n>@p3 AND n<=@p4 ORDER BY n',p.tenant,p.oid,v.projectId,(page-1)*25,page*25);
   return {records:rows.map(r=>({...header(r),name:JSON.parse(r.snapshot).name,itemCount:JSON.parse(r.snapshot).lines.length})),total,page,pages};
@@ -78,6 +80,6 @@ export function* submissions(p:Principal,action:string,data:unknown):Operation<a
  throw new ApiError(404,'Submission operation not found.');
 }
 export function submittedCsv(value:any){
- const s=value.snapshot;const rows=s.lines.map((l:any,i:number)=>({mrf:value.number,revision:value.revision,name:s.name,project:s.projectId,foreman:s.foreman.name,prepared_by:s.preparedBy?.name??s.foreman.name,submitted_at:value.submittedAt,item:i+1,description:l.description,task_code:l.taskCode??'',specifications:l.candidate?.specs.join('; ')??'',quantity:l.quantity,unit:l.requestedUnit,product_unit:l.candidate?.productUnit??'',delivery_date:l.deliveryMode==='override'?l.overrideDate:s.deliveryDate,manufacturer:l.purchasing?.manufacturer??'',manufacturer_part_number:l.purchasing?.partNumber??'',no_substitutions:l.purchasing?.noSubstitutions?'YES':'NO',source:l.source,verification:l.candidate?.verification??'unverified',original_request:l.rawInput.description,review_warnings:value.warnings.filter((w:any)=>w.lineId===l.id).map((w:any)=>w.message).join('; ')}));
+ const s=value.snapshot;const rows=s.lines.map((l:any,i:number)=>({mrf:value.number,revision:value.revision,name:s.name,project:s.projectId,job_name:s.projectName??s.projectId,job_number:s.projectNumber??'',foreman:s.foreman.name,prepared_by:s.preparedBy?.name??s.foreman.name,submitted_at:value.submittedAt,item:i+1,description:l.description,task_code:l.taskCode??'',specifications:l.candidate?.specs.join('; ')??'',quantity:l.quantity,unit:l.requestedUnit,product_unit:l.candidate?.productUnit??'',delivery_date:l.deliveryMode==='override'?l.overrideDate:s.deliveryDate,manufacturer:l.purchasing?.manufacturer??'',manufacturer_part_number:l.purchasing?.partNumber??'',no_substitutions:l.purchasing?.noSubstitutions?'YES':'NO',source:l.source,verification:l.candidate?.verification??'unverified',original_request:l.rawInput.description,review_warnings:value.warnings.filter((w:any)=>w.lineId===l.id).map((w:any)=>w.message).join('; ')}));
  return stringify(rows,{header:true,escape_formulas:true});
 }

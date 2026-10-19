@@ -1,7 +1,7 @@
 import type { DraftFilters } from './draft-filters';
 import { catalogStreamValidator } from './catalog-stream';
 import type { Candidate, Draft } from './domain';
-import { cloudMode, cloudToken } from './cloud-auth';
+import { cloudMode, cloudToken,siteSessionActive } from './cloud-auth';
 
 export const databaseMode = cloudMode || window.location.protocol !== 'file:' && new URLSearchParams(window.location.search).get('database') === '1';
 export const localIdentity = new URLSearchParams(window.location.search).get('identity') ?? 'foreman-one';
@@ -9,6 +9,7 @@ let token: string | null = null;
 let tokenPromise: Promise<string> | null = null;
 type SavedDraft = Omit<Draft, 'ownerId' | 'schemaVersion'> & { id: string; version: number };
 async function accessToken(): Promise<string> {
+  if(siteSessionActive())return '';
   if (cloudMode) return cloudToken();
   if (token) return token;
   if (!tokenPromise) tokenPromise = fetch('/api/dev/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identity: localIdentity }) })
@@ -16,8 +17,9 @@ async function accessToken(): Promise<string> {
     .finally(() => { tokenPromise = null; });
   return tokenPromise;
 }
+async function apiHeaders():Promise<Record<string,string>>{const value=await accessToken();return {'X-EtalonOps-Request':'1',...(value?{Authorization:`Bearer ${value}`}:{})};}
 export async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  const response = await fetch(`/api${path}`, { method, headers: { Authorization: `Bearer ${await accessToken()}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  const response = await fetch(`/api${path}`, { method, headers: { ...await apiHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   const value = await response.json();
   if (!response.ok) throw new Error(value.error ?? 'Database request failed. Your on-screen items are preserved.');
   return value;
@@ -37,7 +39,7 @@ export type ImportRecord = { manufacturer: string; manufacturer_part_number: str
 export type ImportBatch = { id: string; state: string; report: { rows: number; errors: { row: number; message: string }[]; kind: string }; reviewer?: string | null; approvedAt?: string | null };
 export type ImportPreview = ImportBatch & { records: ImportRecord[] };
 export async function downloadCatalog() {
-  const response = await fetch('/api/admin/catalog.csv', { headers: { Authorization: `Bearer ${await accessToken()}` } });
+  const response = await fetch('/api/admin/catalog.csv', { headers: { ...await apiHeaders() } });
   if (!response.ok) throw new Error('Catalog export failed.');
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement('a'); link.href = url; link.download = 'etalonops-catalog.csv'; link.click();
@@ -45,7 +47,7 @@ export async function downloadCatalog() {
 }
 
 export async function downloadCatalogSnapshot() {
-  const response=await fetch('/api/admin/catalog-snapshot.json',{headers:{Authorization:`Bearer ${await accessToken()}`}});
+  const response=await fetch('/api/admin/catalog-snapshot.json',{headers:{...await apiHeaders()}});
   if(!response.ok){const error=await response.json();throw new Error(error.error??'Catalog snapshot export failed.');}
   const url=URL.createObjectURL(await response.blob());
   const link=document.createElement('a');link.href=url;link.download='etalonops-catalog-snapshot.json';link.click();
@@ -63,7 +65,7 @@ export async function downloadLargeCatalog(progress:(count:number)=>void=()=>{})
  catch(error){if(error instanceof DOMException&&error.name==='AbortError')return false;throw error;}
  const controller=new AbortController();let writer:ExportWriter|undefined;
  try{
-  const response=await fetch('/api/admin/catalog-stream.jsonl',{headers:{Authorization:`Bearer ${await accessToken()}`},signal:controller.signal});
+  const response=await fetch('/api/admin/catalog-stream.jsonl',{headers:{...await apiHeaders()},signal:controller.signal});
   if(!response.ok){const error=await response.json();throw new Error(error.error??'Catalog export failed.');}
   if(!response.body)throw new Error('Streaming downloads are unavailable in this browser.');
   writer=await handle.createWritable();const reader=response.body.getReader(),validate=catalogStreamValidator();let reported=0;
@@ -74,14 +76,14 @@ export async function downloadLargeCatalog(progress:(count:number)=>void=()=>{})
 
 export type ImageRecord = { id: string; materialId: string; productId?:string|null; contentHash: string; sourceUrl: string; rightsBasis: string; status: 'pending'|'approved'|'rejected'; reviewer: string|null; reviewedAt: string|null };
 export async function imageBlob(path: string) {
-  const response=await fetch(`/api${path}`,{headers:{Authorization:`Bearer ${await accessToken()}`}});
+  const response=await fetch(`/api${path}`,{headers:{...await apiHeaders()}});
   if(!response.ok)throw new Error('Product image unavailable.');
   return response.blob();
 }
 export async function uploadProductImage(id: string,file: File,sourceUrl: string,rightsBasis: string,productId:string|null=null) {
   const encodedSource=encodeURIComponent(sourceUrl),encodedRights=encodeURIComponent(rightsBasis);
   if(encodedSource.length+encodedRights.length>8000)throw new Error('Shorten the source evidence URL or usage-rights description before uploading.');
-  const response=await fetch(`/api/admin/materials/${id}/images`,{method:'POST',headers:{Authorization:`Bearer ${await accessToken()}`,'Content-Type':file.type||'application/octet-stream','x-image-source-url':encodedSource,'x-image-rights-basis':encodedRights,...(productId?{'x-image-product-id':productId}:{})},body:file});
+  const response=await fetch(`/api/admin/materials/${id}/images`,{method:'POST',headers:{...await apiHeaders(),'Content-Type':file.type||'application/octet-stream','x-image-source-url':encodedSource,'x-image-rights-basis':encodedRights,...(productId?{'x-image-product-id':productId}:{})},body:file});
   const value=await response.json();if(!response.ok)throw new Error(value.error??'Image upload failed.');return value as {image:ImageRecord};
 }
 
@@ -93,6 +95,6 @@ export type DraftPage={records:DraftSummary[];total:number;page:number;pages:num
 export function listDatabaseDrafts(projectId:string,page=1,filters:DraftFilters={}){const params=new URLSearchParams({page:String(page)});for(const [key,value] of Object.entries(filters))if(value)params.set(key,value);return request<DraftPage>(`/projects/${encodeURIComponent(projectId)}/drafts?${params}`);}
 
 export async function uploadCatalogWorkbook<T>(file:File):Promise<T>{
- const response=await fetch('/api/admin/catalog-upload',{method:'POST',headers:{Authorization:`Bearer ${await accessToken()}`,'Content-Type':'application/octet-stream','x-catalog-filename':encodeURIComponent(file.name)},body:file});
+ const response=await fetch('/api/admin/catalog-upload',{method:'POST',headers:{...await apiHeaders(),'Content-Type':'application/octet-stream','x-catalog-filename':encodeURIComponent(file.name)},body:file});
  const value=await response.json();if(!response.ok)throw new Error(value.error??'Workbook upload failed.');return value;
 }

@@ -1,3 +1,4 @@
+import {workforceScenarios} from './workforce-scenarios';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -11,7 +12,7 @@ const bracket=(externalKey='bracket')=>({externalKey,category:'bracket',attribut
 const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-1624')=>({materialKey,manufacturer,partNumber,title:'Telescoping bracket',sourceUrl:'https://example.invalid/fixture',verification:'provisional'});
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
-export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[
+export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[...workforceScenarios,
 {name:'selected registered foreman persists without changing creator ownership and is revalidated on submission',run:async store=>{
  const {admin,user,foreign}=people();user.displayName='Preparing GF';await store.member(user,'riverside');await store.member(admin,'riverside');
  const target={oid:randomUUID(),displayName:'Assigned Foreman',active:true,roleLimit:'Foreman',projects:['riverside'],version:0,reason:'Register foreman for delegated requests.'};await store.users(admin,'save',target);

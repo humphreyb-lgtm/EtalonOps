@@ -7,7 +7,7 @@ import { ApiError } from './contracts';
 import { lookupContext } from '../src/lookup';
 import { aiLimits } from './ai-policy';
 
-export const lookupInput=z.object({projectId:z.enum(['riverside','northside']),sessionId:z.uuid().transform(v=>v.toLowerCase()),turnId:z.uuid().transform(v=>v.toLowerCase()),description:z.string().trim().min(1).max(2000),quantity:z.string().regex(/^(?:\d+(?:\.\d+)?|\.\d+)$/).refine(v=>Number(v)>0),requestedUnit:unit,choice:z.enum(['','hex','tek','pan','other']),turns:z.array(z.object({author:z.enum(['user','assistant']),text:z.string().min(1).max(2000)}).strict()).max(12)}).strict();
+export const lookupInput=z.object({projectId:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/),sessionId:z.uuid().transform(v=>v.toLowerCase()),turnId:z.uuid().transform(v=>v.toLowerCase()),description:z.string().trim().min(1).max(2000),quantity:z.string().regex(/^(?:\d+(?:\.\d+)?|\.\d+)$/).refine(v=>Number(v)>0),requestedUnit:unit,choice:z.enum(['','hex','tek','pan','other']),turns:z.array(z.object({author:z.enum(['user','assistant']),text:z.string().min(1).max(2000)}).strict()).max(12)}).strict();
 export type LookupInput=z.infer<typeof lookupInput>;
 const resultSchema=z.object({question:z.string().max(300).nullable(),summary:z.string().max(600),description:z.string().min(1).max(2000),missingFields:z.array(z.enum(['thread','length','finish','application'])).max(4)}).strict();
 export type AIResult=z.infer<typeof resultSchema>;

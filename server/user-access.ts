@@ -1,3 +1,4 @@
+import {workforce} from './workforce';
 import {foremanRoster} from './mrf-foreman';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -5,6 +6,7 @@ import { ApiError,type Principal } from './contracts';
 import type { Operation,RecordRow } from './catalog-v2';
 function* q(text:string,...values:unknown[]):Operation<RecordRow[]>{return yield {text,values};}
 const oid=z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/).transform(value=>value.toLowerCase());
+// The legacy editor is retained only for pre-managed example assignments.
 const project=z.enum(['riverside','northside']);
 const input=z.object({oid,displayName:z.string().trim().min(1).max(200),active:z.boolean(),roleLimit:z.enum(['Admin','Foreman']).nullable(),projects:z.array(project).max(2).refine(a=>new Set(a).size===a.length),version:z.number().int().nonnegative(),reason:z.string().trim().min(10).max(2000)}).strict();
 function* row(p:Principal,id:string):Operation<RecordRow|undefined>{return (yield* q('SELECT * FROM application_users WHERE tenant=@p0 AND oid=@p1',p.tenant,id))[0];}
@@ -23,11 +25,14 @@ export function* admitUser(p:Principal,localBootstrap=false):Operation<Principal
  if(Boolean(user.entra_admin)!==isAdmin||!user.seen_at||String(user.seen_at)<new Date(Date.now()-15*60*1000).toISOString())yield* q('UPDATE application_users SET entra_admin=@p0,seen_at=@p1 WHERE tenant=@p2 AND oid=@p3',Number(isAdmin),now,p.tenant,p.oid);
  const roles=user.role_limit==='Foreman'?['Foreman']:p.roles;
  if(user.role_limit==='Admin'&&!isAdmin)throw new ApiError(403,'Microsoft administrator assignment is required for this account.');
- return {...p,roles};
+ const profile=(yield* q('SELECT access_role,company_id FROM user_profiles WHERE tenant=@p0 AND oid=@p1',p.tenant,p.oid))[0];
+ if(profile){const company=(yield* q('SELECT active FROM companies WHERE tenant=@p0 AND id=@p1',p.tenant,profile.company_id))[0];if(!company?.active)throw new ApiError(403,'Your company access is inactive. Contact your administrator.');}
+ return {...p,roles:[...roles.filter(role=>role!=='CompanyAdmin'),...(profile?.access_role==='CompanyAdmin'?['CompanyAdmin']:[])]};
 }
 export function* userAccess(p:Principal,action:string,data:unknown):Operation<any>{
- if(action==='foremen'){const {projectId}=z.object({projectId:z.enum(['riverside','northside'])}).strict().parse(data);return yield* foremanRoster(p,projectId);}
- admin(p);
+ if(['assigned-jobs','directory','company-save','job-save','workforce-save','revoke-sessions'].includes(action))return yield* workforce(p,action,data);
+ if(action==='foremen'){const {projectId}=z.object({projectId:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/)}).strict().parse(data);return yield* foremanRoster(p,projectId);}
+ if(action==='history'&&!p.roles.includes('Admin')&&p.roles.includes('CompanyAdmin')){const target=z.object({oid}).passthrough().parse(data);const mine=(yield* q('SELECT company_id FROM user_profiles WHERE tenant=@p0 AND oid=@p1',p.tenant,p.oid))[0],other=(yield* q('SELECT company_id FROM user_profiles WHERE tenant=@p0 AND oid=@p1',p.tenant,target.oid))[0];if(!mine||!other||mine.company_id!==other.company_id)throw new ApiError(404,'User not found.');}else admin(p);
  if(action==='list'){
   const v=z.object({page:z.number().int().min(1).max(100000).default(1),text:z.string().trim().max(200).default('')}).strict().parse(data);
   const pattern='%'+v.text.toLowerCase().replace(/[!%_]/g,c=>'!'+c)+'%';const where="tenant=@p0 AND (LOWER(display_name) LIKE @p1 ESCAPE '!' OR LOWER(oid) LIKE @p1 ESCAPE '!')";
@@ -44,7 +49,7 @@ export function* userAccess(p:Principal,action:string,data:unknown):Operation<an
   return {records:records.map(({n,before_json,after_json,...r})=>({...r,before:JSON.parse(before_json)?.registered===false?null:JSON.parse(before_json),after:JSON.parse(after_json)})),total,page,pages};
  }
  if(action!=='save')throw new ApiError(404,'User operation not found.');
- const v=input.parse(data),prior=yield* row(p,v.oid);if((prior&&Number(prior.version)!==v.version)||(!prior&&v.version!==0))throw new ApiError(409,'User access changed elsewhere. Reload the user before saving.');
+ const v=input.parse(data);if((yield* q('SELECT oid FROM user_profiles WHERE tenant=@p0 AND oid=@p1',p.tenant,v.oid)).length||(yield* q('SELECT owner FROM memberships WHERE tenant=@p0 AND supervisor_oid=@p1',p.tenant,v.oid)).length)throw new ApiError(409,'Use the workforce editor to preserve job roles and reporting relationships.');const prior=yield* row(p,v.oid);if((prior&&Number(prior.version)!==v.version)||(!prior&&v.version!==0))throw new ApiError(409,'User access changed elsewhere. Reload the user before saving.');
  if(v.roleLimit==='Admin'&&!prior?.entra_admin)throw new ApiError(400,'Assign the Admin application role in Microsoft first, then have the user sign in. This screen cannot grant Microsoft roles.');
  if(v.oid===p.oid.toLowerCase()&&(!v.active||v.roleLimit==='Foreman'))throw new ApiError(409,'You cannot deactivate or demote your own administrator access.');
  const removesAdmin=prior?.active&&prior.entra_admin&&prior.role_limit!=='Foreman'&&(!v.active||v.roleLimit==='Foreman');

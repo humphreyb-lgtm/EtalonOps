@@ -8,7 +8,7 @@ import { saveBrowserDraft,listBrowserDrafts } from './draft-storage';
 import { PurchasingFields } from './PurchasingFields';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  AlertCircle, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Check, ChevronDown, ClipboardList, Ellipsis,
+  AlertCircle, ArrowLeft, ArrowRight, Check, ChevronDown, ClipboardList, Ellipsis,
   FileText, FolderKanban, Home, Info, LogOut, Menu, MessageSquare, Package,
   Pencil, Plus, Save, Search, Send, Settings, ShieldCheck, ShoppingCart,
   Sparkles, Trash2, X, ChartNoAxesColumnIncreasing,
@@ -22,7 +22,7 @@ import {
 import { ProductPhoto } from './ProductPhoto';
 import { CatalogAdmin } from './CatalogAdmin';
 import { lookupContext, fallbackDescription } from './lookup';
-import { cloudMode, cloudDisplayName, cloudSignOut } from './cloud-auth';
+import { cloudMode, cloudDisplayName, cloudSignOut,siteSessionActive } from './cloud-auth';
 import { databaseMode, localIdentity, readDatabaseDraft, saveDatabaseDraft, databaseSearch, clearLocalSession, request, listDatabaseDrafts, type DraftPage, type AIStatus, type AIClarification } from './api';
 
 type Stage = 'idle' | 'verified' | 'clarify';
@@ -78,13 +78,14 @@ export default function App() {
   const [productChoices,setProductChoices]=useState<Record<string,string>>({});
   const [allowChanges,setAllowChanges]=useState(true),[exactChoices,setExactChoices]=useState<Record<string,boolean>>({}),[manualProducts,setManualProducts]=useState<Record<string,{manufacturer:string;partNumber:string}>>({});
   const exactFor=(id:string)=>exactChoices[id]??!allowChanges;
-  const [projectId, setProjectId] = useState(() => new URLSearchParams(window.location.search).get('project') === 'northside' ? 'northside' : 'riverside');
+  const [projectId, setProjectId] = useState(() => new URLSearchParams(window.location.search).get('project')??'riverside');
+  const [assignedProjects,setAssignedProjects]=useState<{id:string;name:string;number:string}[]>(databaseMode?[]:projects);
   const [initial] = useState<{ draft: Draft; error?: string; restored?: boolean }>(() => databaseMode ? { draft: freshDraft(projectId) } : loadDraft(projectId,new URLSearchParams(window.location.search).get('draft')??undefined));
   const [draft, setDraft] = useState<Draft>(initial.draft);
   const [headerActions,setHeaderActions]=useState<HTMLElement|null>(null),[listActions,setListActions]=useState<HTMLElement|null>(null);
   const [foremen,setForemen]=useState<{id:string;name:string}[]>(databaseMode?[]:[{id:'local-demo-foreman',name:'Demo foreman'}]);
   const [selfId,setSelfId]=useState(databaseMode?'':'local-demo-foreman'),[foremenError,setForemenError]=useState('');
-  useEffect(()=>{if(!databaseMode)return;let cancelled=false;setForemen([]);setSelfId('');setForemenError('');void request<{selfId:string;users:{id:string;name:string}[]}>(`/projects/${projectId}/foremen`).then(value=>{if(!cancelled){setSelfId(value.selfId.toLowerCase());setForemen(value.users);}}).catch(error=>{if(!cancelled)setForemenError(error.message);});return()=>{cancelled=true;};},[projectId]);
+  useEffect(()=>{if(!databaseMode||!assignedProjects.length)return;let cancelled=false;setForemen([]);setSelfId('');setForemenError('');void request<{selfId:string;users:{id:string;name:string}[]}>(`/projects/${projectId}/foremen`).then(value=>{if(!cancelled){setSelfId(value.selfId.toLowerCase());setForemen(value.users);}}).catch(error=>{if(!cancelled)setForemenError(error.message);});return()=>{cancelled=true;};},[projectId,assignedProjects]);
 
   const [databaseBusy, setDatabaseBusy] = useState(databaseMode);
   const [dirty, setDirty] = useState(false);
@@ -104,7 +105,6 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [message, setMessage] = useState('');
   const [aiEnabled,setAIEnabled] = useState(false);
-  const [researchEnabled,setResearchEnabled]=useState(false);
   const [aiBusy,setAIBusy] = useState(false);
   const [aiError,setAIError] = useState('');
   const [aiWording,setAIWording] = useState('');
@@ -126,7 +126,7 @@ export default function App() {
   const unitRef = useRef<HTMLSelectElement>(null);
   const chatRef = useRef<HTMLTextAreaElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
-  const project = projects.find(p => p.id === projectId)!;
+  const project = assignedProjects.find(p=>p.id===projectId)??{id:projectId,name:'No assigned job',number:'—'};
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty) event.preventDefault(); };
@@ -168,14 +168,12 @@ export default function App() {
   useEffect(() => {
     if (!databaseMode) return;
     let cancelled = false;
-    request<{enabled:boolean}>('/research/status').then(status=>{if(!cancelled)setResearchEnabled(status.enabled);}).catch(()=>{});
     request<AIStatus>('/lookup/status').then(status=>{if(!cancelled)setAIEnabled(status.enabled);}).catch(()=>{});
-    readDatabaseDraft(projectId,new URLSearchParams(window.location.search).get('draft')??undefined).then(saved => {
-      if (!cancelled) { if(saved&&saved.projectId!==projectId)throw new Error('This draft belongs to another project. Choose its project before opening it.');setDraft(saved ?? freshDraft(projectId));if(saved)setDraftAddress(projectId,saved.id); setAnnouncement(cloudMode ? (saved ? 'Draft restored from Azure SQL.' : 'Azure SQL ready. Catalog and configured research tools are available.') : saved ? 'Draft restored from the local database.' : 'Local database ready. Fixture catalog; test session only.'); }
-    }).catch(error => { if (!cancelled) setStorageError(error instanceof Error ? error.message : 'Local database unavailable.'); })
-      .finally(() => { if (!cancelled) setDatabaseBusy(false); });
+    void (async()=>{try{const jobs=await request<{records:{id:string;name:string;number:string}[]}>('/jobs');if(cancelled)return;setAssignedProjects(jobs.records);if(!jobs.records.length){setStorageError('No active jobs are assigned to you. Contact your company administrator.');return;}const chosen=jobs.records.some(j=>j.id===projectId)?projectId:jobs.records[0].id;setProjectId(chosen);const saved=await readDatabaseDraft(chosen,chosen===projectId?new URLSearchParams(location.search).get('draft')??undefined:undefined);if(cancelled)return;if(saved&&saved.projectId!==chosen)throw new Error('Choose the job this draft belongs to.');setDraft(saved??freshDraft(chosen));if(saved)setDraftAddress(chosen,saved.id);setAnnouncement(saved?'Saved MRF restored.':'Your assigned jobs are ready.');}catch(error){if(!cancelled)setStorageError(error instanceof Error?error.message:'Unable to load your jobs.');}finally{if(!cancelled)setDatabaseBusy(false);}})();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(()=>{const refresh=()=>{if(databaseMode)void request<{records:{id:string;name:string;number:string}[]}>('/jobs').then(value=>setAssignedProjects(value.records)).catch(()=>{});};window.addEventListener('etalonops-jobs-changed',refresh);return()=>window.removeEventListener('etalonops-jobs-changed',refresh);},[]);
 
   function changeDraft(update: (current: Draft) => Draft) {
     if(draft.submitted){setStorageError('Submitted MRFs are locked. Create a revision for changes.');return;}
@@ -337,27 +335,19 @@ export default function App() {
     if (save && !await saveDraft()) return;
     if (pendingDraft) await navigateDraft(pendingDraft);
     if (pendingProject) await activateProject(pendingProject);
-    if (pendingLeave) { setActive(false); clearLocalSession(); if (cloudMode) void cloudSignOut(); setProfileOpen(false); setDirty(false); }
+    if (pendingLeave) { setActive(false); clearLocalSession(); if (cloudMode||siteSessionActive()) void cloudSignOut(); setProfileOpen(false); setDirty(false); }
     closeConfirmation();
   }
 
   function leaveDemo() {
     if (dirty) setPendingLeave(true);
-    else { setActive(false); clearLocalSession(); if (cloudMode) void cloudSignOut(); setProfileOpen(false); }
+    else { setActive(false); clearLocalSession(); if (cloudMode||siteSessionActive()) void cloudSignOut(); setProfileOpen(false); }
   }
 
   function resumeDemo() {
     void navigateDraft(draft.id?{kind:'open',id:draft.id}:{kind:'new'});setActive(true);
   }
 
-  function moveLine(id:string,direction:-1|1){
-    if(draft.submitted)return;
-    const index=draft.lines.findIndex(line=>line.id===id),target=index+direction;
-    if(index<0||target<0||target>=draft.lines.length)return;
-    changeDraft(current=>{const lines=[...current.lines];const [line]=lines.splice(index,1);lines.splice(target,0,line);return {...current,lines};});
-    setAnnouncement(`Item moved to position ${target+1}. Save your draft to keep this order.`);
-    requestAnimationFrame(()=>document.getElementById(`mrf-line-${id}`)?.focus());
-  }
 
   function updateLine(id: string, update: Partial<Line>) {
     changeDraft(current => ({ ...current, lines: current.lines.map(line => line.id === id ? { ...line, ...update } : line) }));
@@ -402,27 +392,27 @@ export default function App() {
     <aside className="desktop-sidebar"><Brand /><Navigation /></aside>
     <header className="topbar">
       <button className="icon-button menu-button" aria-label="Open navigation" onClick={() => menuRef.current?.showModal()}><Menu size={23} aria-hidden="true" /></button>
-      <div className="project-picker"><label htmlFor="project-select" className="sr-only">Project</label><div className="project-select-wrap"><select id="project-select" value={projectId} disabled={aiBusy||databaseBusy} onChange={event => { if (dirty) setPendingProject(event.target.value); else activateProject(event.target.value); }}>{projects.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div><span>Project #{project.number} <span className="project-mock">· Demo</span></span></div>
+      <div className="project-picker"><label htmlFor="project-select" className="sr-only">Project</label><div className="project-select-wrap"><select id="project-select" value={projectId} disabled={aiBusy||databaseBusy} onChange={event => { if (dirty) setPendingProject(event.target.value); else activateProject(event.target.value); }}>{!assignedProjects.length&&<option value={projectId}>No assigned jobs</option>}{assignedProjects.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div><span>Job #{project.number}</span></div>
       <form className="global-search" onSubmit={event => { event.preventDefault(); if (globalSearch.trim()) { setDescription(globalSearch.trim()); resetEntry(); descriptionRef.current?.focus(); setAnnouncement('Description filled. Enter a quantity, then Find Matches.'); } }}><Search size={17} aria-hidden="true" /><input aria-label={cloudMode ? 'Search materials' : 'Search demo materials'} placeholder={cloudMode ? 'Search materials…' : 'Search demo materials…'} value={globalSearch} onChange={event => setGlobalSearch(event.target.value)} /><button className="sr-only" type="submit">Use search as description</button></form>
-      <div className="profile"><button className="avatar" aria-label={cloudMode ? 'Account menu' : 'Demo session menu'} aria-expanded={profileOpen} onClick={() => setProfileOpen(current => !current)}>{cloudMode ? cloudDisplayName().split(/\s+/).filter(Boolean).map(part=>part[0]).slice(0,2).join('').toUpperCase() : 'DM'}</button>{profileOpen && <div className="profile-menu"><strong>{cloudMode ? cloudDisplayName() : databaseMode ? localIdentity : 'Demo foreman'}</strong><span>{cloudMode ? 'Microsoft work account' : 'Local session · no sign-in'}</span><button className="button text-button" onClick={leaveDemo}><LogOut size={15} aria-hidden="true" />{cloudMode ? 'Sign out' : 'Leave demo'}</button></div>}</div>
+      <div className="profile"><button className="avatar" aria-label={cloudMode||siteSessionActive() ? 'Account menu' : 'Demo session menu'} aria-expanded={profileOpen} onClick={() => setProfileOpen(current => !current)}>{cloudMode||siteSessionActive() ? cloudDisplayName().split(/\s+/).filter(Boolean).map(part=>part[0]).slice(0,2).join('').toUpperCase() : 'DM'}</button>{profileOpen && <div className="profile-menu"><strong>{cloudMode||siteSessionActive() ? cloudDisplayName() : databaseMode ? localIdentity : 'Demo foreman'}</strong><span>{siteSessionActive()?'Site account':cloudMode ? 'Microsoft work account' : 'Local session · no sign-in'}</span><button className="button text-button" onClick={leaveDemo}><LogOut size={15} aria-hidden="true" />{cloudMode||siteSessionActive() ? 'Sign out' : 'Leave demo'}</button></div>}</div>
     </header>
 
     <main id="main" className="workspace" tabIndex={-1} inert={(databaseBusy||aiBusy) || undefined} aria-busy={databaseBusy||aiBusy}>
       <div className="page-heading"><h1>MRF Builder</h1><AdminWorkspace /><CatalogAdmin /><UserAdmin /><span className="demo-badge">{cloudMode ? 'Cloud pilot' : 'Local preview'}</span></div>
-      <div className="demo-notice"><Info size={14} aria-hidden="true" /><span>{cloudMode ? (researchEnabled ? 'Microsoft sign-in · Azure SQL · AI manufacturer-page research · example projects.' : aiEnabled ? 'Microsoft sign-in · Azure SQL · AI clarification enabled · external search disabled · example projects.' : 'Microsoft sign-in · Azure SQL · AI discovery disabled · example projects.') : databaseMode ? 'Local database demo · scripted AI · no Microsoft sign-in. Test account: ' + localIdentity : 'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
+      <div className="demo-notice"><Info size={14} aria-hidden="true"/><span>{cloudMode||siteSessionActive()?`Signed in as ${cloudDisplayName()}. Choose an assigned job to create or continue an MRF.`:databaseMode?'Local database demo · scripted AI · no Microsoft sign-in. Test account: '+localIdentity:'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
       <nav className="mrf-navigation" aria-label="MRF actions"><span ref={setListActions}/><button className="button" onClick={()=>void showDrafts()}>My Drafts</button><button className="button" onClick={()=>chooseDraft({kind:'new'})}>New MRF</button></nav>
       {draftListOpen&&draftList&&<section className="panel saved-drafts" aria-label="My Drafts"><div className="section-heading"><h2>My Drafts</h2><button className="button" onClick={()=>setDraftListOpen(false)}>Close draft list</button></div><form className="draft-filters" onSubmit={event=>{event.preventDefault();void showDrafts(1,draftSearch);}}><label>Find saved MRF by name<input maxLength={120} value={draftSearch.text??''} onChange={e=>setDraftSearch(current=>({...current,text:e.target.value}))}/></label><label>Delivery from<input type="date" value={draftSearch.deliveryFrom??''} onChange={e=>setDraftSearch(current=>({...current,deliveryFrom:e.target.value}))}/></label><label>Delivery through<input type="date" value={draftSearch.deliveryTo??''} onChange={e=>setDraftSearch(current=>({...current,deliveryTo:e.target.value}))}/></label><div className="catalog-actions"><button className="button" disabled={databaseBusy}>Filter drafts</button><button className="button" type="button" disabled={databaseBusy} onClick={()=>{setDraftSearch({});void showDrafts(1,{});}}>Clear draft filters</button></div></form>{draftListError&&<p role="alert">{draftListError}</p>}<p>{project.name} · {draftList.total} saved drafts{Object.keys(appliedDraftFilters).length?' matching applied filters':''}</p>{draftList.records.length===0&&<p>No saved drafts match. Clear the filters or save a new MRF for this project.</p>}{draftList.records.map(item=><article key={item.id}><h3>{item.name}</h3><p>{item.itemCount} items · Delivery {formatDate(item.deliveryDate)} · Last saved {new Date(item.savedAt).toLocaleString()}</p><button className="button" onClick={()=>chooseDraft({kind:'open',id:item.id})}>Continue {item.name}</button></article>)}<div className="catalog-actions"><button className="button" disabled={draftList.page<=1} onClick={()=>void showDrafts(draftList.page-1)}>Previous drafts</button><span>Page {draftList.page} of {draftList.pages}</span><button className="button" disabled={draftList.page>=draftList.pages} onClick={()=>void showDrafts(draftList.page+1)}>Next drafts</button></div></section>}
       <section className="panel mrf-header" aria-label="MRF header">
         <label htmlFor="mrf-name">MRF name<input id="mrf-name" readOnly={Boolean(draft.submitted)} required maxLength={120} value={draft.name??'Saved MRF'} placeholder="e.g. Level 2 Rough-In" onChange={event=>changeDraft(current=>({...current,name:event.target.value}))}/></label>
         <label htmlFor="mrf-foreman">Foreman<select id="mrf-foreman" aria-label="Foreman" disabled={Boolean(draft.submitted)||!foremen.length} value={draft.foreman?.id??selfId} onChange={event=>{const person=foremen.find(person=>person.id===event.target.value);if(person)changeDraft(current=>({...current,foreman:person}));}}>{!foremen.length&&<option value="">{foremenError?'Foreman list unavailable':'Loading foremen…'}</option>}{draft.foreman&&!foremen.some(person=>person.id===draft.foreman?.id)&&<option value={draft.foreman.id} disabled>{draft.foreman.name} (unavailable)</option>}{foremen.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
         <label htmlFor="delivery-date">MRF Delivery Date<input id="delivery-date" type="date" readOnly={Boolean(draft.submitted)} required value={draft.deliveryDate} onChange={event=>{if(event.target.value)changeDraft(current=>({...current,deliveryDate:event.target.value}));}}/></label>
-        <div className="mrf-header-actions"><div className="catalog-actions"><button className="button save-button" disabled={Boolean(draft.submitted)} onClick={saveDraft}><Save size={16} aria-hidden="true"/>Save as Draft</button><span ref={setHeaderActions}/></div><span className={`save-status ${dirty?'unsaved':''}`}>{dirty?'Unsaved changes':draft.savedAt?(cloudMode?'Saved in Azure SQL':databaseMode?'Saved in local database':'Saved in this browser'):'Not saved yet'}</span></div>
+        <div className="mrf-header-actions"><div className="catalog-actions"><button className="button save-button" disabled={Boolean(draft.submitted)||(databaseMode&&!assignedProjects.length)} onClick={saveDraft}><Save size={16} aria-hidden="true"/>Save as Draft</button><span ref={setHeaderActions}/></div><span className={`save-status ${dirty?'unsaved':''}`}>{dirty?'Unsaved changes':draft.savedAt?(cloudMode?'Saved in Azure SQL':databaseMode?'Saved in local database':'Saved in this browser'):'Not saved yet'}</span></div>
         {foremenError&&<p role="alert" className="error-message">{foremenError}</p>}
       </section>
-      <SubmissionCenter headerActions={headerActions} listActions={listActions} projectId={projectId} draft={draft} prepare={prepareSubmission} onSubmitted={submissionSaved} onOpenDraft={id=>chooseDraft({kind:'open',id})}/>
+      <SubmissionCenter projectName={project.name} headerActions={headerActions} listActions={listActions} projectId={projectId} draft={draft} prepare={prepareSubmission} onSubmitted={submissionSaved} onOpenDraft={id=>chooseDraft({kind:'open',id})}/>
       {storageError && <div className="error-message" role="alert"><AlertCircle size={17} aria-hidden="true" /><span>{storageError}</span></div>}
 
-      <div inert={draft.submitted?true:undefined}>
+      <div inert={draft.submitted||(databaseMode&&!assignedProjects.length)?true:undefined}>
       <section className="panel entry-panel" aria-label="Add a material">
         <SectionHeading title="Add MRF Item"/>
         <form onSubmit={event => search(event)} className="entry-form" noValidate>
@@ -454,7 +444,7 @@ export default function App() {
       <section className="panel item-list" aria-label="MRF Item List"><SectionHeading title="MRF Item List" aside={<span className="item-list-tools">{databaseMode&&<button className="button" onClick={()=>void request<{issues:{lineId:string;message:string}[];ready:boolean}>('/catalog/validate-lines','POST',{projectId,lines:draft.lines}).then(result=>{setCompliance(result.issues.map(issue=>`Item ${draft.lines.findIndex(line=>line.id===issue.lineId)+1}: ${issue.message}`));setAnnouncement(result.ready?'Manufacturer and job restriction checks passed. No order was submitted.':'Some items need correction before purchasing. Your draft is preserved.');}).catch(error=>setEntryError(error.message))}>Check purchasing requirements</button>}<span className="count-badge">{draft.lines.length} {draft.lines.length === 1 ? 'item' : 'items'}</span></span>}>Materials added to your request.</SectionHeading>
         <div className="item-table-wrap"><table className="item-table"><thead><tr><th scope="col" className="number-column">#</th><th scope="col" className="image-column">Image</th><th scope="col">Material description</th><th scope="col" className="quantity-column">Qty / UOM</th><th scope="col" className="delivery-column">Item delivery</th><th scope="col" className="action-column">Actions</th></tr></thead><tbody>
           {draft.lines.length === 0 ? <tr className="empty-row"><td colSpan={6}><div className="empty-list"><FileText size={38} strokeWidth={1.3} aria-hidden="true" /><div><strong>No items added yet</strong><span>Find a match above to add items to your MRF.</span></div></div></td></tr>
-            : draft.lines.map((line, index) => <tr key={line.id} className={line.purchasing?.noSubstitutions?'no-substitutions':undefined} id={`mrf-line-${line.id}`} tabIndex={-1} data-testid="mrf-line"><td className="line-number"><span className="mobile-label">Item </span>{String(index + 1).padStart(2, '0')}</td><td className="line-image"><ProductImage category={line.candidate?.category ?? 'conduit'} candidate={line.candidate??undefined} productId={line.purchasing?.productId} small /></td><td className="line-description"><strong>{formatMaterialText(line.description,line.candidate?.category)}</strong><SourceTag source={line.source} verification={line.candidate?.verification} />{line.purchasing?.manufacturer&&<p className="line-manufacturer">{line.purchasing.manufacturer} · {line.purchasing.partNumber}<span className="substitution-note">{line.purchasing.noSubstitutions?'No Substitutions — exact product required':'or equivalent'}</span></p>}{line.taskCode&&<span className="line-task-code">Task Code: {line.taskCode}</span>}<details className="line-extra"><summary>Original input</summary><p>{line.rawInput.quantity} {line.rawInput.requestedUnit} · {line.rawInput.description}</p>{line.candidate && <p>Product UOM: {line.candidate.productUnit}. No quantity conversion applied.</p>}<div className="line-reorder" aria-label={`Reorder item ${index+1}`}><button className="icon-button" aria-label={`Move item ${index+1} up`} disabled={index===0||Boolean(draft.submitted)} onClick={()=>moveLine(line.id,-1)}><ArrowUp size={16} aria-hidden="true"/></button><button className="icon-button" aria-label={`Move item ${index+1} down`} disabled={index===draft.lines.length-1||Boolean(draft.submitted)} onClick={()=>moveLine(line.id,1)}><ArrowDown size={16} aria-hidden="true"/></button><span>Move item</span></div></details></td><td className="line-quantity"><span className="mobile-label">Quantity</span><strong>{line.quantity}</strong> <span>{line.requestedUnit}</span></td><td className="line-delivery"><label className="sr-only" htmlFor={`mode-${line.id}`}>Delivery mode for item {index + 1}</label><select id={`mode-${line.id}`} value={line.deliveryMode} onChange={event => updateLine(line.id, event.target.value === 'inherit' ? { deliveryMode: 'inherit', overrideDate: null } : { deliveryMode: 'override', overrideDate: draft.deliveryDate })}><option value="inherit">Use MRF Date</option><option value="override">Item Delivery Override</option></select>{line.deliveryMode === 'override' ? <><label className="sr-only" htmlFor={`override-${line.id}`}>Delivery override for item {index + 1}</label><input id={`override-${line.id}`} type="date" value={line.overrideDate ?? ''} onChange={event => { if (event.target.value) updateLine(line.id, { overrideDate: event.target.value }); }} /></> : <span className="inherited-date" data-testid="effective-date">{formatDate(draft.deliveryDate)}</span>}</td><td className="line-actions"><button className="icon-button" aria-label={`Edit item ${index + 1}`} onClick={event => { editTriggerRef.current = event.currentTarget; setEditing({ ...line }); setEditError(''); }}><Pencil size={16} aria-hidden="true" /></button><button className="icon-button remove-button" aria-label={`Remove item ${index + 1}`} onClick={() => setRemoving(line)}><Trash2 size={16} aria-hidden="true" /></button></td></tr>)}
+            : draft.lines.map((line, index) => <tr key={line.id} className={line.purchasing?.noSubstitutions?'no-substitutions':undefined} id={`mrf-line-${line.id}`} tabIndex={-1} data-testid="mrf-line"><td className="line-number"><span className="mobile-label">Item </span>{String(index + 1).padStart(2, '0')}</td><td className="line-image"><ProductImage category={line.candidate?.category ?? 'conduit'} candidate={line.candidate??undefined} productId={line.purchasing?.productId} small /></td><td className="line-description"><strong>{formatMaterialText(line.description,line.candidate?.category)}</strong><SourceTag source={line.source} verification={line.candidate?.verification} />{line.purchasing?.manufacturer&&<p className="line-manufacturer">{line.purchasing.manufacturer} · {line.purchasing.partNumber}<span className="substitution-note">{line.purchasing.noSubstitutions?'No Substitutions — exact product required':'or equivalent'}</span></p>}{line.taskCode&&<span className="line-task-code">Task Code: {line.taskCode}</span>}</td><td className="line-quantity"><span className="mobile-label">Quantity</span><strong>{line.quantity}</strong> <span>{line.requestedUnit}</span></td><td className="line-delivery"><label className="sr-only" htmlFor={`mode-${line.id}`}>Delivery mode for item {index + 1}</label><select id={`mode-${line.id}`} value={line.deliveryMode} onChange={event => updateLine(line.id, event.target.value === 'inherit' ? { deliveryMode: 'inherit', overrideDate: null } : { deliveryMode: 'override', overrideDate: draft.deliveryDate })}><option value="inherit">Use MRF Date</option><option value="override">Item Delivery Override</option></select>{line.deliveryMode === 'override' ? <><label className="sr-only" htmlFor={`override-${line.id}`}>Delivery override for item {index + 1}</label><input id={`override-${line.id}`} type="date" value={line.overrideDate ?? ''} onChange={event => { if (event.target.value) updateLine(line.id, { overrideDate: event.target.value }); }} /></> : <span className="inherited-date" data-testid="effective-date">{formatDate(draft.deliveryDate)}</span>}</td><td className="line-actions"><button className="icon-button" aria-label={`Edit item ${index + 1}`} onClick={event => { editTriggerRef.current = event.currentTarget; setEditing({ ...line }); setEditError(''); }}><Pencil size={16} aria-hidden="true" /></button><button className="icon-button remove-button" aria-label={`Remove item ${index + 1}`} onClick={() => setRemoving(line)}><Trash2 size={16} aria-hidden="true" /></button></td></tr>)}
         </tbody></table></div>
         {draft.lines.length > 0 && <div className="list-footer"><span><Info size={14} aria-hidden="true" />Items use the MRF date unless you choose an override.</span><button className="button text-button" onClick={() => { setDescription(''); setQuantity(''); setUnit(''); setAllowChanges(true);resetEntry(); descriptionRef.current?.focus(); }}><Plus size={15} aria-hidden="true" />Next material</button></div>}
       </section>

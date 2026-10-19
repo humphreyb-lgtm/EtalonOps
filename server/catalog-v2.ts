@@ -34,7 +34,7 @@ export const translationInput=z.object({materialKey:reference,phrase:z.string().
 export const imageReferenceInput=z.object({materialKey:reference,manufacturer:name.optional(),partNumber:name.optional(),sourceUrl:https,rightsBasis:z.string().trim().min(10).max(2000)}).strict().refine(v=>Boolean(v.manufacturer)===Boolean(v.partNumber),'Manufacturer and part number must be supplied together.');
 export { purchaseSchema, type Purchasing } from './purchasing';
 import { purchaseSchema, type Purchasing } from './purchasing';
-export const policyInput=z.object({id:z.uuid().optional(),projectId:z.enum(['riverside','northside']),materialKey:reference.nullable(),category:z.enum(['conduit','bracket','box','general']).nullable(),enabled:z.boolean().default(false),manufacturerIds:z.array(z.uuid()).max(100),productIds:z.array(z.uuid()).max(100)}).strict().refine(v=>!(v.materialKey&&v.category),'Choose material or category scope, not both.').refine(v=>v.manufacturerIds.length+v.productIds.length>0,'An allow list cannot be empty.');
+export const policyInput=z.object({id:z.uuid().optional(),projectId:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/),materialKey:reference.nullable(),category:z.enum(['conduit','bracket','box','general']).nullable(),enabled:z.boolean().default(false),manufacturerIds:z.array(z.uuid()).max(100),productIds:z.array(z.uuid()).max(100)}).strict().refine(v=>!(v.materialKey&&v.category),'Choose material or category scope, not both.').refine(v=>v.manufacturerIds.length+v.productIds.length>0,'An allow list cannot be empty.');
 function materialIdentity(category:string,productUnit:string,attributes:Record<string,unknown>){
  const canonical=Object.fromEntries(Object.entries(attributes).filter(([field])=>!['nominalSpacing','category','recordOrigin'].includes(field)&&!isProductDetail(category,field)).sort(([x],[y])=>x.localeCompare(y)).map(([field,value])=>{
   let normalized=typeof value==='string'?key(value):value;
@@ -116,7 +116,7 @@ function* addPhrase(p:Principal,materialId:string,phrase:string,origin:string,ba
 }
 export function* addTranslation(p:Principal,data:unknown,dry=false,batch:string|null=null):Operation<any>{admin(p);const input=translationInput.parse(data),m=yield* materialByKey(p,input.materialKey);if(dry)return {};const result=yield* addPhrase(p,String(m.id).toLowerCase(),input.phrase,input.origin,batch,input.sourceUrl??null);yield* audit(p,'translation.imported',result.id);return result;}
 export function* selectMaterial(p:Principal,data:unknown):Operation<any>{
-  const input=z.object({eventId:z.uuid(),projectId:z.enum(['riverside','northside']),materialId:z.uuid(),productId:z.uuid().nullable(),phrase:z.string().trim().min(1).max(500)}).strict().parse(data);
+  const input=z.object({eventId:z.uuid(),projectId:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/),materialId:z.uuid(),productId:z.uuid().nullable(),phrase:z.string().trim().min(1).max(500)}).strict().parse(data);
   if(!(yield* query('SELECT project FROM memberships WHERE tenant=@p0 AND owner=@p1 AND project=@p2',p.tenant,p.oid,input.projectId)).length)throw new ApiError(404,'Project not found.');
   const material=yield* materialById(p,input.materialId);if(!material.active)throw new ApiError(409,'Material is inactive.');
   const existing=(yield* query('SELECT * FROM selection_events WHERE id=@p0',input.eventId))[0];
@@ -292,7 +292,7 @@ export function* rollbackBulk(p:Principal,id:string):Operation<any>{
   yield* query("UPDATE catalog_batches SET state='rolled_back' WHERE tenant=@p0 AND id=@p1",p.tenant,id);yield* audit(p,'catalog.bulk_rolled_back',id);return {historyPreserved:true};
 }
 export function* selectDiscovery(p:Principal,data:unknown):Operation<any>{
-  const input=z.object({eventId:z.uuid(),projectId:z.enum(['riverside','northside']),phrase:z.string().trim().min(1).max(500),material:materialInput,product:productInput.omit({materialKey:true}),additionalPhrases:z.array(z.string().trim().min(1).max(500)).max(8).default([])}).strict().parse(data);
+  const input=z.object({eventId:z.uuid(),projectId:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/),phrase:z.string().trim().min(1).max(500),material:materialInput,product:productInput.omit({materialKey:true}),additionalPhrases:z.array(z.string().trim().min(1).max(500)).max(8).default([])}).strict().parse(data);
   if(!(yield* query('SELECT project FROM memberships WHERE tenant=@p0 AND owner=@p1 AND project=@p2',p.tenant,p.oid,input.projectId)).length)throw new ApiError(404,'Project not found.');
   const fingerprint=`${input.eventId}/${digest(JSON.stringify(input)).slice(0,32)}`;
   const prior=(yield* query('SELECT id FROM selection_events WHERE id=@p0',input.eventId))[0];
@@ -488,11 +488,11 @@ export function* catalogAction(p:Principal,action:string,data:any):Operation<any
     case 'priority':return yield* setPriority(p,data);
     case 'policy':return yield* setPolicy(p,data);
     case 'validate-lines':{
-      const body=z.object({projectId:z.enum(['riverside','northside']),lines:z.array(z.object({id:z.uuid(),candidate:z.object({id:z.string()}).nullable(),purchasing:purchaseSchema.optional()}).passthrough()).max(500)}).parse(data);
+      const body=z.object({projectId:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/),lines:z.array(z.object({id:z.uuid(),candidate:z.object({id:z.string()}).nullable(),purchasing:purchaseSchema.optional()}).passthrough()).max(500)}).parse(data);
       if(!(yield* query('SELECT project FROM memberships WHERE tenant=@p0 AND owner=@p1 AND project=@p2',p.tenant,p.oid,body.projectId)).length)throw new ApiError(404,'Project not found.');
       const issues:{lineId:string;message:string}[]=[];for(const line of body.lines){try{yield* validatePurchase(p,body.projectId,line.candidate?.id??null,line.purchasing);}catch(error){if(!(error instanceof ApiError))throw error;issues.push({lineId:line.id,message:error.message});}}return {issues,ready:issues.length===0};
     }
-    case 'details':return yield* materialDetails(p,z.uuid().parse(data.id),z.enum(['riverside','northside']).optional().parse(data.projectId));
+    case 'details':return yield* materialDetails(p,z.uuid().parse(data.id),z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/).optional().parse(data.projectId));
     case 'translations':return yield* translationsForAdmin(p,z.uuid().parse(data.id));
     case 'reject-translation':return yield* rejectTranslation(p,z.uuid().parse(data.id));
     case 'image-reference':return yield* addImageReference(p,data);

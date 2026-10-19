@@ -5,7 +5,7 @@ import type {DraftFilters} from '../src/draft-filters';
 function* query(text:string,...values:unknown[]):Operation<RecordRow[]>{return yield {text,values};}
 export const draftFilters=z.object({text:z.string().trim().max(120).default(''),deliveryFrom:z.iso.date().optional(),deliveryTo:z.iso.date().optional()}).strict().refine(f=>!f.deliveryFrom||!f.deliveryTo||f.deliveryFrom<=f.deliveryTo,'Delivery from must be on or before delivery through.');
 export function* listSavedDrafts(p:Principal,project:string,page:number,filters:DraftFilters):Operation<{records:{id:string;name:string;projectId:string;deliveryDate:string;savedAt:string;itemCount:number;version:number}[];total:number;page:number;pages:number}>{
- z.enum(['riverside','northside']).parse(project);page=z.number().int().min(1).max(100000).parse(page);const input=draftFilters.parse(filters);
+ z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/).parse(project);page=z.number().int().min(1).max(100000).parse(page);const input=draftFilters.parse(filters);
  if(!(yield* query('SELECT project FROM memberships WHERE tenant=@p0 AND owner=@p1 AND project=@p2',p.tenant,p.oid,project)).length)throw new ApiError(404,'Project not found.');
  const values:unknown[]=[p.tenant,p.oid,project];let where='d.tenant=@p0 AND d.owner=@p1 AND d.project=@p2 AND NOT EXISTS(SELECT 1 FROM mrf_submissions s WHERE s.draft_id=d.id)';
  if(input.text){values.push('%'+input.text.toLowerCase().replace(/[!%_\[]/g,c=>'!'+c)+'%');where+=` AND LOWER(d.name) LIKE @p${values.length-1} ESCAPE '!'`;}

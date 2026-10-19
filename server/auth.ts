@@ -21,7 +21,7 @@ export function createAuth(options: AuthOptions) {
         const { payload } = await jwtVerify(token, key, { issuer, audience: options.mode === 'entra' ? options.audience : 'etalonops-local-api', algorithms: [options.mode === 'entra' ? 'RS256' : 'HS256'], requiredClaims: ['exp', 'iat', 'tid', 'oid', 'scp', 'roles'] });
         const tenant = options.mode === 'entra' ? options.tenant : 'local-development';
         if (payload.tid !== tenant || typeof payload.oid !== 'string' || typeof payload.scp !== 'string' || !payload.scp.split(' ').includes('access_as_user') || !Array.isArray(payload.roles)) throw new Error('Invalid claims');
-        const roles = payload.roles.filter((role): role is string => typeof role === 'string' && ['Admin', 'Foreman'].includes(role));
+        const roles = payload.roles.filter((role): role is string => typeof role === 'string' && ['Admin','CompanyAdmin','Superintendent','GeneralForeman','Foreman'].includes(role));
         if (!roles.length) throw new ApiError(403, 'Application assignment required.');
         return { tenant, oid: payload.oid.toLowerCase(), roles,...(typeof payload.name==='string'?{displayName:payload.name.trim().slice(0,200)}:{}) };
       } catch (error) { if (error instanceof ApiError) throw error; throw new ApiError(401, 'Valid API access token required.'); }

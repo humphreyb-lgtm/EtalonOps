@@ -1,3 +1,4 @@
+import {LoginPage,accountRequest} from './LoginPage';
 import { useEffect, useState, type ReactNode } from 'react';
 import { PublicClientApplication, InteractionRequiredAuthError, type AccountInfo } from '@azure/msal-browser';
 
@@ -5,8 +6,10 @@ declare global { interface Window { __ETALONOPS_CONFIG__?: { tenant: string; cli
 export const cloudMode = Boolean(window.__ETALONOPS_CONFIG__);
 let client: PublicClientApplication | undefined;
 let account: AccountInfo | null = null;
+let siteAccount:{displayName:string}|null=null;
+export function siteSessionActive(){return Boolean(siteAccount);}
 let initialization: Promise<void> | undefined;
-export function cloudDisplayName() { return account?.name ?? 'Assigned user'; }
+export function cloudDisplayName() { return siteAccount?.displayName??account?.name ?? 'Assigned user'; }
 const scopes = () => [`api://${window.__ETALONOPS_CONFIG__!.clientId}/access_as_user`];
 async function authClient() {
   if (!client) {
@@ -18,22 +21,29 @@ async function authClient() {
   return client;
 }
 export async function cloudToken() {
+  if(siteAccount)return '';
   const auth = await authClient();
   if (!account) throw new Error('Sign in with Microsoft to continue.');
   try { return (await auth.acquireTokenSilent({ scopes: scopes(), account })).accessToken; }
   catch (error) { if (error instanceof InteractionRequiredAuthError) throw new Error('Your Microsoft session needs attention. Sign out and sign in again; keep unsaved items on screen until you are ready.'); throw error; }
 }
 export async function cloudSignOut() {
+  if(siteAccount){await accountRequest('logout',{});siteAccount=null;location.assign('/');return;}
   const auth = await authClient();
   await auth.logoutRedirect({ account, postLogoutRedirectUri: window.location.origin });
 }
 export function CloudGate({ children }: { children: ReactNode }) {
+  const [explicitAccountLink]=useState(()=>/^#(?:register|reset)=[A-Za-z0-9_-]{43}$/.test(location.hash));
+  useEffect(()=>{const openAccountLink=()=>{if(/^#(?:register|reset)=[A-Za-z0-9_-]{43}$/.test(location.hash))location.reload();};window.addEventListener('hashchange',openAccountLink);return()=>window.removeEventListener('hashchange',openAccountLink);},[]);
   const [signedIn, setSignedIn] = useState(false), [busy, setBusy] = useState(cloudMode), [error, setError] = useState('');
   useEffect(() => {
-    if (!cloudMode) return;
+    if (!cloudMode&&!new URLSearchParams(location.search).has('auth')) return;
+    if(explicitAccountLink){setBusy(false);return;}
     let cancelled = false;
     (async () => {
       try {
+        try{const user=await accountRequest('session');siteAccount=user;if(!cancelled)setSignedIn(true);return;}catch{}
+        if(!cloudMode)return;
         const auth = await authClient();
         const cached = auth.getActiveAccount() ?? (auth.getAllAccounts().length === 1 ? auth.getAllAccounts()[0] : null);
         if (!cached) return;
@@ -46,8 +56,9 @@ export function CloudGate({ children }: { children: ReactNode }) {
     })();
     return () => { cancelled = true; };
   }, []);
-  if (!cloudMode || signedIn) return children;
+  if ((!cloudMode&&!new URLSearchParams(location.search).has('auth')) || signedIn) return children;
   async function signIn() {
+    if(!cloudMode){setError('Microsoft sign-in is available in the deployed environment.');return;}
     setBusy(true); setError('');
     try {
       const result = await (await authClient()).loginPopup({ scopes: scopes() });
@@ -60,5 +71,5 @@ export function CloudGate({ children }: { children: ReactNode }) {
     } catch (error) { setError(error instanceof Error ? error.message : 'Sign-in could not be completed.'); }
     finally { setBusy(false); }
   }
-  return <main className="resume-page"><section className="resume-panel"><span className="eyebrow">ETALONOPS PILOT</span><h1>Sign in to EtalonOps</h1><p>Use your assigned Microsoft work account.</p><button className="button primary" disabled={busy} onClick={signIn}>{busy ? 'Signing in…' : 'Sign in with Microsoft'}</button>{error && <p role="alert">{error}</p>}<p className="fine-print">AI discovery is not enabled. Pilot projects contain example project names.</p></section></main>;
+  return <LoginPage microsoft={signIn} onSite={user=>{siteAccount=user;setSignedIn(true);}} busy={busy} error={error}/>;
 }
