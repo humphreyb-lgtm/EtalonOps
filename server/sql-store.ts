@@ -127,9 +127,10 @@ export class SqlStore implements Repository {
   async submissions(p:Principal,action:string,data:unknown){return this.transaction(async tx=>{const id=(data as {draftId?:unknown})?.draftId;if((action==='review'||action==='submit')&&typeof id==='string')await tx.getDraft(p,id);return tx.catalogRun(submissions(p,action,data));});}
   async admit(p:Principal,localBootstrap=false){return this.transaction(tx=>tx.catalogRun(admitUser(p,localBootstrap)));}
   async users(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(userAccess(p,action,data)));}
-  async selectResearch(p:Principal,data:unknown){return this.transaction(tx=>tx.catalogRun(selectResearchedProduct(p,data)));}
+  async selectResearch(p:Principal,data:unknown){return this.transaction(async tx=>{await tx.catalogLock(p);return tx.catalogRun(selectResearchedProduct(p,data));});}
   async paidResearch(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(researchLedger(p,action,data)));}
-  async catalogCommand(p:Principal,action:string,data:unknown){return this.transaction(tx=>tx.catalogRun(catalogAction(p,action,data)));}
+  async catalogLock(p:Principal){const resource='etalonops-catalog:'+createHash('sha256').update(p.tenant).digest('hex');const lock=await this.q("DECLARE @result int; EXEC @result=sys.sp_getapplock @Resource=@p0,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000; SELECT @result AS lock_result",resource);if(Number(lock.recordset[0].lock_result)<0)throw new ApiError(409,'Another catalog update is still running. Try again after it finishes.');}
+  async catalogCommand(p:Principal,action:string,data:unknown){return this.transaction(async tx=>{await tx.catalogLock(p);return tx.catalogRun(catalogAction(p,action,data));});}
   async search(p:Principal,query:string,projectId?:string){return this.catalogRun(searchCatalog(p,query,projectId));}
   async conflicts(p: Principal, rows: ImportRow[]) {
     const errors: Report['errors'] = [];
