@@ -1,3 +1,4 @@
+import {materialTable} from './material-table';
 import {preparedResearchAction} from './prepared-research';
 import {isProductDetail} from '../src/research-attributes';
 import {productDetailsSchema} from '../src/catalog-research';
@@ -22,10 +23,10 @@ const key = (value: string) => value.normalize('NFKC').toLowerCase().replace(/\s
 const phraseKey = (value: string) => key(searchWords(value)).replace(/[″"]/g,' inch ').replace(/\s+/g,' ').trim();
 const name = z.string().trim().min(1).max(200);
 const reference = z.string().trim().min(1).max(100);
-const https = z.url().max(2000).refine(v=>{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password;},'Use a public HTTPS evidence URL.');
+const https = z.url().max(2000).refine(v=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password;}catch{return false;}},'Use a public HTTPS evidence URL.');
 const verification = z.enum(['provisional','reviewed']);
 const attributeValue = z.union([z.string().trim().min(1).max(200),z.number().finite().nonnegative()]);
-export const materialInput = z.object({externalKey:reference,category:z.enum(['conduit','bracket','box','general']),attributes:z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9]{0,39}$/),attributeValue).refine(v=>Object.keys(v).length>0&&Object.keys(v).length<=25),productUnit:z.enum(['EA','FT','STICK','BOX','ROLL','PAIR']),verification,origin:z.enum(['admin_reviewed','ai_import','ai_discovery']).default('admin_reviewed'),sourceUrl:https,verificationBasis:z.string().trim().min(10).max(2000)}).strict();
+export const materialInput = z.object({externalKey:reference,category:z.enum(['conduit','bracket','box','general']),attributes:z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9]{0,39}$/),attributeValue).refine(v=>Object.keys(v).length>0&&Object.keys(v).length<=25),productUnit:z.enum(['EA','FT','STICK','BOX','ROLL','PAIR']),verification,origin:z.enum(['admin_reviewed','ai_import','ai_discovery']).default('admin_reviewed'),sourceUrl:z.union([https,z.literal('')]),verificationBasis:z.string().trim().min(10).max(2000)}).strict().refine(value=>Boolean(value.sourceUrl)||value.origin==='admin_reviewed','AI-origin materials require a source URL.');
 export type MaterialInput=z.infer<typeof materialInput>;
 export const productInput=z.object({materialKey:reference,manufacturer:name,partNumber:name,title:z.string().trim().min(1).max(500),details:productDetailsSchema.optional(),sourceUrl:https,verification,origin:z.enum(['admin_reviewed','ai_import','ai_discovery']).default('admin_reviewed')}).strict();
 export const translationInput=z.object({materialKey:reference,phrase:z.string().trim().min(1).max(500),origin:z.enum(['admin_reviewed','ai_import','ai_generated']),sourceUrl:https.optional()}).strict().superRefine((v,c)=>{if(v.origin!=='admin_reviewed'&&!v.sourceUrl)c.addIssue({code:'custom',message:'AI phrases need source evidence.'});});
@@ -447,6 +448,7 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
   return snapshot;
 }
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
+  if(['material-table-page','material-table-row','material-table-preview','material-table-save'].includes(action))return yield* materialTable(p,action,data);
   if(action.startsWith('inbox-'))return yield* inboxAction(p,action,data);
   switch(action){
     case 'prepared-preview':return yield* preparedResearchAction(p,data);

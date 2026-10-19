@@ -598,3 +598,21 @@ dialog::backdrop { background: #14203c55; }
 .compact-import-table tr.catalog-match-existing > td:first-child { box-shadow: inset 4px 0 #b97a00; }
 .compact-import-table tr.catalog-match-conflict > td:first-child { box-shadow: inset 4px 0 #b51f2b; }
 .catalog-match-summary { padding: 4px 7px; margin: 3px 0; border-left: 4px solid #b97a00; background: #fff0bd; color: #493100; font-size: 12px; }
+
+.material-editor-table { min-width: 1000px; }
+.material-editor-table th:nth-child(1) { width: 42px; }
+.material-editor-table th:nth-child(2) { width: 24%; }
+.material-editor-table th:nth-child(3) { width: 65px; }
+.material-editor-table th:nth-child(4) { width: auto; }
+.material-editor-table th:nth-child(5) { width: 52px; }
+.material-editor-table th:nth-child(6) { width: 112px; }
+.material-editor-table td > strong { display:block; font-size:12px; }
+.material-table-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:2px 5px; }
+.material-editor-table select { font-size:12px; padding:2px; min-height:25px; max-width:100%; }
+.material-editor-table .button { padding:3px 5px; min-height:26px; font-size:12px; }
+.material-editor-table .material-table-more { min-width:270px; }
+.material-editor-table .material-table-more label { margin-bottom:4px; }
+.material-editor-table .material-new-row > td { background:#eff6ff; border-bottom:2px solid #8ab8ff; }
+.material-editor-table .material-table-review > td { background:#fff8de; padding:5px 8px; }
+.material-editor-table .material-table-review p { margin:2px 0; font-size:12px; }
+.material-editor-table .material-table-review label { display:inline-flex; gap:4px; align-items:center; margin-right:8px; }

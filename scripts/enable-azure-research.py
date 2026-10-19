@@ -34,7 +34,7 @@ model=info['properties']['model']
 require(model['name']=='gpt-5.4-mini' and model['version']=='2026-03-17' and info['sku']['name']=='DataZoneStandard','Unexpected model, version or deployment type. No settings changed.')
 require(info['properties'].get('provisioningState')=='Succeeded','Model deployment is not ready.')
 with urllib.request.urlopen('https://etalonops-954bb4a3.azurewebsites.net/api/health',timeout=30) as response: health=json.load(response)
-require(health.get('release') in ['source-research-v16','research-contract-v17','assisted-research-v18','catalog-details-v19','prepared-paste-v20','compact-research-v21','compact-research-v21.1','catalog-markers-v22'] and health.get('engine')=='Azure SQL','Install the v16 update successfully before enabling research.')
+require(health.get('release') in ['source-research-v16','research-contract-v17','assisted-research-v18','catalog-details-v19','prepared-paste-v20','compact-research-v21','compact-research-v21.1','catalog-markers-v22','material-table-v23'] and health.get('engine')=='Azure SQL','Install the v16 update successfully before enabling research.')
 # Verify current public retail rates before changing the AI deployment or application.
 query=urllib.parse.urlencode({'$filter':"contains(meterName, '5.4') and armRegionName eq 'eastus'"})
 with urllib.request.urlopen('https://prices.azure.com/api/retail/prices?'+query,timeout=30) as response: prices=json.load(response)
@@ -43,7 +43,7 @@ for sku,expected in [('5.4 mini Inp Dz',0.825),('5.4 mini Opt Dz',4.95)]:
     matches=[item for item in prices['Items'] if item.get('skuName')==sku and item.get('unitOfMeasure')=='1M' and item.get('type')=='Consumption']
     require(len(matches)==1 and matches[0]['retailPrice']==expected,'Model retail pricing changed or is ambiguous. Stop for budget-policy review.')
 if web_discovery:
-    require(health.get('release') in ['assisted-research-v18','catalog-details-v19','prepared-paste-v20','compact-research-v21','compact-research-v21.1','catalog-markers-v22'],'Install v18 before enabling web discovery.')
+    require(health.get('release') in ['assisted-research-v18','catalog-details-v19','prepared-paste-v20','compact-research-v21','compact-research-v21.1','catalog-markers-v22','material-table-v23'],'Install v18 before enabling web discovery.')
     query=urllib.parse.urlencode({'$filter':"contains(productName, 'Bing')"})
     with urllib.request.urlopen('https://prices.azure.com/api/retail/prices?'+query,timeout=30) as response: grounding=json.load(response)
     matches=[item for item in grounding['Items'] if item.get('productName')=='Grounding with Bing' and item.get('skuName')=='Search' and item.get('unitOfMeasure')=='1K' and item.get('type')=='Consumption']
