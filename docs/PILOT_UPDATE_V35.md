@@ -1,0 +1,9 @@
+# Publish edits and uploaded images v35
+
+In grouped import review, Publish selected items saves edited fields and image URLs first, checks the updated records, then publishes the selected groups. A separate Save inline changes step is no longer required or shown in grouped mode. Invalid edits remain saved unpublished with a correction message. Leave unpublished also saves field/URL edits. Advanced individual-record mode retains its explicit save option for repair work. Optimistic batch versions, administrator checks, publication plan hashing and grouped held-record protection remain enforced.
+
+Each product (or standalone material) offers JPEG/PNG/WebP upload, up to 5 MB, with an immediate thumbnail. Selected uploads take display priority over linked images. Files remain in browser memory until Publish; keep the review open until completion. Approval covers the selected product images and owner-managed use. After catalog publication the existing authenticated image upload/approval pipeline normalizes photos and stores them in the existing private image storage. Stored approved photos are preferred to external URL references in the builder and published grouped review. Original URL references are retained as fallback.
+
+Catalog publication and binary storage are separate operations. If an image fails, published catalog records are retained, the selected file remains in the current page, and Retry image uploads completes the photo without republishing catalog data. Leaving/reloading the page before that completion loses the in-memory file selection; select it again if needed. No new Azure resource or migration is required. Health reports publish-images-v35.
+
+Validation includes production build and real local SQL/image-storage browser tests for save-on-publish, URL retention, file normalization/retrieval and retry after a simulated temporary upload failure, plus existing grouped/advanced import publish/delete checks. No paid AI calls were made.
