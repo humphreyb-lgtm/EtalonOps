@@ -15,16 +15,6 @@ async function addPVC(page: Page) {
   await expect(page.getByTestId('mrf-line')).toHaveCount(1);
 }
 
-async function clarification(page: Page) {
-  await search(page, 'self tappers', 'EA', '200');
-  await page.getByLabel(/Other \/ none of these/).check();
-  await expect(page.getByLabel('Tell the assistant what you are looking for')).toBeFocused();
-  await page.getByLabel('Tell the assistant what you are looking for').fill('I need the black screws we use to mount devices to electrical boxes.');
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByRole('log')).toContainText('What length do you need?');
-  await expect(page.getByRole('log').locator('.message-bubble').last()).not.toContainText('6-32');
-}
-
 async function noOverflow(page: Page) {
   expect(await page.evaluate(() => ({ width: window.innerWidth, content: document.documentElement.scrollWidth }))).toEqual({ width: page.viewportSize()!.width, content: page.viewportSize()!.width });
   for (const button of await page.getByRole('button', { name: /^Add / }).all()) {
@@ -68,23 +58,8 @@ for (const width of [1440, 390, 320]) {
       await noOverflow(page);
     });
 
-    test('supports both escalation paths, actual typed follow-up, exact AI candidate and fallback', async ({ page }) => {
-      await search(page);
-      await page.getByRole('button', { name: 'None of these is what I want' }).click();
-      await expect(page.getByRole('heading', { name: 'Are you looking for…?' })).toBeVisible();
-      await clarification(page);
-      await expect(page.getByRole('region', { name: 'AI suggestions' })).toContainText('no live source');
-      await page.getByLabel('Tell the assistant what you are looking for').fill('One inch long, please.');
-      await page.getByLabel('Tell the assistant what you are looking for').press('Enter');
-      await expect(page.getByRole('log')).toContainText('One inch long, please.');
-      await page.getByRole('button', { name: 'Add Black 6-32 extended device screws', exact: true }).click();
-      await expect(page.getByTestId('mrf-line')).toContainText('Black 6-32 extended device screws');
-      await expect(page.getByTestId('mrf-line')).toContainText('AI mock · unverified');
-      await page.getByRole('button', { name: 'Use My Description', exact: true }).click();
-      await expect(page.getByTestId('mrf-line')).toHaveCount(2);
-      await expect(page.getByTestId('mrf-line').nth(1)).toContainText('self tappers');
-      await expect(page.getByTestId('mrf-line').nth(1)).toContainText('Your description');
-      await noOverflow(page);
+    test('uses a compact manual fallback when catalog matches are unsuitable', async ({page})=>{
+      await search(page);await page.getByRole('button',{name:'None of these is what I want'}).click();await expect(page.getByRole('region',{name:'No match found',exact:true})).toBeVisible();await page.getByLabel('Description to add',{exact:true}).fill('Special conduit for room 201');await page.getByRole('button',{name:'Add to MRF',exact:true}).click();await expect(page.getByTestId('mrf-line')).toHaveCount(1);await expect(page.getByTestId('mrf-line')).toContainText('Special conduit for room 201');await expect(page.getByTestId('mrf-line')).toContainText('Your description');await noOverflow(page);
     });
 
     test('preserves inherited and overridden dates across save, leave and resume', async ({ page }) => {
@@ -194,60 +169,11 @@ test('empty and edit states pass automated accessibility checks', async ({ page 
 
 test.describe('Touch interaction', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  test('conversation stays usable with limited vertical space', async ({ page }) => {
-    await page.goto('/');
-    await page.getByLabel('Quantity',{exact:true}).fill('200');
-    await page.getByLabel('Unit',{exact:true}).selectOption('EA');
-    await page.getByLabel('Description',{exact:true}).fill('self tappers');
-    await page.getByRole('button', { name: 'Find Matches' }).tap();
-    await page.getByLabel(/Other \/ none of these/).tap();
-    // A shorter viewport checks obstruction/reflow; it does not claim to
-    // emulate or validate a real iOS/Android on-screen keyboard.
-    await page.setViewportSize({ width: 390, height: 400 });
-    await page.getByLabel('Tell the assistant what you are looking for').fill('Black device screws');
-    await page.getByRole('button', { name: 'Send message' }).tap();
-    await expect(page.getByRole('log')).toContainText('What length do you need?');
-    await expect(page.getByRole('log').locator('.message-bubble').last()).not.toContainText('6-32');
-    await page.getByRole('button', { name: 'Use My Description' }).tap();
-    await expect(page.getByTestId('mrf-line')).toHaveCount(1);
-    await noOverflow(page);
+  test('manual fallback stays usable with limited vertical space',async({page})=>{
+    await page.goto('/');await search(page,'self tappers','EA','200');await page.setViewportSize({width:390,height:400});await page.getByLabel('Description to add',{exact:true}).fill('Black device screws');await page.getByRole('button',{name:'Add to MRF',exact:true}).tap();await expect(page.getByTestId('mrf-line')).toHaveCount(1);await noOverflow(page);
   });
 });
 
-for (const width of [320, 375, 390, 768, 1440, 844, 1024]) {
-  test(`responsive captures and accessibility at ${width}px`, async ({ page }) => {
-    const height = width === 844 ? 390 : width === 1024 ? 768 : width <= 390 ? 844 : 1080;
-    await page.setViewportSize({ width, height });
-    await page.goto('/');
-    await page.getByLabel('MRF Delivery Date', { exact: true }).fill('2026-11-10');
-    await addPVC(page);
-    await page.getByRole('button', { name: 'Edit item 1', exact: true }).click();
-    await page.getByLabel('Material description', { exact: true }).fill('1 in. PVC conduit, Schedule 40 — long description to confirm readable wrapping on narrow screens without losing quantity, dates, or actions');
-    await page.getByRole('button', { name: 'Save item changes' }).click();
-    await noOverflow(page);
-    await page.getByRole('button', { name: 'Dismiss notification' }).click();
-    await mkdir('artifacts/screenshots', { recursive: true });
-    await page.screenshot({ path: `artifacts/screenshots/${width}-01-database-results.png`, fullPage: true });
-    let violations = (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations;
-    expect(violations).toEqual([]);
-    await search(page, 'self tappers', 'EA', '200');
-    await page.getByLabel(/Other \/ none of these/).check();
-    await noOverflow(page);
-    await page.getByRole('button', { name: 'Dismiss notification' }).click();
-    await page.screenshot({ path: `artifacts/screenshots/${width}-02-ai-clarification.png`, fullPage: true });
-    await page.getByLabel('Tell the assistant what you are looking for').fill('I need the black screws we use to mount devices to electrical boxes.');
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await page.getByRole('button', { name: 'Add Black 6-32 device mounting screws', exact: true }).click();
-    await page.getByLabel('Delivery mode for item 2', { exact: true }).selectOption('override');
-    await page.getByLabel('Delivery override for item 2', { exact: true }).fill('2026-11-15');
-    await noOverflow(page);
-    await page.getByRole('button', { name: 'Dismiss notification' }).click();
-    await page.screenshot({ path: `artifacts/screenshots/${width}-03-ai-suggestions.png`, fullPage: true });
-    violations = (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations;
-    expect(violations).toEqual([]);
-    if (width <= 390) {
-      const addBounds = await page.getByRole('button', { name: 'Add Black 6-32 extended device screws', exact: true }).boundingBox();
-      expect(addBounds!.height).toBeGreaterThanOrEqual(44);
-    }
-  });
-}
+for(const width of [320,375,390,768,1440,844,1024])test(`responsive captures and accessibility at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:width===844?390:1080});await page.goto('/');await addPVC(page);await search(page,'unlisted special screws','EA','200');await expect(page.getByRole('region',{name:'No match found',exact:true})).toBeVisible();await noOverflow(page);await mkdir('/tmp/v33-screenshots',{recursive:true});await page.screenshot({path:`/tmp/v33-screenshots/${width}-manual-fallback.png`,fullPage:true});expect((await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze()).violations).toEqual([]);await page.getByLabel('Description to add',{exact:true}).fill('Special screws, room 201');await page.getByRole('button',{name:'Add to MRF',exact:true}).click();await expect(page.getByTestId('mrf-line')).toHaveCount(2);await page.getByLabel('Delivery mode for item 2',{exact:true}).selectOption('override');await page.getByLabel('Delivery override for item 2',{exact:true}).fill('2026-11-15');await noOverflow(page);
+});

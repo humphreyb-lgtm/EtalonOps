@@ -17,7 +17,7 @@ for(const width of [390,1440])test(`catalog readiness drives reviewed material, 
  await catalog.getByLabel('Potential search phrase',{exact:true}).fill('readiness support '+key);await catalog.getByRole('button',{name:'Add potential translation',exact:true}).click();await expect(catalog.getByRole('status')).toContainText('Potential translation saved');
  await admin.getByRole('button',{name:'Catalog readiness',exact:true}).click();await queue.getByRole('button',{name:'Refresh readiness'}).click();await expect(queue).toContainText('0 matching records');await queue.getByRole('combobox',{name:'Catalog readiness queue',exact:true}).selectOption('images');await expect(queue).toContainText('1 matching records');
  await admin.screenshot({path:`artifacts/screenshots/${width}-catalog-readiness.png`});await queue.getByRole('button',{name:`Review ${key}`,exact:true}).click();await expect(admin.getByRole('heading',{name:new RegExp('Image review:.*'+key)})).toBeVisible();
- await admin.getByRole('button',{name:'Pilot status',exact:true}).click();const status=admin.getByRole('region',{name:'Pilot status'});await expect(status).toContainText('microsoft-session-v32');await expect(status).toContainText('Connection verified');
+ await admin.getByRole('button',{name:'Pilot status',exact:true}).click();const status=admin.getByRole('region',{name:'Pilot status'});await expect(status).toContainText('manual-entry-v33');await expect(status).toContainText('Connection verified');
  expect(await admin.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
 });
 test('readiness API rejects a signed-in foreman',async({request})=>{

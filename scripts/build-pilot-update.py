@@ -9,9 +9,9 @@ import sys
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v32.zip')
+output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v33.zip')
 files = [
-    'docs/PILOT_UPDATE_V32.md', 'docs/PILOT_UPDATE_V31.md', 'docs/SITE_ACCOUNTS_AND_JOBS.md', 'db/012-workforce-accounts.sql', 'db/migrations/012-workforce-accounts.sql',
+    'docs/PILOT_UPDATE_V33.md', 'docs/PILOT_UPDATE_V32.md', 'docs/PILOT_UPDATE_V31.md', 'docs/SITE_ACCOUNTS_AND_JOBS.md', 'db/012-workforce-accounts.sql', 'db/migrations/012-workforce-accounts.sql',
     'server/workforce.ts', 'server/site-accounts.ts', 'server/account-routes.ts', 'src/LoginPage.tsx', 'src/useJobs.ts', 'scripts/recover-cloud-workspace.sh',
     'docs/PILOT_UPDATE_V30.md', 'db/011-line-task-code.sql', 'db/migrations/011-line-task-code.sql',
     'docs/PILOT_UPDATE_V29.md',

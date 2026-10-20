@@ -1,0 +1,7 @@
+# Compact manual no-match entry v33
+
+The MRF builder replaces scripted clarification, suggestions, conversation and live research panels with one compact manual-entry box. Description to add defaults to the entered wording and supports inline edits; Add to MRF adds the original or edited description as an uncataloged request line, Search again retries catalog lookup with the edited wording, and Clear entry resets the input fields and focuses Description without deleting existing MRF lines. Quantity, unit, task code and purchasing restrictions remain in effect. No Substitutions still requires manufacturer and part number. Successful additions are marked Added to MRF to prevent repeated clicks. This action does not populate or publish catalog records.
+
+Desktop fields and buttons share 36px height and aligned baselines; narrow screens wrap without horizontal scrolling. Admin research/import tools remain available, while the builder no longer mounts research components or requests AI lookup status. No Azure AI configuration, schema or resources are changed and no paid calls are made by this workflow.
+
+Install the cumulative source ZIP and run scripts/update-cloud-app.sh. Health reports manual-entry-v33. Browser validation covers manual edits, retained draft lines, retry, clear, task code, exact-product requirements and absence of builder AI requests; production build verifies TypeScript and bundles.

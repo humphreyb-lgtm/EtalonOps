@@ -1,4 +1,3 @@
-import {LiveResearch} from './LiveResearch';
 import {formatInchText,formatMaterialText,formatMaterialSpecification} from './measurements';
 import { draftFilterError,type DraftFilters } from './draft-filters';
 import { AdminWorkspace } from './AdminWorkspace';
@@ -8,25 +7,23 @@ import { saveBrowserDraft,listBrowserDrafts } from './draft-storage';
 import { PurchasingFields } from './PurchasingFields';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  AlertCircle, ArrowLeft, ArrowRight, Check, ChevronDown, ClipboardList, Ellipsis,
-  FileText, FolderKanban, Home, Info, LogOut, Menu, MessageSquare, Package,
-  Pencil, Plus, Save, Search, Send, Settings, ShieldCheck, ShoppingCart,
-  Sparkles, Trash2, X, ChartNoAxesColumnIncreasing,
+  AlertCircle, ArrowLeft, ArrowRight, Check, ChevronDown, ClipboardList,
+  FileText, FolderKanban, Home, Info, LogOut, Menu,  Package,
+  Pencil, Plus, Save, Search, Settings, ShieldCheck, ShoppingCart,
+  Trash2, X, ChartNoAxesColumnIncreasing,
 } from 'lucide-react';
 import {
-  clarificationOptions, discoveryFixtures, formatDate, freshDraft, loadDraft,
+   formatDate, freshDraft, loadDraft,
   positiveQuantity, projects, searchFixtures, units,
   type Candidate, type Draft, type Line, type Unit,
 } from './domain';
 
 import { ProductPhoto } from './ProductPhoto';
 import { CatalogAdmin } from './CatalogAdmin';
-import { lookupContext, fallbackDescription } from './lookup';
 import { cloudMode, cloudDisplayName, cloudSignOut,siteSessionActive } from './cloud-auth';
-import { databaseMode, localIdentity, readDatabaseDraft, saveDatabaseDraft, databaseSearch, clearLocalSession, request, listDatabaseDrafts, type DraftPage, type AIStatus, type AIClarification } from './api';
+import { databaseMode, localIdentity, readDatabaseDraft, saveDatabaseDraft, databaseSearch, clearLocalSession, request, listDatabaseDrafts, type DraftPage } from './api';
 
 type Stage = 'idle' | 'verified' | 'clarify';
-type Message = { id: string; author: 'user' | 'assistant'; text: string };
 
 function Brand() {
   return <a href="#main" className="brand" aria-label="EtalonOps, go to MRF Builder">
@@ -101,16 +98,7 @@ export default function App() {
   const [stage, setStage] = useState<Stage>('idle');
   const [matches, setMatches] = useState<Candidate[]>([]);
   const [searchedDescription, setSearchedDescription] = useState('');
-  const [choice, setChoice] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [message, setMessage] = useState('');
-  const [aiEnabled,setAIEnabled] = useState(false);
-  const [aiBusy,setAIBusy] = useState(false);
-  const [aiError,setAIError] = useState('');
-  const [aiWording,setAIWording] = useState('');
-  const lookupSession = useRef(crypto.randomUUID());
   const [customDescription, setCustomDescription] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<Candidate[]>([]);
   const [added, setAdded] = useState<string[]>([]);
   const [globalSearch, setGlobalSearch] = useState('');
   const [editing, setEditing] = useState<Line | null>(null);
@@ -124,8 +112,6 @@ export default function App() {
   const confirmRef = useRef<HTMLDialogElement>(null);
   const descriptionRef = useRef<HTMLInputElement>(null);
   const unitRef = useRef<HTMLSelectElement>(null);
-  const chatRef = useRef<HTMLTextAreaElement>(null);
-  const transcriptRef = useRef<HTMLDivElement>(null);
   const project = assignedProjects.find(p=>p.id===projectId)??{id:projectId,name:'No assigned job',number:'—'};
 
   useEffect(() => {
@@ -149,26 +135,8 @@ export default function App() {
   }, [removing, pendingProject, pendingLeave, pendingDraft]);
 
   useEffect(() => {
-    if (choice) chatRef.current?.focus({ preventScroll: true });
-  }, [choice]);
-
-  useEffect(() => {
-    const composer = chatRef.current;
-    if (!composer) return;
-    composer.style.height = 'auto';
-    composer.style.height = `${Math.min(150, composer.scrollHeight + 2)}px`;
-    if (!message) composer.scrollTop = 0;
-  }, [message, choice]);
-
-  useEffect(() => {
-    const transcript = transcriptRef.current;
-    if (transcript) transcript.scrollTop = transcript.scrollHeight;
-  }, [messages]);
-
-  useEffect(() => {
     if (!databaseMode) return;
     let cancelled = false;
-    request<AIStatus>('/lookup/status').then(status=>{if(!cancelled)setAIEnabled(status.enabled);}).catch(()=>{});
     void (async()=>{try{const jobs=await request<{records:{id:string;name:string;number:string}[]}>('/jobs');if(cancelled)return;setAssignedProjects(jobs.records);if(!jobs.records.length){setStorageError('No active jobs are assigned to you. Contact your company administrator.');return;}const chosen=jobs.records.some(j=>j.id===projectId)?projectId:jobs.records[0].id;setProjectId(chosen);const saved=await readDatabaseDraft(chosen,chosen===projectId?new URLSearchParams(location.search).get('draft')??undefined:undefined);if(cancelled)return;if(saved&&saved.projectId!==chosen)throw new Error('Choose the job this draft belongs to.');setDraft(saved??freshDraft(chosen));if(saved)setDraftAddress(chosen,saved.id);setAnnouncement(saved?'Saved MRF restored.':'Your assigned jobs are ready.');}catch(error){if(!cancelled)setStorageError(error instanceof Error?error.message:'Unable to load your jobs.');}finally{if(!cancelled)setDatabaseBusy(false);}})();
     return () => { cancelled = true; };
   }, []);
@@ -183,8 +151,7 @@ export default function App() {
   }
 
   function resetEntry() {
-    setExactChoices({});setManualProducts({});setStage('idle'); setMatches([]); setSuggestions([]); setChoice('');
-    setMessages([]); setMessage(''); setCustomDescription(null); setAIError(''); setAIWording(''); lookupSession.current=crypto.randomUUID(); setAdded([]); setEntryError('');
+    setExactChoices({});setManualProducts({});setStage('idle');setMatches([]);setCustomDescription(null);setAdded([]);setEntryError('');
   }
 
   async function search(event?: FormEvent, override?: string) {
@@ -202,7 +169,7 @@ export default function App() {
     finally { setDatabaseBusy(false); }
     setMatches(found);
     setStage(found.length ? 'verified' : 'clarify');
-    setAnnouncement(found.length ? `${found.length} ${cloudMode ? "catalog" : "demo catalog"} matches found.` : cloudMode ? 'No catalog match found. Clarify the material below or use your description.' : 'No demo catalog match found. Clarify the material below or use your description.');
+    setAnnouncement(found.length ? `${found.length} ${cloudMode ? "catalog" : "demo catalog"} matches found.` : 'No match found. Edit your description below or add it as entered.');
   }
 
   function requireEntry(): boolean {
@@ -215,7 +182,7 @@ export default function App() {
     if (candidate && added.includes(candidate.id)) return;
     if (!candidate && added.includes('description')) return;
     if (!requireEntry()) return;
-    const ownDescription = customDescription ?? fallbackDescription(description, messages);
+    const ownDescription = customDescription ?? description;
     if (!candidate && (!ownDescription.trim() || ownDescription.length > 2000)) { setEntryError('Your description must contain 1–2000 characters. Edit Description to add before continuing.'); return; }
     const product=candidate?.products?.find(p=>p.id===(selectedPurchase?.productId??productChoices[candidate.id]??candidate.products?.[0]?.id))??candidate?.products?.[0];
     const exact=selectedPurchase?.noSubstitutions??exactFor(candidate?.id??'description'),manual=manualProducts[candidate?.id??'description'];
@@ -236,41 +203,8 @@ export default function App() {
     setAnnouncement(`Added ${formatInchText(line.description)} to your MRF. ${quantity} ${unit}; using the MRF delivery date. Save your draft to keep it.`);
   }
 
-  function clarify() {
-    setStage('clarify'); setChoice(''); setMessages([]); setSuggestions([]); setMessage('');
-    setAnnouncement('Let’s clarify what you need. Choose an option or describe it in your own words.');
-  }
-
-  function chooseOption(id: string) {
-    setChoice(id);
-    setSuggestions([]);
-    // Retain the transcript when changing an option for this same lookup.
-    setMessages(current => [...current, { id: crypto.randomUUID(), author: 'assistant', text: lookupContext(searchedDescription || description, current, id).reply }]);
-  }
-
-  async function sendMessage(event: FormEvent) {
-    event.preventDefault();
-    const text = message.trim();
-    if (!text || aiBusy) return;
-    const next: Message[] = [...messages, { id: crypto.randomUUID(), author: 'user', text }];
-    const result = lookupContext(searchedDescription || description, next, choice);
-    if (!cloudMode && /black|device|electrical box|6.?32/i.test([searchedDescription, ...next.filter(m => m.author === 'user').map(m => m.text)].join(' '))) setSuggestions(discoveryFixtures);
-    let response = result.reply;
-    setAIError('');
-    if (aiEnabled && databaseMode) {
-      if (!unit) { setEntryError('Choose your quantity unit before using live AI.'); unitRef.current?.focus(); return; }
-      setAIBusy(true);setMessages(next);
-      try {
-        const value=await request<AIClarification>('/lookup/clarify','POST',{projectId,sessionId:lookupSession.current,turnId:crypto.randomUUID(),description:searchedDescription||description,quantity,requestedUnit:unit,choice,turns:next.map(({author,text})=>({author,text}))});
-        response=`${value.summary} ${value.reply}`;setAIWording(value.description);
-      } catch(error) { setAIError(error instanceof Error?error.message:'AI unavailable. Your details are retained.'); }
-      finally { setAIBusy(false); }
-    }
-    setMessages([...next, { id: crypto.randomUUID(), author: 'assistant', text: response }]);
-    setMessage('');
-    setAnnouncement('Clarification details retained.');
-    chatRef.current?.focus();
-  }
+  function clarify() {setStage('clarify');setCustomDescription(description);setAnnouncement('No suitable match. Edit your description below or add it as entered.');}
+  function clearEntry(){setDescription('');setQuantity('');setUnit('');setTaskCode('');setAllowChanges(true);resetEntry();descriptionRef.current?.focus();}
 
   function setDraftAddress(project:string,id?:string){const url=new URL(window.location.href);url.searchParams.set('project',project);if(id)url.searchParams.set('draft',id);else url.searchParams.delete('draft');window.history.replaceState(null,'',url);}
   async function showDrafts(page=1,filters:DraftFilters=appliedDraftFilters){
@@ -387,19 +321,19 @@ export default function App() {
   if (!active) return <main className="resume-page"><Brand /><section className="resume-panel"><span className="eyebrow">LOCAL PROOF OF CONCEPT</span><h1>Your work, ready when you are.</h1><p>You’ve left the demo. {databaseMode ? 'Saved drafts remain in the local database for this test account.' : 'Saved drafts remain in this browser; unsaved changes are not retained.'}</p><button className="button primary" onClick={resumeDemo}>Resume demo <ArrowRight size={16} aria-hidden="true" /></button><p className="fine-print">This is a local demo session, not Microsoft sign-in. {databaseMode ? 'Data is stored in your local development database.' : 'No data is sent to a server.'}</p></section></main>;
 
   return <>
-    {(databaseBusy||aiBusy) && <div className="database-progress" role="status">{aiBusy ? 'Interpreting your material request…' : cloudMode ? 'Connecting to Azure SQL…' : 'Connecting to local database…'}</div>}
+    {(databaseBusy) && <div className="database-progress" role="status">{cloudMode ? 'Connecting to Azure SQL…' : 'Connecting to local database…'}</div>}
     <a className="skip-link" href="#main">Skip to MRF Builder</a>
     <aside className="desktop-sidebar"><Brand /><Navigation /></aside>
     <header className="topbar">
       <button className="icon-button menu-button" aria-label="Open navigation" onClick={() => menuRef.current?.showModal()}><Menu size={23} aria-hidden="true" /></button>
-      <div className="project-picker"><label htmlFor="project-select" className="sr-only">Project</label><div className="project-select-wrap"><select id="project-select" value={projectId} disabled={aiBusy||databaseBusy} onChange={event => { if (dirty) setPendingProject(event.target.value); else activateProject(event.target.value); }}>{!assignedProjects.length&&<option value={projectId}>No assigned jobs</option>}{assignedProjects.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div><span>Job #{project.number}</span></div>
+      <div className="project-picker"><label htmlFor="project-select" className="sr-only">Project</label><div className="project-select-wrap"><select id="project-select" value={projectId} disabled={databaseBusy} onChange={event => { if (dirty) setPendingProject(event.target.value); else activateProject(event.target.value); }}>{!assignedProjects.length&&<option value={projectId}>No assigned jobs</option>}{assignedProjects.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div><span>Job #{project.number}</span></div>
       <form className="global-search" onSubmit={event => { event.preventDefault(); if (globalSearch.trim()) { setDescription(globalSearch.trim()); resetEntry(); descriptionRef.current?.focus(); setAnnouncement('Description filled. Enter a quantity, then Find Matches.'); } }}><Search size={17} aria-hidden="true" /><input aria-label={cloudMode ? 'Search materials' : 'Search demo materials'} placeholder={cloudMode ? 'Search materials…' : 'Search demo materials…'} value={globalSearch} onChange={event => setGlobalSearch(event.target.value)} /><button className="sr-only" type="submit">Use search as description</button></form>
       <div className="profile"><button className="avatar" aria-label={cloudMode||siteSessionActive() ? 'Account menu' : 'Demo session menu'} aria-expanded={profileOpen} onClick={() => setProfileOpen(current => !current)}>{cloudMode||siteSessionActive() ? cloudDisplayName().split(/\s+/).filter(Boolean).map(part=>part[0]).slice(0,2).join('').toUpperCase() : 'DM'}</button>{profileOpen && <div className="profile-menu"><strong>{cloudMode||siteSessionActive() ? cloudDisplayName() : databaseMode ? localIdentity : 'Demo foreman'}</strong><span>{siteSessionActive()?'Site account':cloudMode ? 'Microsoft work account' : 'Local session · no sign-in'}</span><button className="button text-button" onClick={leaveDemo}><LogOut size={15} aria-hidden="true" />{cloudMode||siteSessionActive() ? 'Sign out' : 'Leave demo'}</button></div>}</div>
     </header>
 
-    <main id="main" className="workspace" tabIndex={-1} inert={(databaseBusy||aiBusy) || undefined} aria-busy={databaseBusy||aiBusy}>
+    <main id="main" className="workspace" tabIndex={-1} inert={(databaseBusy) || undefined} aria-busy={databaseBusy}>
       <div className="page-heading"><h1>MRF Builder</h1><AdminWorkspace /><CatalogAdmin /><UserAdmin /><span className="demo-badge">{cloudMode ? 'Cloud pilot' : 'Local preview'}</span></div>
-      <div className="demo-notice"><Info size={14} aria-hidden="true"/><span>{cloudMode||siteSessionActive()?`Signed in as ${cloudDisplayName()}. Choose an assigned job to create or continue an MRF.`:databaseMode?'Local database demo · scripted AI · no Microsoft sign-in. Test account: '+localIdentity:'Demo data and scripted AI. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
+      <div className="demo-notice"><Info size={14} aria-hidden="true"/><span>{cloudMode||siteSessionActive()?`Signed in as ${cloudDisplayName()}. Choose an assigned job to create or continue an MRF.`:databaseMode?'Local database demo · no Microsoft sign-in. Test account: '+localIdentity:'Demo data. Drafts save only in this browser. No live catalog or Microsoft sign-in.'}</span></div>
       <nav className="mrf-navigation" aria-label="MRF actions"><span ref={setListActions}/><button className="button" onClick={()=>void showDrafts()}>My Drafts</button><button className="button" onClick={()=>chooseDraft({kind:'new'})}>New MRF</button></nav>
       {draftListOpen&&draftList&&<section className="panel saved-drafts" aria-label="My Drafts"><div className="section-heading"><h2>My Drafts</h2><button className="button" onClick={()=>setDraftListOpen(false)}>Close draft list</button></div><form className="draft-filters" onSubmit={event=>{event.preventDefault();void showDrafts(1,draftSearch);}}><label>Find saved MRF by name<input maxLength={120} value={draftSearch.text??''} onChange={e=>setDraftSearch(current=>({...current,text:e.target.value}))}/></label><label>Delivery from<input type="date" value={draftSearch.deliveryFrom??''} onChange={e=>setDraftSearch(current=>({...current,deliveryFrom:e.target.value}))}/></label><label>Delivery through<input type="date" value={draftSearch.deliveryTo??''} onChange={e=>setDraftSearch(current=>({...current,deliveryTo:e.target.value}))}/></label><div className="catalog-actions"><button className="button" disabled={databaseBusy}>Filter drafts</button><button className="button" type="button" disabled={databaseBusy} onClick={()=>{setDraftSearch({});void showDrafts(1,{});}}>Clear draft filters</button></div></form>{draftListError&&<p role="alert">{draftListError}</p>}<p>{project.name} · {draftList.total} saved drafts{Object.keys(appliedDraftFilters).length?' matching applied filters':''}</p>{draftList.records.length===0&&<p>No saved drafts match. Clear the filters or save a new MRF for this project.</p>}{draftList.records.map(item=><article key={item.id}><h3>{item.name}</h3><p>{item.itemCount} items · Delivery {formatDate(item.deliveryDate)} · Last saved {new Date(item.savedAt).toLocaleString()}</p><button className="button" onClick={()=>chooseDraft({kind:'open',id:item.id})}>Continue {item.name}</button></article>)}<div className="catalog-actions"><button className="button" disabled={draftList.page<=1} onClick={()=>void showDrafts(draftList.page-1)}>Previous drafts</button><span>Page {draftList.page} of {draftList.pages}</span><button className="button" disabled={draftList.page>=draftList.pages} onClick={()=>void showDrafts(draftList.page+1)}>Next drafts</button></div></section>}
       <section className="panel mrf-header" aria-label="MRF header">
@@ -426,20 +360,13 @@ export default function App() {
 
       {stage === 'verified' && <section className="panel results-panel" aria-label="Material results"><SectionHeading title="Material matches" aside={<span className="count-badge">{matches.length} matches</span>}>{databaseMode ? 'Local database matches for “' + searchedDescription + '”. Fixture records are labeled.' : 'Demo verified-match layout for “' + searchedDescription + '”. These are fictional catalog fixtures.'}</SectionHeading>{resultTable(matches)}<div className="panel-footer"><button className="button text-button" onClick={clarify}>None of these is what I want <ArrowRight size={15} aria-hidden="true" /></button><span className="muted">Add a match directly from its row.</span></div></section>}
 
-      {stage === 'clarify' && <>
-        <div className="no-match" role="status"><AlertCircle size={19} aria-hidden="true" /><div><strong>No translation match found</strong><p>{matches.length ? 'Let’s find a better match for' : 'No confident demo catalog match for'} <strong>“{searchedDescription}”</strong>.</p></div></div>
-        <section className="panel clarification-panel" aria-label="Material clarification">
-          <SectionHeading title="Are you looking for…?">Choose the closest option, or tell the assistant what you need in your own words.</SectionHeading>
-          <fieldset className="clarification-options"><legend className="sr-only">Clarify your material</legend>{clarificationOptions.map(option => <label className={`clarification-option ${choice === option.id ? 'selected' : ''}`} key={option.id}><input type="radio" name="clarification" value={option.id} checked={choice === option.id} onChange={() => chooseOption(option.id)} /><span className="choice-image">{option.id === 'other' ? <Ellipsis size={23} aria-hidden="true" /> : <ProductImage category="screw" small />}</span><span><strong>{option.title}</strong><span className="choice-detail">{option.detail}</span></span></label>)}</fieldset>
-          {choice ? <div className="conversation"><div className="conversation-label"><Sparkles size={14} aria-hidden="true" />{aiEnabled ? 'AI material clarification' : cloudMode ? 'Material clarification' : 'Demo assistant'}<span>{aiEnabled ? 'Unverified interpretation · no web search' : cloudMode ? 'AI discovery disabled' : 'Scripted responses'}</span></div><div className="transcript" ref={transcriptRef} role="log" aria-label="Clarification conversation" aria-live="polite">{messages.map(m => <div className={`message ${m.author}`} key={m.id}><span className={`message-avatar ${m.author === 'assistant' ? 'ai-avatar' : ''}`} aria-hidden="true">{m.author === 'assistant' ? <Sparkles size={20} /> : 'DM'}</span><div className="message-bubble"><span className="sr-only">{m.author === 'assistant' ? 'Demo assistant' : 'You'}: </span>{m.text}</div></div>)}</div><form className="chat-form" onSubmit={sendMessage}><MessageSquare size={19} className="chat-icon" aria-hidden="true" /><label className="sr-only" htmlFor="chat-input">Tell the assistant what you are looking for</label><textarea id="chat-input" disabled={aiBusy} ref={chatRef} value={message} maxLength={2000} placeholder="Describe what you need…" rows={1} onChange={event => setMessage(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendMessage(event); } }} /><button className="icon-button send-button" type="submit" disabled={!message.trim()||aiBusy} aria-label="Send message"><Send size={19} aria-hidden="true" /></button></form></div>
-            : <p className="clarify-hint"><MessageSquare size={15} aria-hidden="true" />Select “Other / none of these” to start a conversation.</p>}
-          {aiBusy && <p role="status">Interpreting your request…</p>}{aiError && <p className="error-message" role="alert">{aiError}</p>}{aiWording && <div className="clarification-summary"><strong>AI wording · unverified</strong><p>{aiWording}</p><button className="button" onClick={()=>setCustomDescription(aiWording)}>Use AI wording for my description</button><span className="muted">Review this wording first. Original input stays separate; this does not create a catalog match.</span></div>}
-          {messages.some(m => m.author === 'user') && <div className="clarification-summary"><label htmlFor="clarified-description">Description to add</label><textarea id="clarified-description" value={customDescription ?? fallbackDescription(description, messages)} onChange={event => setCustomDescription(event.target.value)} rows={3} />{customDescription !== null && <button className="button text-button" onClick={() => setCustomDescription(null)}>Use conversation wording</button>}<span className="muted">Your original entry and these clarification details stay separate from verified catalog facts. You can edit the line after adding it.</span></div>}
-          {entryPurchasing(null)}<div className="panel-footer fallback-footer"><span className="muted">Can’t find the right item? Keep your own wording.</span><button className="button" type="button" disabled={added.includes('description')} onClick={() => addLine(null)}>{added.includes('description') ? <Check size={15} aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}{added.includes('description') ? 'Description added' : 'Use My Description'}</button></div>
-        </section>
-        {databaseMode&&stage==='clarify'&&<LiveResearch key={projectId+searchedDescription} scope={searchedDescription||description} searchPhrase={searchedDescription||description} projectId={projectId} initialExact={!allowChanges} canAdd={Boolean(unit)&&positiveQuantity(quantity)} onSelect={value=>addLine(value.candidate,{productId:value.productId,noSubstitutions:value.noSubstitutions})}/>}
-        {suggestions.length > 0 && <section className="panel results-panel" aria-label="AI suggestions"><SectionHeading title="Suggested materials" aside={<span className="source-tag provisional"><Sparkles size={12} aria-hidden="true" />Mock discovery</span>}>Illustrative candidates only. Live product discovery, sources, and approved photos are not connected.</SectionHeading>{resultTable(suggestions, true)}</section>}
-      </>}
+      {stage === 'clarify' && <section className="panel unmatched-panel" aria-label="No match found">
+        <div className="unmatched-heading" role="status"><AlertCircle size={17}/><strong>{matches.length?'No suitable match selected':'No match found'}</strong><span className="muted">Edit the description or add it as entered. This adds an MRF line only.</span></div>
+        <form className="unmatched-form" onSubmit={event=>{event.preventDefault();addLine(null);}}>
+          <label>Description to add<input value={customDescription??description} maxLength={2000} onChange={event=>{setCustomDescription(event.target.value);setAdded(current=>current.filter(id=>id!=='description'));}}/></label>
+          <div className="unmatched-actions"><button className="button primary" disabled={added.includes('description')||!(customDescription??description).trim()} type="submit">{added.includes('description')?'Added to MRF':'Add to MRF'}</button><button className="button" type="button" onClick={()=>{const value=(customDescription??description).trim();setDescription(value);void search(undefined,value);}}>Search again</button><button className="button" type="button" onClick={clearEntry}>Clear entry</button></div>
+        </form>{entryPurchasing(null)}
+      </section>}
 
       <section className="panel item-list" aria-label="MRF Item List"><SectionHeading title="MRF Item List" aside={<span className="item-list-tools">{databaseMode&&<button className="button" onClick={()=>void request<{issues:{lineId:string;message:string}[];ready:boolean}>('/catalog/validate-lines','POST',{projectId,lines:draft.lines}).then(result=>{setCompliance(result.issues.map(issue=>`Item ${draft.lines.findIndex(line=>line.id===issue.lineId)+1}: ${issue.message}`));setAnnouncement(result.ready?'Manufacturer and job restriction checks passed. No order was submitted.':'Some items need correction before purchasing. Your draft is preserved.');}).catch(error=>setEntryError(error.message))}>Check purchasing requirements</button>}<span className="count-badge">{draft.lines.length} {draft.lines.length === 1 ? 'item' : 'items'}</span></span>}>Materials added to your request.</SectionHeading>
         <div className="item-table-wrap"><table className="item-table"><thead><tr><th scope="col" className="number-column">#</th><th scope="col" className="image-column">Image</th><th scope="col">Material description</th><th scope="col" className="quantity-column">Qty / UOM</th><th scope="col" className="delivery-column">Item delivery</th><th scope="col" className="action-column">Actions</th></tr></thead><tbody>
