@@ -714,3 +714,5 @@ dialog::backdrop { background: #14203c55; }
 .designer-properties .designer-format-flags{flex-wrap:nowrap;gap:6px}.designer-properties .designer-format-flags label{font-size:10px;white-space:nowrap}.designer-properties fieldset{gap:4px}
 
 .designer-cell{user-select:none;touch-action:none}.designer-cell img{-webkit-user-drag:none}.designer-cell .designer-move-handle{position:absolute;top:0;right:0;z-index:3;padding:0;width:16px;height:16px;min-height:0;border:1px solid #1453ff;border-radius:2px;background:#fff;color:#1453ff;font-size:12px;line-height:14px;cursor:move}.designer-repeat-help{font-size:11px;margin:3px 0 6px}.designer-repeat-help ol{margin:4px 0;padding-left:20px}.designer-repeat-help li{margin:3px 0}.designer-repeat-help button{padding:1px 4px;color:#1453ff;background:white;border:1px solid #dce3ee;border-radius:3px;font-size:11px}
+
+.designer-sizing-warning{border:1px solid #d8a035;background:#fff8e8;color:#744600;padding:6px 8px;margin:5px 0;font-size:11px}.designer-sizing-warning ul{margin:3px 0;padding-left:18px}
