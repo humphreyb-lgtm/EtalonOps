@@ -1,3 +1,7 @@
+# Current import format
+
+Catalog JSON v2 now supports generic materials without a manufacturer, manufacturer products, supplier references and package quantities. See [Catalog JSON v2](PILOT_UPDATE_V43.md) for the current format and examples. Use EA for hardware requested individually; supplier package quantity is separate. Older formats below remain supported.
+
 # ChatGPT Project instructions: catalog research
 
 When I say “Research and Output XXX”, research that product and respond ONLY with the JSON object below. No Markdown or introductory text. Replace the example values. Multiple products may be included in items. Do not invent facts or URLs.

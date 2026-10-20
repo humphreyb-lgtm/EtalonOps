@@ -2,7 +2,7 @@ export type SpreadsheetKind='material'|'product'|'translation'|'image';
 export const materialColumns=['diameterIn','material','type','schedule','lengthIn','endConnection','minSpanIn','maxSpanIn','mounting','nominalSpacing','widthIn','heightIn','depthIn','knockouts','specification'] as const;
 const numeric=new Set(['diameterIn','lengthIn','minSpanIn','maxSpanIn','widthIn','heightIn','depthIn']);
 const fields:Record<SpreadsheetKind,string[]>={
- material:['kind','externalKey','category','productUnit','verification','origin','sourceUrl','verificationBasis',...materialColumns],
+ material:['displayDescription','details','kind','externalKey','category','productUnit','verification','origin','sourceUrl','verificationBasis',...materialColumns],
  product:['kind','materialKey','manufacturer','partNumber','title','sourceUrl','verification','origin','details'],
  translation:['kind','materialKey','phrase','origin','sourceUrl'],
  image:['kind','materialKey','manufacturer','partNumber','sourceUrl','rightsBasis'],
@@ -13,7 +13,7 @@ export function spreadsheetRecord(kind:SpreadsheetKind,row:Record<string,string>
  const result:Record<string,unknown>={};
  for(const column of fields[kind]){
   if(column==='kind'||(kind==='material'&&(materialColumns as readonly string[]).includes(column)))continue;
-  const value=row[column]?.trim();if(value)result[column]=kind==='product'&&column==='details'?JSON.parse(value):value;
+  const value=row[column]?.trim();if(value)result[column]=column==='details'?JSON.parse(value):value;
  }
  // Spreadsheet authors must explicitly identify provenance; blank origin must never become admin-reviewed by default.
  if(kind==='material'||kind==='product'||kind==='translation')result.origin=row.origin?.trim()??'';

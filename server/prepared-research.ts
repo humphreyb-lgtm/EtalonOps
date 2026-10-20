@@ -1,3 +1,4 @@
+import {parseCatalogV2} from './catalog-import-v2';
 import {z} from 'zod';
 import {createHash,randomUUID} from 'node:crypto';
 import {ApiError,type Principal} from './contracts';
@@ -23,6 +24,7 @@ export function parsePreparedResearch(json:string){
  if(Buffer.byteLength(json)>300000)throw new ApiError(413,'Paste research JSON smaller than 300 KB.');
  let raw:unknown;try{raw=JSON.parse(json.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));}catch{throw new ApiError(400,'Paste a complete JSON object. Your pasted text has been retained.');}
  let nodes=0;function bounded(value:unknown,depth=0){if(++nodes>50000||depth>12)throw new ApiError(400,'Research JSON is nested too deeply or contains too many values.');if(value&&typeof value==='object')for(const nested of Object.values(value))bounded(nested,depth+1);}bounded(raw);
+ if((raw as any)?.schemaVersion==='etalonops-catalog-v2'){try{return parseCatalogV2(raw);}catch(error){if(error instanceof z.ZodError)throw new ApiError(400,'Research JSON needs correction: '+error.issues.slice(0,4).map(issue=>issue.path.join('.')+': '+issue.message).join('; ')+'. Your pasted text is retained.');throw error;}}
  let input:z.infer<typeof preparedResearch>;try{input=preparedResearch.parse(expandCompact(raw));}catch(error){if(error instanceof z.ZodError)throw new ApiError(400,'Research JSON needs correction: '+error.issues.slice(0,4).map(issue=>issue.path.join('.')+': '+issue.message).join('; ')+'. Your pasted text is retained.');throw error;}if(!input.items.length)throw new ApiError(400,'The research contains no products to import. Your text has been retained.');
  const sources=new Map(input.sources.map(source=>[source.id,source]));if(sources.size!==input.sources.length)throw new ApiError(400,'Source identifiers must be unique.');
  function checkIds(values:string[]){for(const id of values)if(!sources.has(id))throw new ApiError(400,'Unknown source reference: '+id);}
