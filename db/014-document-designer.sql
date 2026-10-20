@@ -1,0 +1,10 @@
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+IF EXISTS(SELECT 1 FROM dbo.schema_migrations WHERE version=14) BEGIN COMMIT; RETURN; END;
+CREATE TABLE dbo.document_templates(tenant nvarchar(200) NOT NULL,id uniqueidentifier NOT NULL,company_id nvarchar(64) NULL,name nvarchar(120) NOT NULL,layout nvarchar(max) NOT NULL,version int NOT NULL,published_revision int NOT NULL DEFAULT 0,PRIMARY KEY(tenant,id));
+CREATE TABLE dbo.document_template_versions(tenant nvarchar(200) NOT NULL,template_id uniqueidentifier NOT NULL,revision int NOT NULL,name nvarchar(120) NOT NULL,company_id nvarchar(64) NULL,layout nvarchar(max) NOT NULL,published_at nvarchar(40) NOT NULL,PRIMARY KEY(tenant,template_id,revision));
+CREATE TABLE dbo.document_template_defaults(tenant nvarchar(200) NOT NULL,scope_key nvarchar(100) NOT NULL,template_id uniqueidentifier NOT NULL,PRIMARY KEY(tenant,scope_key));
+CREATE TABLE dbo.company_logo_assets(tenant nvarchar(200) NOT NULL,id uniqueidentifier NOT NULL,company_id nvarchar(64) NOT NULL,content_hash char(64) NOT NULL,created_at nvarchar(40) NOT NULL,PRIMARY KEY(tenant,id));
+CREATE TABLE dbo.company_logo_defaults(tenant nvarchar(200) NOT NULL,company_id nvarchar(64) NOT NULL,asset_id uniqueidentifier NOT NULL,PRIMARY KEY(tenant,company_id));
+INSERT dbo.schema_migrations(version) VALUES(14);
+COMMIT;

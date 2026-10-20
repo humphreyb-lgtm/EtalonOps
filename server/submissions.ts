@@ -1,3 +1,4 @@
+import {resolveDocumentTemplate,currentCompanyLogo} from './document-templates';
 import {effectiveTaskCode,printedTaskCode} from '../src/mrf-form';
 import {resolveForeman} from './mrf-foreman';
 import { createHash,randomUUID } from 'node:crypto';
@@ -27,7 +28,8 @@ function* prepare(p:Principal,v:z.infer<typeof reviewInput>):Operation<any>{
  let foreman={id:String(d.foreman_oid??p.oid).toLowerCase(),name:String(d.foreman_name??p.displayName??person?.display_name??p.oid)},foremanError='';try{foreman=yield* resolveForeman(p,String(d.project),foreman.id);}catch(error){if(!(error instanceof ApiError))throw error;foremanError=error.message;}
  const jobMeta=(yield* q('SELECT name,number,status,details,company_id FROM jobs WHERE tenant=@p0 AND id=@p1',p.tenant,d.project))[0];
  const requesterProfile=(yield* q('SELECT details FROM user_profiles WHERE tenant=@p0 AND oid=@p1',p.tenant,p.oid))[0];const requesterDetails=JSON.parse(String(requesterProfile?.details??'{}'));const jobDetails=JSON.parse(String(jobMeta?.details??'{}'));const company=(yield* q('SELECT name,details FROM companies WHERE tenant=@p0 AND id=@p1',p.tenant,jobMeta?.company_id??'main'))[0];
- const snapshot={form:JSON.parse(String(d.form_json??'{}')),jobDetails,companyName:String(company?.name??''),createdAt:new Date(d.updated_at).toISOString(),id:guid(d.id),version:Number(d.version),projectId:String(d.project),projectName:String(jobMeta?.name??d.project),projectNumber:String(jobMeta?.number??''),name:d.name,deliveryDate:day(d.delivery_date),foreman,preparedBy:{id:p.oid,phone:String(requesterDetails.phone??''),email:String(requesterDetails.email??''),name:p.displayName??person?.display_name??p.oid},lines};
+ const outputTemplate=yield* resolveDocumentTemplate(p,String(d.project),String(jobMeta?.company_id??'main')),companyLogo=yield* currentCompanyLogo(p,String(jobMeta?.company_id??'main'));
+ const snapshot={outputTemplate,companyLogo,form:JSON.parse(String(d.form_json??'{}')),jobDetails,companyName:String(company?.name??''),createdAt:new Date(d.updated_at).toISOString(),id:guid(d.id),version:Number(d.version),projectId:String(d.project),projectName:String(jobMeta?.name??d.project),projectNumber:String(jobMeta?.number??''),name:d.name,deliveryDate:day(d.delivery_date),foreman,preparedBy:{id:p.oid,phone:String(requesterDetails.phone??''),email:String(requesterDetails.email??''),name:p.displayName??person?.display_name??p.oid},lines};
  const errors:{lineId:string|null;message:string}[]=[],warnings:{lineId:string;message:string}[]=[],evidence:unknown[]=[];
  if(foremanError)errors.push({lineId:null,message:foremanError});
  const job=jobMeta;if(job&&job.status!=='active')errors.push({lineId:null,message:'This job is archived.'});

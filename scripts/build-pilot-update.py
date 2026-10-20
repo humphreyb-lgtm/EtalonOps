@@ -9,8 +9,11 @@ import sys
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v37.zip')
+output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v38.zip')
 files = [
+    'docs/PILOT_UPDATE_V38.md', 'db/014-document-designer.sql', 'db/migrations/014-document-designer.sql',
+    'src/document-layout.ts', 'src/DocumentDesigner.tsx', 'src/CompanyLogo.tsx',
+    'server/document-templates.ts', 'server/document-renderer.ts', 'server/document-routes.ts',
     'docs/PILOT_UPDATE_V37.md', 'db/013-mrf-export.sql', 'db/migrations/013-mrf-export.sql', 'src/mrf-form.ts', 'src/pdf-template.ts', 'src/PDFTemplateAdmin.tsx', 'server/pdf-template.ts', 'server/pdf-routes.ts', 'server/mrf-pdf.ts', 'docs/PILOT_UPDATE_V36.md', 'src/image-selection.ts', 'src/PurchasingFields.tsx', 'docs/PILOT_UPDATE_V35.md', 'docs/PILOT_UPDATE_V34.md', 'docs/PILOT_UPDATE_V33.md', 'docs/PILOT_UPDATE_V32.md', 'docs/PILOT_UPDATE_V31.md', 'docs/SITE_ACCOUNTS_AND_JOBS.md', 'db/012-workforce-accounts.sql', 'db/migrations/012-workforce-accounts.sql',
     'server/workforce.ts', 'server/site-accounts.ts', 'server/account-routes.ts', 'src/LoginPage.tsx', 'src/useJobs.ts', 'scripts/recover-cloud-workspace.sh',
     'docs/PILOT_UPDATE_V30.md', 'db/011-line-task-code.sql', 'db/migrations/011-line-task-code.sql',

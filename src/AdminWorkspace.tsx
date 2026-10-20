@@ -1,4 +1,4 @@
-import {PDFTemplateAdmin} from './PDFTemplateAdmin';
+import {DocumentDesigner} from './DocumentDesigner';
 import {MaterialTable} from './MaterialTable';
 import {CatalogInbox} from './CatalogInbox';
 import {CatalogResearch} from './CatalogResearch';
@@ -57,13 +57,13 @@ export function AdminWorkspace() {
   if (!allowed) return null;
   return <><button ref={trigger} className="button" onClick={() => void enter()}><Settings size={18} aria-hidden="true"/> Administration</button>
     {!open && error && <p role="alert">{error}</p>}
-    <dialog ref={dialog} className={`admin-workspace ${section==='materials'?'material-table-workspace':''}`} aria-labelledby="admin-workspace-title" onCancel={event => {event.preventDefault();close();}}>
+    <dialog ref={dialog} className={`admin-workspace ${section==='materials'?'material-table-workspace':section==='pdf'?'designer-workspace-modal':''}`} aria-labelledby="admin-workspace-title" onCancel={event => {event.preventDefault();close();}}>
       <header className="modal-heading"><div><h2 id="admin-workspace-title" ref={heading} tabIndex={-1}>Administration</h2><p>EtalonOps management</p></div><button className="button" onClick={close}><X size={18} aria-hidden="true"/> Return to MRF</button></header>
       <nav aria-label="Administration sections" className="admin-sections">{sections.map(([id,label]) => <button key={id} className={`button ${section===id?'primary':''}`} aria-current={section===id?'page':undefined} onClick={() => choose(id)}>{label}</button>)}</nav>
       {error && <p role="alert">{error}</p>}
       <div className="admin-content" onChange={() => setChanged(true)}>
         <section hidden={section!=='overview'} aria-label="Administration overview"><h3>Manage your materials workflow</h3><p>Your MRF stays open while you administer the application. Each section keeps its form entries when you switch sections.</p><div className="admin-cards">{sections.slice(1).map(([id,label]) => <article key={id}><h3>{label}</h3><p>{({pdf:'Set up and preview fillable MRF PDF layouts.',materials:'Add and edit generic materials in a compact table without manufacturer parts.',imports:'Upload Excel workbooks directly, edit unpublished records and approve publication.',research:'Review a manufacturer product family, edit specifications and phrases, and add selected products.',status:'Check the installed release, database connection and current sign-in access.',readiness:'View catalog counts, find missing relationships and work through specification, product and image reviews.',users:'Register Microsoft users, manage project access, deactivate accounts and review access history.',catalog:'Maintain canonical materials, manufacturer parts, translations, search priority and reviewed CSV imports.',images:'Upload product photos and review their identity, source evidence and usage rights.',restrictions:'Manage manufacturer restrictions by job or material category.',ai:'Check the current AI activation status and request limits.'} as Record<string,string>)[id]}</p><button className="button" onClick={() => choose(id)}>Open {label.toLowerCase()}</button></article>)}</div><p>Catalog and access changes use the existing review and history controls. Submitting an MRF does not place an order.</p></section>
-        {visited.includes('pdf')&&<section hidden={section!=='pdf'}><PDFTemplateAdmin/></section>}{visited.includes('status')&&<section hidden={section!=='status'}><AdminStatus/></section>}
+        {visited.includes('pdf')&&<section hidden={section!=='pdf'}><DocumentDesigner/></section>}{visited.includes('status')&&<section hidden={section!=='status'}><AdminStatus/></section>}
         {visited.includes('readiness')&&<section hidden={section!=='readiness'}><CatalogReadiness inspect={inspect}/></section>}
         {visited.includes('users')&&<section hidden={section!=='users'} aria-label="Users and access"><h3>Users and access</h3><UserAdmin embedded/></section>}
         {visited.includes('materials')&&<section hidden={section!=='materials'}><MaterialTable onImages={id=>inspect(id,'images')}/></section>}

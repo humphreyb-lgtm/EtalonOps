@@ -100,3 +100,5 @@ export async function uploadCatalogWorkbook<T>(file:File):Promise<T>{
  const response=await fetch('/api/admin/catalog-upload',{method:'POST',headers:{...await apiHeaders(),'Content-Type':'application/octet-stream','x-catalog-filename':encodeURIComponent(file.name)},body:file});
  const value=await response.json();if(!response.ok)throw new Error(value.error??'Workbook upload failed.');return value;
 }
+
+export async function uploadCompanyLogo(companyId:string,file:File){const response=await fetch(`/api/companies/${encodeURIComponent(companyId)}/logo`,{method:'POST',headers:{...await apiHeaders(),'Content-Type':file.type||'application/octet-stream'},body:file});const value=await response.json();if(!response.ok)throw Error(value.error??'Logo upload failed.');window.dispatchEvent(new Event('company-logo-changed'));return value;}

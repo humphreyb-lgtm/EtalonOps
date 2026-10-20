@@ -34,7 +34,7 @@ export class Store {
     if (!exists) this.transaction(() => { this.db.exec(migration); this.db.prepare('INSERT INTO schema_migrations(version,checksum) VALUES(1,?)').run(hash(migration)); });
     const applied = this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=1').get();
     if (applied?.checksum !== hash(migration)) throw new Error('Applied migration checksum changed. Create a new migration instead.');
-    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql'],[7,'007-mrf-submissions.sql'],[8,'008-product-details.sql'],[9,'009-material-categories.sql'],[10,'010-mrf-foreman.sql'],[11,'011-line-task-code.sql'],[12,'012-workforce-accounts.sql'],[13,'013-mrf-export.sql']] as const){
+    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql'],[7,'007-mrf-submissions.sql'],[8,'008-product-details.sql'],[9,'009-material-categories.sql'],[10,'010-mrf-foreman.sql'],[11,'011-line-task-code.sql'],[12,'012-workforce-accounts.sql'],[13,'013-mrf-export.sql'],[14,'014-document-designer.sql']] as const){
       const next=readFileSync(new URL(`../db/migrations/${file}`,import.meta.url),'utf8');
       const prior=this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=?').get(version);
       if(prior&&prior.checksum!==hash(next))throw new Error('Applied catalog migration checksum changed.');

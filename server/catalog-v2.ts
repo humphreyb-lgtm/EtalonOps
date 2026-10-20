@@ -1,3 +1,4 @@
+import {designerCommand} from './document-templates';
 import {templateCommand} from './pdf-template';
 import {selectImage} from '../src/image-selection';
 import {validateMaterialCategory} from './material-categories';
@@ -461,6 +462,7 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
 }
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
   if(['material-table-page','material-table-row','material-table-preview','material-table-save','material-categories','material-category-save'].includes(action))return yield* materialTable(p,action,data);
+  if(action.startsWith('designer-'))return yield* designerCommand(p,action,data);
   if(action.startsWith('inbox-'))return yield* inboxAction(p,action,data);
   switch(action){
     case 'prepared-preview':return yield* preparedResearchAction(p,data);
