@@ -1,0 +1,9 @@
+# Consistent catalog images v36
+
+Material-only views now use an approved linked-manufacturer upload when no generic uploaded photo exists. Product-specific views prefer their exact product upload, then a generic material upload; they never borrow an unrelated manufacturer photo. Uploaded images retain priority over external URL references. The same deterministic scope selection is shared by SQLite and Azure SQL, and external URL references exclude inactive manufacturer products. Material views prefer generic images before representative active linked-product images.
+
+Thumbnails are included in material administration, catalog relationships/search/browse, manufacturer product details/corrections, MRF line editing and submission review/submitted details. Existing MRF search and item-list photos use the same shared component. A successful image approval or import publication refreshes mounted photos so users do not need to reload the entire page. Failed stored-image decoding can fall back to its source reference. Lazy loading remains in place for long requests.
+
+Free-text MRF lines without a catalog material association retain a placeholder: no photograph is guessed from ambiguous wording. No image can display until an image has been supplied and approved. Historical MRF text/snapshots are unchanged; thumbnails resolve currently available catalog images.
+
+Cumulative update: run scripts/update-cloud-app.sh in the existing Cloud Shell workspace. Health reports consistent-images-v36. No schema change, new Azure resources or paid AI calls are required. Validation includes production build, shared image-scope tests, image-storage validation, SQL integration and browser checks for upload priority, material/search/MRF/review image consistency, approval/replacement/rejection and lazy loading.

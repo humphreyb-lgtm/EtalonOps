@@ -1,3 +1,4 @@
+import {selectImage} from '../src/image-selection';
 import {accountAction} from './site-accounts';
 import {resolveForeman} from './mrf-foreman';
 import {selectResearchedProduct} from './research-selection';
@@ -218,7 +219,7 @@ export class SqlStore implements Repository {
   }
   async approvedImage(p: Principal,id: string,productId:string|null=null): Promise<ImageRecord|null> {
     await this.imageMaterial(p,id);
-    const row=(await this.q("SELECT * FROM dbo.image_associations WHERE tenant=@p0 AND material_id=@p1 AND status='approved' AND ((product_id IS NULL AND @p2 IS NULL) OR product_id=@p2)",p.tenant,id,productId)).recordset[0];
+    const rows=(await this.q("SELECT i.* FROM dbo.image_associations i LEFT JOIN dbo.manufacturer_products p ON p.id=i.product_id AND p.tenant=i.tenant AND p.material_id=i.material_id WHERE i.tenant=@p0 AND i.material_id=@p1 AND i.status='approved' AND (i.product_id IS NULL OR p.active=1)",p.tenant,id)).recordset;const row=selectImage(rows,productId);
     return row ? this.mapImage(row):null;
   }
   async submitImage(p: Principal,id: string,hash: string,evidence: ImageEvidence,productId:string|null=null) {

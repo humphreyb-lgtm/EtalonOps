@@ -1,3 +1,4 @@
+import {selectImage} from '../src/image-selection';
 import {accountAction} from './site-accounts';
 import {resolveForeman} from './mrf-foreman';
 import {selectResearchedProduct} from './research-selection';
@@ -212,7 +213,7 @@ export class Store {
   }
   approvedImage(p: Principal, id: string, productId: string|null = null): ImageRecord | null {
     this.imageMaterial(p,id);
-    const row=this.db.prepare("SELECT * FROM image_associations WHERE tenant=? AND material_id=? AND status='approved' AND ((product_id IS NULL AND ? IS NULL) OR product_id=?)").get(p.tenant,id,productId,productId);
+    const rows=this.db.prepare("SELECT i.* FROM image_associations i LEFT JOIN manufacturer_products p ON p.id=i.product_id AND p.tenant=i.tenant AND p.material_id=i.material_id WHERE i.tenant=? AND i.material_id=? AND i.status='approved' AND (i.product_id IS NULL OR p.active=1)").all(p.tenant,id);const row=selectImage(rows,productId);
     return row ? this.mapImage(row):null;
   }
   submitImage(p: Principal,id: string,hash: string,evidence: ImageEvidence,productId:string|null=null) {

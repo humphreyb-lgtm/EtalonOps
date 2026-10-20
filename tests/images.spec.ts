@@ -22,22 +22,22 @@ for(const width of [390,1440])test(`admin image review, foreman visibility, repl
   async function upload(buffer:Buffer){await choose(buffer);const response=page.waitForResponse(r=>r.url().endsWith('/images')&&r.request().method()==='POST');await region.getByRole('button',{name:'Upload image for review'}).click();return (await(await response).json()).image;}
   const image=await upload(bytes);const first=region.locator('.image-review-record').filter({hasText:image.contentHash});
   await expect(first.getByRole('button',{name:'Approve product image'})).toBeDisabled();
-  await expect(first.getByRole('img',{name:`Image under review for ${description}`})).toBeVisible();
+  await first.scrollIntoViewIfNeeded();await expect(first.getByRole('img',{name:`Image under review for ${description}`})).toBeVisible();
   const foreman=await browser.newContext({viewport:{width,height:1000}});const view=await foreman.newPage();
   try{
     await view.goto('/?database=1&identity=foreman-one');await expect(view.locator('main')).toHaveAttribute('aria-busy','false');
     await view.getByLabel('Quantity',{exact:true}).fill('3');await view.getByLabel('Unit',{exact:true}).selectOption('EA');await view.getByLabel('Description',{exact:true}).fill(key);await view.getByRole('button',{name:'Find Matches',exact:true}).click();
-    await expect(view.getByRole('region',{name:'Translation results'})).toContainText(description);
+    await expect(view.getByRole('region',{name:'Material results'})).toContainText(description);
     await expect(view.getByRole('img',{name:`Approved product image for ${description}`})).toHaveCount(0);
     mkdirSync('artifacts/screenshots',{recursive:true});await first.scrollIntoViewIfNeeded();await page.screenshot({path:`artifacts/screenshots/${width}-image-admin-pending.png`,fullPage:true});
     await first.getByLabel('I verified the product image and usage rights.').check();await first.getByRole('button',{name:'Approve product image'}).click();
     await expect(first.getByText('approved',{exact:true})).toBeVisible();
-    await view.getByRole('button',{name:'Find Matches',exact:true}).click();await expect(view.getByRole('img',{name:`Approved product image for ${description}`})).toBeVisible();
+    await view.getByRole('button',{name:'Find Matches',exact:true}).click();await view.getByRole('region',{name:'Material results'}).scrollIntoViewIfNeeded();await expect(view.getByRole('img',{name:`Approved product image for ${description}`})).toBeVisible();
     await view.screenshot({path:`artifacts/screenshots/${width}-approved-image-results.png`,fullPage:true});
     const secondImage=await upload(replacement);const second=region.locator('.image-review-record').filter({hasText:secondImage.contentHash});
     await second.getByLabel('I verified the product image and usage rights.').check();await second.getByRole('button',{name:'Approve product image'}).click();await expect(first.getByText('rejected',{exact:true})).toBeVisible();
     await second.getByRole('button',{name:'Remove approved image'}).click();await expect(second.getByText('rejected',{exact:true})).toBeVisible();
-    await view.getByRole('button',{name:'Find Matches',exact:true}).click();await expect(view.getByRole('img',{name:`Approved product image for ${description}`})).toHaveCount(0);
+    await view.getByRole('button',{name:'Find Matches',exact:true}).click();await view.getByRole('region',{name:'Material results'}).scrollIntoViewIfNeeded();await expect(view.getByRole('img',{name:`Approved product image for ${description}`})).toHaveCount(0);
     await upload(bytes);await expect(region.getByRole('alert')).toContainText('rejected for this product');
     const axe=await new AxeBuilder({page}).include('.catalog-modal').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(axe.violations).toEqual([]);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

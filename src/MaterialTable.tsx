@@ -37,7 +37,7 @@ function MaterialRow({material:incoming,draft,categories,onDraft,onSaved,onDirty
  }
 
  return <><tr className={newRow?'material-new-row':''} data-testid={newRow?'new-material-row':'material-table-row'} aria-busy={busy}>
- <td>{material?<ProductPhoto materialId={material.id} description={material.description} fallback={<span>—</span>}/>:<strong>＋</strong>}</td>
+ <td>{material?<ProductPhoto materialId={material.id} description={material.description} fallback={<span className="muted">No image</span>}/>:<strong>＋</strong>}</td>
  <td>{newRow&&<strong>New material</strong>}<label><span>Description</span><textarea className="material-description-input" aria-label={`Material description · ${identity}`} rows={2} maxLength={2000} value={descriptionText} disabled={busy} placeholder={material?.generatedDescription?formatInchText(material.generatedDescription):'Generated from specifications unless you enter your own wording'} onChange={event=>{setDescriptionText(event.target.value);setDescriptionMode('custom');changed();}}/></label>{material&&<small>{material.verification==='reviewed'?'Reviewed specifications':'Provisional specifications'} · {material.products.length} manufacturer products</small>}</td>
 
  <td><div className="material-table-fields">{inlineFields.map(specificationControl)}{categoryControl}{unitControl}</div></td>

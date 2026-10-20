@@ -22,6 +22,7 @@ export async function request<T>(path: string, method = 'GET', body?: unknown): 
   const response = await fetch(`/api${path}`, { method, headers: { ...await apiHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   const value = await response.json();
   if (!response.ok) throw new Error(value.error ?? 'Database request failed. Your on-screen items are preserved.');
+  if(method!=='GET'&&(/\/images\/[^/]+\/review$/.test(path)||path==='/catalog/inbox-publish-ready'||path==='/catalog/review-image-reference'))window.dispatchEvent(new Event('catalog-images-changed'));
   return value;
 }
 export function clearLocalSession() { token = null; tokenPromise = null; }
