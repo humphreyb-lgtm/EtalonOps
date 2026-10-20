@@ -34,7 +34,7 @@ export class Store {
     if (!exists) this.transaction(() => { this.db.exec(migration); this.db.prepare('INSERT INTO schema_migrations(version,checksum) VALUES(1,?)').run(hash(migration)); });
     const applied = this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=1').get();
     if (applied?.checksum !== hash(migration)) throw new Error('Applied migration checksum changed. Create a new migration instead.');
-    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql'],[7,'007-mrf-submissions.sql'],[8,'008-product-details.sql'],[9,'009-material-categories.sql'],[10,'010-mrf-foreman.sql'],[11,'011-line-task-code.sql'],[12,'012-workforce-accounts.sql']] as const){
+    for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql'],[7,'007-mrf-submissions.sql'],[8,'008-product-details.sql'],[9,'009-material-categories.sql'],[10,'010-mrf-foreman.sql'],[11,'011-line-task-code.sql'],[12,'012-workforce-accounts.sql'],[13,'013-mrf-export.sql']] as const){
       const next=readFileSync(new URL(`../db/migrations/${file}`,import.meta.url),'utf8');
       const prior=this.db.prepare('SELECT checksum FROM schema_migrations WHERE version=?').get(version);
       if(prior&&prior.checksum!==hash(next))throw new Error('Applied catalog migration checksum changed.');
@@ -78,7 +78,7 @@ export class Store {
       rawInput: JSON.parse(String(line.raw_input)), candidate: line.candidate ? JSON.parse(String(line.candidate)) : null,
       purchasing: line.purchasing ? JSON.parse(String(line.purchasing)) : undefined, source: line.source, deliveryMode: line.delivery_mode, overrideDate: line.override_date,
     }));
-    return { ...(submission?{submitted:{id:String(submission.id),number:submissionLabel(Number(submission.mrf_number),Number(submission.revision)),revision:Number(submission.revision),submittedAt:String(submission.submitted_at)}}:{}),foreman:{id:String(row.foreman_oid??row.owner).toLowerCase(),name:String(row.foreman_name??row.owner)},revisionOf:row.revision_of??null,id: row.id, projectId: row.project, name: row.name, deliveryDate: row.delivery_date, version: row.version, savedAt: row.updated_at, lines };
+    return { form:JSON.parse(String(row.form_json??'{}')), ...(submission?{submitted:{id:String(submission.id),number:submissionLabel(Number(submission.mrf_number),Number(submission.revision)),revision:Number(submission.revision),submittedAt:String(submission.submitted_at)}}:{}),foreman:{id:String(row.foreman_oid??row.owner).toLowerCase(),name:String(row.foreman_name??row.owner)},revisionOf:row.revision_of??null,id: row.id, projectId: row.project, name: row.name, deliveryDate: row.delivery_date, version: row.version, savedAt: row.updated_at, lines };
   }
   saveDraft(p: Principal, body: DraftBody, id?: string) {
     this.requireProject(p, body.projectId);
@@ -93,6 +93,7 @@ export class Store {
       if (existing) this.db.prepare('UPDATE drafts SET delivery_date=?,version=version+1,updated_at=?,name=? WHERE id=? AND tenant=? AND owner=?').run(body.deliveryDate, now(), body.name??existing?.name??'Untitled MRF', draftId, p.tenant, p.oid);
       else this.db.prepare('INSERT INTO drafts(id,tenant,owner,project,delivery_date,version,updated_at,name) VALUES(?,?,?,?,?,1,?,?)').run(draftId, p.tenant, p.oid, body.projectId, body.deliveryDate, now(), body.name??'Untitled MRF');
       this.db.prepare('UPDATE drafts SET foreman_oid=?,foreman_name=? WHERE id=? AND tenant=? AND owner=?').run(foreman.id,foreman.name,draftId,p.tenant,p.oid);
+      this.db.prepare('UPDATE drafts SET form_json=? WHERE id=? AND tenant=? AND owner=?').run(JSON.stringify(body.form??existing?.form??{}),draftId,p.tenant,p.oid);
       const priorMaterials = new Map(this.db.prepare('SELECT id,material_id,purchasing,candidate,source FROM draft_lines WHERE draft_id=?').all(draftId).map(line => [String(line.id), {materialId:line.material_id,purchasing:line.purchasing,candidate:line.candidate,source:line.source}]));
       this.db.prepare('DELETE FROM draft_lines WHERE draft_id=?').run(draftId);
       body.lines.forEach((line, index) => {

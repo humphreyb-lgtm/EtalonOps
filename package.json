@@ -39,6 +39,7 @@
     "jose": "^6.2.12",
     "lucide-react": "^0.468.0",
     "mssql": "^12.7.9",
+    "pdf-lib": "^1.17.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "read-excel-file": "^9.3.12",

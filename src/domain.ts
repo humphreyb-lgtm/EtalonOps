@@ -1,3 +1,4 @@
+import {emptyMRFForm,type MRFForm} from './mrf-form';
 export type Purchasing={productId:string|null;manufacturer:string;partNumber:string;noSubstitutions:boolean};
 export type ManufacturerProduct={id:string;manufacturerId?:string;title?:string;sourceUrl?:string;details?:Record<string,string|number>;manufacturer:string;partNumber:string;verification?:'provisional'|'reviewed';allowed?:boolean};
 export type Unit = 'EA' | 'FT' | 'STICK' | 'BOX' | 'ROLL' | 'PAIR';
@@ -29,6 +30,7 @@ export type Line = {
   overrideDate: string | null;
 };
 export type Draft = {
+  form?:MRFForm;
   foreman?:{id:string;name:string};
   submitted?:{id:string;number:string;revision:number;submittedAt:string};
   revisionOf?:string|null;
@@ -90,7 +92,7 @@ export function formatDate(value: string): string {
 }
 
 export function freshDraft(projectId: string): Draft {
-  return { name:'New MRF', schemaVersion: 1, projectId, ownerId: 'local-demo-foreman', deliveryDate: localDate(), lines: [], savedAt: null };
+  return { form:emptyMRFForm(),name:'New MRF', schemaVersion: 1, projectId, ownerId: 'local-demo-foreman', deliveryDate: localDate(), lines: [], savedAt: null };
 }
 
 export const storageKey = (projectId: string) => `etalonops:demo:v1:${projectId}`;

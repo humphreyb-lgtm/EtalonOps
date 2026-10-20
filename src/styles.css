@@ -691,3 +691,7 @@ dialog::backdrop { background: #14203c55; }
 .submission-item-heading{display:flex;align-items:center;gap:8px}.submission-item-heading .product-photo-slot{width:40px;height:40px;flex:0 0 40px}.submission-item-heading h4{margin:0}.catalog-relationships .product-photo-slot{display:inline-flex;width:40px;height:40px;vertical-align:middle;margin-right:6px}.product-photo-slot .approved-product-photo{max-width:100%;max-height:100%;object-fit:contain}
 
 .image-material-choice .product-photo-slot,.purchasing-fields .product-photo-slot{width:36px;height:36px;flex:0 0 36px}.image-material-choice{display:flex;align-items:center;gap:6px}
+
+.mrf-logistics{padding:8px 12px}.mrf-logistics-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 10px;border:0;padding:0;margin:0}.mrf-logistics-fields legend{font-weight:600;margin-bottom:5px}.mrf-logistics-fields label{display:flex;flex-direction:column;gap:3px}.mrf-logistics-fields input{height:34px;min-height:34px;padding:4px 7px}@media(max-width:700px){.mrf-logistics-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:400px){.mrf-logistics-fields{grid-template-columns:1fr}}
+
+.mrf-job-defaults{font-size:12px;margin:0 0 6px;color:#53627a;overflow-wrap:anywhere}

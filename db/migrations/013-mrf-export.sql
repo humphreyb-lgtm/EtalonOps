@@ -1,0 +1,2 @@
+ALTER TABLE drafts ADD COLUMN form_json TEXT NOT NULL DEFAULT '{}';
+CREATE TABLE pdf_templates(tenant TEXT PRIMARY KEY,config TEXT NOT NULL,version INTEGER NOT NULL);

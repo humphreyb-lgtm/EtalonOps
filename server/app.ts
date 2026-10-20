@@ -1,3 +1,4 @@
+import {pdfRoutes} from './pdf-routes';
 import {accountRoutes,managedAccountRoutes,sessionCookie} from './account-routes';
 import {tokenHash} from './site-accounts';
 import {researchRoutes} from './research-routes';
@@ -35,7 +36,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   });
   app.use(rateLimit({ windowMs: 60_000, limit: 1800, handler:(_req,res)=>{res.status(429).json({error:'Too many requests. Wait a minute before retrying.'});}, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.use(express.json({ limit: '1mb' }));
-  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'consistent-images-v36' }); });
+  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'pdf-foundation-v37' }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
     const { identity } = z.object({ identity: z.string() }).strict().parse(req.body);
     const token = await auth.issueLocal(identity);
@@ -58,7 +59,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   const principal = (res: express.Response): Principal => res.locals.principal;
   managedAccountRoutes(app,store);
   catalogExportRoutes(app,store);
-  imageRoutes(app,store,services.images);
+  imageRoutes(app,store,services.images);pdfRoutes(app,store,services.images);
   aiRoutes(app,store,services.ai);
   researchRoutes(app,store,services.research,services.researchSourceLoader);
   app.post('/api/admin/catalog-upload',(_req,res,next)=>{if(!principal(res).roles.includes('Admin'))return next(new ApiError(403,'Administrator role required.'));next();},express.raw({type:'application/octet-stream',limit:'3mb'}),async(req,res)=>{if(!Buffer.isBuffer(req.body))throw new ApiError(400,'Upload the workbook as a file.');let filename:string;try{filename=decodeURIComponent(req.get('x-catalog-filename')??'');}catch{throw new ApiError(400,'Invalid filename.');}const {ignoredSheets,...payload}=await parseWorkbookUpload(filename,req.body);res.json({...await store.catalogCommand(principal(res),'inbox-stage',payload),ignoredSheets});});

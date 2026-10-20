@@ -1,3 +1,4 @@
+import {emptyMRFForm} from './mrf-form';
 import type { DraftFilters } from './draft-filters';
 import { catalogStreamValidator } from './catalog-stream';
 import type { Candidate, Draft } from './domain';
@@ -31,7 +32,7 @@ export async function readDatabaseDraft(projectId: string,id?:string): Promise<D
   return draft ? { ...draft, schemaVersion: 1, ownerId: 'local-demo-foreman' } : null;
 }
 export async function saveDatabaseDraft(draft: Draft): Promise<Draft> {
-  const { draft: saved } = await request<{ draft: SavedDraft }>(draft.id ? `/drafts/${draft.id}` : '/drafts', draft.id ? 'PUT' : 'POST', { name:draft.name??'Untitled MRF',foremanId:draft.foreman?.id, projectId: draft.projectId, deliveryDate: draft.deliveryDate, lines: draft.lines, version: draft.version ?? 0 });
+  const { draft: saved } = await request<{ draft: SavedDraft }>(draft.id ? `/drafts/${draft.id}` : '/drafts', draft.id ? 'PUT' : 'POST', { form:{...emptyMRFForm(),...draft.form},name:draft.name??'Untitled MRF',foremanId:draft.foreman?.id, projectId: draft.projectId, deliveryDate: draft.deliveryDate, lines: draft.lines, version: draft.version ?? 0 });
   return { ...saved, schemaVersion: 1, ownerId: 'local-demo-foreman' };
 }
 export async function databaseSearch(query: string,projectId?:string) { return (await request<{ matches: Candidate[] }>(`/materials?q=${encodeURIComponent(query)}${projectId?`&projectId=${encodeURIComponent(projectId)}`:''}`)).matches; }

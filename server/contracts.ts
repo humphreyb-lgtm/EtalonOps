@@ -22,9 +22,10 @@ export const line = z.object({
   if ((value.source === 'user_description') !== (value.candidate === null)) context.addIssue({ code: 'custom', message: 'Candidate/source mismatch.' });
   if (value.candidate && value.source !== value.candidate.source) context.addIssue({ code: 'custom', message: 'Candidate/source mismatch.' });
 });
+export const mrfForm=z.object({workArea:z.string().trim().max(200),packagingMethod:z.string().trim().min(1).max(200).default('Standard'),specialPackagingInstructions:z.string().trim().max(2000),defaultTaskCode:z.string().trim().max(16),deliveryInstructions:z.string().trim().max(2000),purchasingNotes:z.string().trim().max(2000)}).strict();
 export const draftBody = z.object({
   projectId: z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/), name:z.string().trim().min(1).max(120).optional(), deliveryDate: date, foremanId:z.string().trim().min(1).max(64).nullable().optional(),
-  lines: z.array(line).max(500), version: z.number().int().nonnegative(),
+  form:mrfForm.optional(),lines: z.array(line).max(500), version: z.number().int().nonnegative(),
 }).strict().refine(value => new Set(value.lines.map(item => item.id)).size === value.lines.length, 'Duplicate line identifiers');
 export type DraftBody = z.infer<typeof draftBody>;
 export type Principal = { tenant: string; oid: string; roles: string[]; displayName?:string };
