@@ -40,7 +40,7 @@ files = [
     'docs/PILOT_UPDATE_V18.md', 'server/research-discovery.ts', 'docs/PILOT_UPDATE_V17.md', 'server/research-output.ts', 'server/research-error.ts', 'docs/PILOT_UPDATE_V16.md', 'docs/AZURE_RESEARCH.md', 'docs/LIVE_AI_ACTIVATION.md', 'scripts/enable-azure-research.py',
     'server/cloud-config.ts', 'server/cloud-main.ts', 'server/ai-provider.ts', 'server/azure-research.ts', 'server/research-policy.ts', 'server/research-ledger.ts', 'server/research-source.ts', 'server/research-pdf.ts', 'server/research-routes.ts', 'server/research-selection.ts', 'src/LiveResearch.tsx',
     'docs/PILOT_UPDATE_V15.md', 'server/catalog-publication.ts', 'docs/PILOT_UPDATE_V14.md',
-    'server/cloud-app.ts', 'server/image-routes.ts', 'docs/PILOT_UPDATE_V13.md', 'docs/DESIGN_PREFERENCES.md',
+    'server/cloud-app.ts', 'server/image-assets.ts', 'server/image-routes.ts', 'docs/PILOT_UPDATE_V13.md', 'docs/DESIGN_PREFERENCES.md',
     'server/catalog-inbox.ts', 'server/catalog-workbook.ts', 'src/CatalogInbox.tsx', 'package-lock.json', 'docs/PILOT_UPDATE_V12.md', 'docs/WORKBOOK_PUBLISHING.md',
     'src/CatalogResearch.tsx', 'src/catalog-research.ts', 'server/catalog-research.ts', 'docs/PRODUCT_RESEARCH.md', 'docs/PILOT_UPDATE_V11.md',
     'server/catalog-spreadsheet.ts', 'scripts/build-catalog-workbook.py', 'docs/PILOT_UPDATE_V10.md',
