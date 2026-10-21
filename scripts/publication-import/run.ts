@@ -4,7 +4,7 @@ import {execFileSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
 import sql from 'mssql';
 import {AzureCliCredential} from '@azure/identity';
-import {ContainerClient,StorageSharedKeyCredential} from '@azure/storage-blob';
+import {ContainerClient} from '@azure/storage-blob';
 import {SqlStore} from '../../server/sql-store';
 import {normalizeImage,BlobImageAssets} from '../../server/image-assets';
 import {imageLimits} from '../../server/image-contracts';
@@ -43,12 +43,13 @@ async function main(){
   const associations=snapshot.tables.image_associations??[];const expectedNewImages=data.records.filter((r,i)=>{if(!r.image)return false;const existing=associations.filter((x:any)=>normId(x.material_id)===initial.matches[i].existingId);return !existing.some((x:any)=>x.status==='approved'||x.content_hash===images.get(r.image!.file)!.hash);}).length;if(associations.length+expectedNewImages>imageLimits.maxAssociations)fail('The existing 500-image-association limit would be exceeded. No material changes were applied.');
   report.state='validated';save();console.log('Preflight passed: '+JSON.stringify(report.preview));
   if(!args.has('--apply')){console.log('Read-only preflight complete. Result: '+reportFile);return;}
-  const credential=new AzureCliCredential();let container=new ContainerClient(`https://${state.storageName}.blob.core.windows.net/catalog-images`,credential),assets:any=new BlobImageAssets(state.storageName,credential);
-  // Check write access before material changes. If the owner has management-plane
-  // access but no blob data role, use the existing account key only in memory.
-  let probe=container.getBlockBlobClient('publication-import-probe/'+randomUUID());
-  try{await probe.uploadData(Buffer.from('EtalonOps import readiness'),{conditions:{ifNoneMatch:'*'}});await probe.delete();}
-  catch{try{const keys=az(['storage','account','keys','list','-g',state.resourceGroup,'-n',state.storageName]),key=keys.find((k:any)=>k.permissions==='FULL')?.value??keys[0]?.value;if(!key)throw Error();const shared=new StorageSharedKeyCredential(state.storageName,key);container=new ContainerClient(`https://${state.storageName}.blob.core.windows.net/catalog-images`,shared);probe=container.getBlockBlobClient('publication-import-probe/'+randomUUID());await probe.uploadData(Buffer.from('EtalonOps import readiness'),{conditions:{ifNoneMatch:'*'}});await probe.delete();assets={put:async(key:string,bytes:Buffer)=>{const blob=container.getBlockBlobClient(key);try{await blob.uploadData(bytes,{conditions:{ifNoneMatch:'*'},blobHTTPHeaders:{blobContentType:'image/webp'},metadata:{sha256:createHash('sha256').update(bytes).digest('hex')}});}catch(e:any){if(![409,412].includes(e.statusCode))throw e;if(!Buffer.from(await blob.downloadToBuffer()).equals(bytes))throw Error('Existing stored image checksum mismatch.');}},get:async(key:string)=>container.getBlockBlobClient(key).downloadToBuffer()};}catch{fail('Existing storage write access unavailable. No roles were granted and no material changes were applied.');}}
+  const credential=new AzureCliCredential(),container=new ContainerClient(`https://${state.storageName}.blob.core.windows.net/catalog-images`,credential),assets=new BlobImageAssets(state.storageName,credential);
+  // OAuth only: account keys are deliberately disabled in this deployment.
+  for(let attempt=0;;attempt++){
+   const probe=container.getBlockBlobClient('publication-import-probe/'+randomUUID());
+   try{await probe.uploadData(Buffer.from('EtalonOps import readiness'),{conditions:{ifNoneMatch:'*'}});await probe.delete();break;}
+   catch(e:any){if(e.statusCode===403&&attempt<12){console.log('Waiting for temporary image-storage access to propagate…');await new Promise(r=>setTimeout(r,10000));continue;}const code=String(e.code??'unknown').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,80);fail(`Image storage OAuth check failed (${code}). No material changes were applied. Account keys remain disabled.`);}
+  }
   report.state='applying materials';save();
   for(let i=0;i<data.records.length;i+=50){snapshot=await store.catalogCommand(p,'export-snapshot',{});const current=reconcile(data.records,snapshot),rows=current.prepared.slice(i,i+50),name='R2-ready-'+String(i/50+1).padStart(2,'0')+'.xlsx';const applied=await applyChunk(store,p,rows,name,args.has('--approve-images'));report.batches.push({first:i+1,last:Math.min(i+50,data.records.length),...applied});save();console.log(`Saved materials ${i+1}–${Math.min(i+50,data.records.length)} / ${data.records.length}`);}
   snapshot=await store.catalogCommand(p,'export-snapshot',{});const matched=reconcile(data.records,snapshot);report.state='attaching images';save();
