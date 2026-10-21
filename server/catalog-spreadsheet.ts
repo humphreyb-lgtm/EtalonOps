@@ -19,6 +19,7 @@ export function spreadsheetRecord(kind:SpreadsheetKind,row:Record<string,string>
  // Spreadsheet authors must explicitly identify provenance; blank origin must never become admin-reviewed by default.
  if(kind==='material'||kind==='product'||kind==='translation')result.origin=row.origin?.trim()??'';
  if(kind==='material'){
+  result.sourceUrl=row.sourceUrl?.trim()??'';
   const attributes:Record<string,string|number>={};
   for(const [column,cell] of Object.entries(row)){
    const value=cell.trim();if(!value)continue;

@@ -1,0 +1,59 @@
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {resolve,join,dirname} from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {createHash,randomUUID} from 'node:crypto';
+import sql from 'mssql';
+import {AzureCliCredential} from '@azure/identity';
+import {ContainerClient,StorageSharedKeyCredential} from '@azure/storage-blob';
+import {SqlStore} from '../../server/sql-store';
+import {normalizeImage,BlobImageAssets} from '../../server/image-assets';
+import {imageLimits} from '../../server/image-contracts';
+import {packageSchema,reconcile,validateChunks,applyChunk,attachReviewedImages,hash,normId} from './core';
+process.umask(0o077);
+const args=new Set(process.argv.slice(2)),root=resolve(process.env.ETALONOPS_IMPORT_ROOT??'.');
+const statePath=join(root,'.runtime','state.json');mkdirSync(dirname(statePath),{recursive:true});
+function az(values:string[]):any{try{return JSON.parse(execFileSync('az',[...values,'--output','json'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}));}catch{throw Error('An authenticated Azure CLI read failed. Check Cloud Shell sign-in; no credential output is needed.');}}
+const fail=(message:string):never=>{throw Error(message);};
+async function main(){
+ if(args.has('--check-package')){const bytes=readFileSync(join(root,'materials.json'));if(createHash('sha256').update(bytes).digest('hex')!==readFileSync(join(root,'materials.sha256'),'utf8').trim())fail('Material checksum mismatch.');const d=packageSchema.parse(JSON.parse(bytes.toString())),seen=new Set<string>();for(const r of d.records){if(!r.image||seen.has(r.image.file))continue;const bytes=readFileSync(join(root,r.image.file));if(createHash('sha256').update(bytes).digest('hex')!==r.image.sha256)fail('Image checksum mismatch.');await normalizeImage(bytes);seen.add(r.image.file);}console.log('Package verified without Azure access: '+d.records.length+' materials, '+seen.size+' assets, 28 held records excluded.');return;}
+ if(args.has('--prepare-state')){
+  const account=az(['account','show']);if(account.id!=='a428f249-9b2a-4314-8619-6b3fd33c805e')fail('Select the existing Azure Standard subscription first.');
+  const owner=az(['ad','signed-in-user','show']),resourceGroup='rg-etalonops-poc',appName='etalonops-954bb4a3',sqlName='etalonops-954bb4a3-sql';
+  const admins=az(['sql','server','ad-admin','list','-g',resourceGroup,'--server-name',sqlName]);if(admins.length!==1||normId(admins[0].sid)!==normId(owner.id))fail('The signed-in user must be the existing SQL administrator. No permissions are changed.');
+  const rows=az(['webapp','config','appsettings','list','-g',resourceGroup,'-n',appName,'--query',"[?name=='ETALONOPS_TENANT_ID' || name=='ETALONOPS_SQL_HOST' || name=='ETALONOPS_STORAGE_ACCOUNT'].{name:name,value:value}"]),settings=Object.fromEntries(rows.map((r:any)=>[r.name,r.value]));
+  if(normId(settings.ETALONOPS_TENANT_ID)!==normId(account.tenantId)||settings.ETALONOPS_SQL_HOST!==sqlName+'.database.windows.net'||!/^[a-z0-9]{3,24}$/.test(settings.ETALONOPS_STORAGE_ACCOUNT??''))fail('Existing app tenant, SQL server or storage settings did not match.');
+  writeFileSync(statePath,JSON.stringify({tenant:account.tenantId,ownerId:owner.id,resourceGroup,appName,sqlName,storageName:settings.ETALONOPS_STORAGE_ACCOUNT},null,2),{mode:0o600});console.log('Verified the existing pilot and Cloud Shell owner. No Azure resource or permission changes.');return;
+ }
+ const state=JSON.parse(readFileSync(statePath,'utf8')),account=az(['account','show']);if(account.id!=='a428f249-9b2a-4314-8619-6b3fd33c805e'||normId(account.tenantId)!==normId(state.tenant))fail('Azure account changed; stopped.');
+ const tokenResult=az(['account','get-access-token','--resource','https://database.windows.net/']);const claims=JSON.parse(Buffer.from(String(tokenResult.accessToken).split('.')[1],'base64url').toString());
+ if(normId(claims.oid)!==normId(state.ownerId)||normId(claims.tid)!==normId(state.tenant))fail('SQL token identity changed; stopped.');
+ const pool=new sql.ConnectionPool({server:state.sqlName+'.database.windows.net',database:'EtalonOps',authentication:{type:'azure-active-directory-access-token',options:{token:tokenResult.accessToken}},options:{encrypt:true,trustServerCertificate:false},connectionTimeout:30000,requestTimeout:60000,pool:{max:5,min:0,idleTimeoutMillis:1000}});
+ try{await pool.connect();}catch(e){await pool.close();if(args.has('--probe')){const match=String((e as Error).message).match(/Client with IP address '([\d.]+)'/i);if(match){console.log(match[1]);return;}}throw Error('Azure SQL connection failed. No catalog data was changed.');}
+ if(args.has('--probe')){console.log('already-allowed');await pool.close();return;}
+ const store=new SqlStore(pool),p={tenant:String(state.tenant),oid:normId(state.ownerId),roles:['Admin']};const report:any={format:'etalonops-publication-run-v1',startedAt:new Date().toISOString(),state:'validating',batches:[],images:{uploaded:0,preserved:0,alreadyApproved:0,pending:0},heldExcluded:28};
+ const reportFile=join(root,'.runtime','result.json'),save=()=>writeFileSync(reportFile,JSON.stringify(report,null,2),{mode:0o600});
+ try{
+  const user=(await store.q('SELECT active,role_limit,entra_admin FROM application_users WHERE tenant=@p0 AND oid=@p1',p.tenant,p.oid)).recordset[0];if(!user?.active||!user.entra_admin||user.role_limit==='Foreman')fail('Cloud Shell owner must already be an active Microsoft administrator in EtalonOps. Sign in to the app as that administrator; this script does not grant roles.');
+  const bytes=readFileSync(join(root,'materials.json')),expected=readFileSync(join(root,'materials.sha256'),'utf8').trim();if(createHash('sha256').update(bytes).digest('hex')!==expected)fail('Material package checksum mismatch.');
+  const data=packageSchema.parse(JSON.parse(bytes.toString()));if(createHash('sha256').update(normId(p.tenant)).digest('hex')!==data.expectedTenantHash)fail('Package belongs to another tenant.');report.packageHash=hash(data);
+  const images=new Map<string,Awaited<ReturnType<typeof normalizeImage>>>();for(const r of data.records){if(!r.image||images.has(r.image.file))continue;const file=join(root,r.image.file),raw=readFileSync(file);if(createHash('sha256').update(raw).digest('hex')!==r.image.sha256)fail('Image checksum mismatch: '+r.image.file);images.set(r.image.file,await normalizeImage(raw));}
+  console.log(`Checked ${data.records.length} ready material records and ${images.size} local image assets. The 28 held records are excluded.`);
+  let snapshot=await store.catalogCommand(p,'export-snapshot',{});const backup=join(root,'.runtime','catalog-before-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json');writeFileSync(backup,JSON.stringify(snapshot,null,2),{mode:0o600});report.backup=backup;
+  const initial=reconcile(data.records,snapshot),checks=await validateChunks(store,p,initial.prepared,console.log);report.preview=checks.reduce((a,c)=>{for(const [k,v] of Object.entries(c.preview.summary))a[k]=(a[k]??0)+Number(v);return a;},{} as Record<string,number>);report.images.expectedAssignments=data.records.filter(r=>r.image).length;
+  const associations=snapshot.tables.image_associations??[];const expectedNewImages=data.records.filter((r,i)=>{if(!r.image)return false;const existing=associations.filter((x:any)=>normId(x.material_id)===initial.matches[i].existingId);return !existing.some((x:any)=>x.status==='approved'||x.content_hash===images.get(r.image!.file)!.hash);}).length;if(associations.length+expectedNewImages>imageLimits.maxAssociations)fail('The existing 500-image-association limit would be exceeded. No material changes were applied.');
+  report.state='validated';save();console.log('Preflight passed: '+JSON.stringify(report.preview));
+  if(!args.has('--apply')){console.log('Read-only preflight complete. Result: '+reportFile);return;}
+  const credential=new AzureCliCredential();let container=new ContainerClient(`https://${state.storageName}.blob.core.windows.net/catalog-images`,credential),assets:any=new BlobImageAssets(state.storageName,credential);
+  // Check write access before material changes. If the owner has management-plane
+  // access but no blob data role, use the existing account key only in memory.
+  let probe=container.getBlockBlobClient('publication-import-probe/'+randomUUID());
+  try{await probe.uploadData(Buffer.from('EtalonOps import readiness'),{conditions:{ifNoneMatch:'*'}});await probe.delete();}
+  catch{try{const keys=az(['storage','account','keys','list','-g',state.resourceGroup,'-n',state.storageName]),key=keys.find((k:any)=>k.permissions==='FULL')?.value??keys[0]?.value;if(!key)throw Error();const shared=new StorageSharedKeyCredential(state.storageName,key);container=new ContainerClient(`https://${state.storageName}.blob.core.windows.net/catalog-images`,shared);probe=container.getBlockBlobClient('publication-import-probe/'+randomUUID());await probe.uploadData(Buffer.from('EtalonOps import readiness'),{conditions:{ifNoneMatch:'*'}});await probe.delete();assets={put:async(key:string,bytes:Buffer)=>{const blob=container.getBlockBlobClient(key);try{await blob.uploadData(bytes,{conditions:{ifNoneMatch:'*'},blobHTTPHeaders:{blobContentType:'image/webp'},metadata:{sha256:createHash('sha256').update(bytes).digest('hex')}});}catch(e:any){if(![409,412].includes(e.statusCode))throw e;if(!Buffer.from(await blob.downloadToBuffer()).equals(bytes))throw Error('Existing stored image checksum mismatch.');}},get:async(key:string)=>container.getBlockBlobClient(key).downloadToBuffer()};}catch{fail('Existing storage write access unavailable. No roles were granted and no material changes were applied.');}}
+  report.state='applying materials';save();
+  for(let i=0;i<data.records.length;i+=50){snapshot=await store.catalogCommand(p,'export-snapshot',{});const current=reconcile(data.records,snapshot),rows=current.prepared.slice(i,i+50),name='R2-ready-'+String(i/50+1).padStart(2,'0')+'.xlsx';const applied=await applyChunk(store,p,rows,name,args.has('--approve-images'));report.batches.push({first:i+1,last:Math.min(i+50,data.records.length),...applied});save();console.log(`Saved materials ${i+1}–${Math.min(i+50,data.records.length)} / ${data.records.length}`);}
+  snapshot=await store.catalogCommand(p,'export-snapshot',{});const matched=reconcile(data.records,snapshot);report.state='attaching images';save();
+  report.images={...report.images,...await attachReviewedImages(store,p,data.records,matched.matches,images,assets,args.has('--approve-images'),stats=>{report.images={...report.images,...stats};if((stats.uploaded+stats.pending)%25===0){save();console.log('Attached '+(stats.uploaded+stats.pending)+' local image assignments.');}})};
+  snapshot=await store.catalogCommand(p,'export-snapshot',{});report.activeMaterials=snapshot.tables.materials.filter((m:any)=>m.active).length;report.catalogRowsVerified=reconcile(data.records,snapshot).matches.filter(m=>m.existingId).length;if(report.catalogRowsVerified!==data.records.length)fail('Final material verification incomplete.');report.state='complete';report.finishedAt=new Date().toISOString();save();console.log(`COMPLETE: ${report.catalogRowsVerified} ready materials present; ${report.activeMaterials} total active materials. Local images: ${report.images.uploaded} approved, ${report.images.alreadyApproved} already approved, ${report.images.preserved} existing images preserved. Report: ${reportFile}`);
+ }catch(e){report.state='stopped';report.error=e instanceof Error?e.message:'Import stopped.';save();console.error('STOPPED: '+report.error+' Completed batches are retained. Rerun the same command to revalidate and resume; do not delete the report or existing data.');process.exitCode=1;}finally{await pool.close();}
+}
+main().catch(e=>{console.error(e instanceof Error?e.message:'Import stopped.');process.exitCode=1;});

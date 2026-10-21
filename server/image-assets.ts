@@ -44,9 +44,9 @@ export class FileImageAssets implements ImageAssets {
 }
 export class BlobImageAssets implements ImageAssets {
   private container: ContainerClient;
-  constructor(account: string) {
+  constructor(account: string,credential:Pick<ManagedIdentityCredential,'getToken'> = new ManagedIdentityCredential()) {
     if (!/^[a-z0-9]{3,24}$/.test(account)) throw new Error('Explicit Azure storage account is required.');
-    this.container=new ContainerClient(`https://${account}.blob.core.windows.net/catalog-images`,new ManagedIdentityCredential());
+    this.container=new ContainerClient(`https://${account}.blob.core.windows.net/catalog-images`,credential);
   }
   async put(key: string,bytes: Buffer) {
     const blob=this.container.getBlockBlobClient(safeKey(key));

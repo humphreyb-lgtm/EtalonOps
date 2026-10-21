@@ -1,3 +1,4 @@
+import {publicationScenario} from '../scripts/publication-import/scenarios';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -192,3 +193,5 @@ test('SQL runtime client-ID SID encoding matches SQL Server native GUID conversi
   const row=(await store.q('SELECT CONVERT(varchar(34),CONVERT(varbinary(16),CONVERT(uniqueidentifier,@p0)),1) AS sid',client)).recordset[0];
   assert.equal(String(row.sid).toLowerCase(),sqlSid(client));
 });
+
+test('SQL headless publication preserves stable keys and revalidates a resumable import',async()=>{const {admin}=identities();await publicationScenario(store,admin);});

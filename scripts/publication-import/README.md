@@ -1,0 +1,19 @@
+# Owner-run publication import
+
+This source code prepares and runs a credential-free import package from the user-supplied R2 directory plus a current catalog snapshot. The generated data package is separate from application source. Do not commit snapshots, .runtime state, Azure access tokens, storage keys, owner identities, account data, or MRFs.
+
+## Preparation
+
+Run `npx tsx scripts/publication-import/prepare.ts EXTRACTED_R2 LIVE_SNAPSHOT OUTPUT`. This reads the 537 Reference Records and three 110-row Materials sheets, validates the known schema, constructs domain inputs, records protected existing-key signatures, and copies only explicitly mapped photo assets. The Hold workbook is never consumed. Compile run.ts using esbuild with platform=node, format=esm, packages=external. Include production package.json/package-lock.json, node-cloud.sh and run-import.sh.
+
+## Execution
+
+`bash run-import.sh` performs live preflight without changing catalog materials. `bash run-import.sh --apply --approve-images` confirms the prepared materials and representative images for publication. The script validates its own existing Azure owner/context and uses the existing repository/domain operations. This is an explicit owner-operated alternative to the admin upload page; it does not weaken anonymous API authentication or install a public import endpoint.
+
+The apply command can install the bundled v45 update into the existing application first. It never downgrades an unknown release. Data is written in protected, audited batches of 50. Images are normalized to WebP and content-checked before approval. Existing approved images are preserved. The 500-association pilot cap is checked before data changes. No external photo downloads, Azure AI, or Bing calls are made.
+
+If interrupted, rerun the same command. It rechecks keys/physical identities, reuses committed materials and images, and does not blindly repeat INSERTs. In-progress unpublished batches may remain; reviewed publication is idempotent. A concurrent change to one of the protected existing keys requires a new export rather than an overwrite. New conflicts stop subsequent work; completed batches remain and are recorded in `.runtime/result.json`.
+
+Blob and SQL work cannot form a single distributed transaction. A storage readiness probe occurs before material changes; later blob failures stop with a resumable report. Unreferenced content-addressed blob writes are harmless to catalog visibility. The script does not delete original material IDs, manufacturer relationships, submitted MRFs or historic revisions.
+
+Tests: scripts/publication-import/*.test.ts, shared SQL publication scenario, and the private complete-data rehearsal. Source and assets remain provisional research: the runner validates consistency, not independent manufacturer availability or licensing.
