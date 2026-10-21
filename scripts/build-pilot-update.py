@@ -9,8 +9,11 @@ import sys
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v43.zip')
+output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v44.zip')
 files = [
+    'docs/PILOT_UPDATE_V44.md', 'docs/material-workbook/backend.md', 'docs/material-workbook/CHATGPT_POPULATION.md', 'docs/material-workbook/EtalonOps-Materials-Only.xlsx',
+    'src/MaterialWorkbook.tsx', 'src/material-families.ts', 'src/material-workbook-format.ts',
+    'server/material-family.ts', 'server/material-search-constraints.ts', 'server/material-workbook.ts', 'server/material-workbook-data.ts', 'server/material-workbook-xlsx.ts',
     'docs/PILOT_UPDATE_V43.md', 'server/catalog-import-v2.ts',
     'docs/PILOT_UPDATE_V42.md',
     'docs/PILOT_UPDATE_V41.md', 'src/document-sizing.ts',

@@ -1,3 +1,4 @@
+import {materialFamily} from '../src/material-families';
 export type SpreadsheetKind='material'|'product'|'translation'|'image';
 export const materialColumns=['diameterIn','material','type','schedule','lengthIn','endConnection','minSpanIn','maxSpanIn','mounting','nominalSpacing','widthIn','heightIn','depthIn','knockouts','specification'] as const;
 const numeric=new Set(['diameterIn','lengthIn','minSpanIn','maxSpanIn','widthIn','heightIn','depthIn']);
@@ -28,7 +29,7 @@ export function spreadsheetRecord(kind:SpreadsheetKind,row:Record<string,string>
     }else attributes[column]=value;
    }else if(column.startsWith('attribute.')){
     const name=column.slice(10);if((materialColumns as readonly string[]).includes(name))throw new Error(`Use the ${name} column instead of ${column}.`);
-    attributes[name]=value;
+    const family=materialFamily(row['attribute.familyId']);const field=family?.fields.find(f=>f.key===name);attributes[name]=field&&field.kind!=='text'?Number(value):value;
    }
   }
   result.attributes=attributes;

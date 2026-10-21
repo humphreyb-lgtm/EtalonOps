@@ -1,3 +1,7 @@
+import {matchesPhysicalSearch,sizeQueryWithoutRadius} from './material-search-constraints';
+import {familyDescription,familyIdentityFields} from './material-family';
+import {materialFamilies} from '../src/material-families';
+import {materialWorkbookAction} from './material-workbook';
 import {designerCommand} from './document-templates';
 import {templateCommand} from './pdf-template';
 import {selectImage} from '../src/image-selection';
@@ -38,8 +42,9 @@ export const imageReferenceInput=z.object({materialKey:reference,manufacturer:na
 export { purchaseSchema, type Purchasing } from './purchasing';
 import { purchaseSchema, type Purchasing } from './purchasing';
 export const policyInput=z.object({id:z.uuid().optional(),projectId:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/),materialKey:reference.nullable(),category:z.enum(['conduit','bracket','box','general']).nullable(),enabled:z.boolean().default(false),manufacturerIds:z.array(z.uuid()).max(100),productIds:z.array(z.uuid()).max(100)}).strict().refine(v=>!(v.materialKey&&v.category),'Choose material or category scope, not both.').refine(v=>v.manufacturerIds.length+v.productIds.length>0,'An allow list cannot be empty.');
-function materialIdentity(category:string,productUnit:string,attributes:Record<string,unknown>){
- const canonical=Object.fromEntries(Object.entries(attributes).filter(([field])=>!['nominalSpacing','category','recordOrigin'].includes(field)&&!isProductDetail(category,field)).sort(([x],[y])=>x.localeCompare(y)).map(([field,value])=>{
+export function materialIdentity(category:string,productUnit:string,attributes:Record<string,unknown>){
+ const physical=familyIdentityFields(category,attributes);
+ const canonical=Object.fromEntries(Object.entries(attributes).filter(([field])=>(!physical||physical.has(field))&&!['familyId','configurationStatus','nominalSpacing','category','recordOrigin'].includes(field)&&!isProductDetail(category,field)).sort(([x],[y])=>x.localeCompare(y)).map(([field,value])=>{
   let normalized=typeof value==='string'?key(value):value;
   if(field==='endConnection'&&typeof normalized==='string'){const end=normalized.replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();normalized=['bell','bell end','belled','belled end'].includes(end)?'bell end':['plain','plain end'].includes(end)?'plain end':end;}
   if(field==='material'&&typeof normalized==='string'&&['pvc','polyvinyl chloride','polyvinylchloride'].includes(normalized))normalized='pvc';
@@ -48,11 +53,14 @@ function materialIdentity(category:string,productUnit:string,attributes:Record<s
 }
 export function describeMaterial(input:MaterialInput){
   const a=input.attributes;
+  if(a.configurationStatus&&a.configurationStatus!=='confirmed')throw new ApiError(400,'Unconfirmed configurations cannot enter the active catalog.');
   if(Object.keys(a).some(field=>/manufacturer|brand|vendor|partnumber|source|verification|price|usage|image/i.test(field)))throw new ApiError(400,'Brands, part numbers and administrative metadata belong outside material specifications.');
   const positive=(field:string)=>{if(typeof a[field]!=='number'||Number(a[field])<=0)throw new ApiError(400,`Positive numeric ${field} in inches is required.`);return a[field];};
   const required=(field:string)=>{if(typeof a[field]!=='string'||!String(a[field]).trim())throw new ApiError(400,`${field} is required.`);return String(a[field]).trim();};
   let description:string;
-  if(input.category==='conduit'){
+  const familyText=familyDescription(input.category,a);
+  if(familyText)description=familyText;
+  else if(input.category==='conduit'){
     const type=required('type').toLowerCase();if(!['pipe','conduit'].includes(type))throw new ApiError(400,'Specify pipe or conduit explicitly.');
     description=`${positive('diameterIn')} in. ${required('material')} ${type}, Schedule ${required('schedule')}, ${positive('lengthIn')} in. Length, ${required('endConnection')}`;
   }else if(input.category==='bracket'){
@@ -227,7 +235,8 @@ export function* searchCatalog(p:Principal,input:string,projectId?:string):Opera
     if(span&&attributes.minSpanIn!=null&&attributes.maxSpanIn!=null){if(Number(span[1])<Number(attributes.minSpanIn)||Number(span[1])>Number(attributes.maxSpanIn))return null;q=q.replace(span[0],'').trim();}
     let rank=0;for(const phrase of new Set(phraseList))rank=Math.max(rank,score(q,searchWords(phrase)));
     const schedule=q.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1],expectedSchedule=attributes.schedule??material.description.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1];
-    const diameter=q.match(/\b(\d+(?:\.\d+|\/\d+)?)\s*(?:inch|in\b|["″])/i)?.[1];
+    if(!matchesPhysicalSearch(input,attributes))return null;
+    const diameter=sizeQueryWithoutRadius(q).match(/\b(\d+(?:\.\d+|\/\d+)?)\s*(?:inch|in\b|["″])/i)?.[1];
     const mappedTerminology=(phrasesByMaterial.get(id)??[]).some(phrase=>score(q,searchWords(phrase))>=90);
     if(!mappedTerminology&&((/\bpipe\b/i.test(q)&&attributes.type==='conduit')||(/\bconduit\b/i.test(q)&&attributes.type==='pipe')))rank=0;
     if((schedule&&expectedSchedule&&String(schedule)!==String(expectedSchedule))||(diameter&&attributes.diameterIn&&Number(diameter)!==Number(attributes.diameterIn)))rank=0;
@@ -461,6 +470,8 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
   return snapshot;
 }
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
+ if(action==='material-families')return {families:materialFamilies};
+ if(action.startsWith('material-workbook-'))return yield* materialWorkbookAction(p,action,data);
   if(['material-table-page','material-table-row','material-table-preview','material-table-save','material-categories','material-category-save'].includes(action))return yield* materialTable(p,action,data);
   if(action.startsWith('designer-'))return yield* designerCommand(p,action,data);
   if(action.startsWith('inbox-'))return yield* inboxAction(p,action,data);

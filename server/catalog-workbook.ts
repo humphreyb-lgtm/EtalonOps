@@ -14,12 +14,17 @@ function rowsToItems(sheet:string,rows:unknown[][],kind?:InboxItem['kind']):Inbo
 export async function parseWorkbookUpload(filename:string,buffer:Buffer){
  if(buffer.length>3000000)throw new ApiError(413,'Use an Excel or CSV file smaller than 3 MB.');let items:InboxItem[]=[];const ignoredSheets:string[]=[];
  if(filename.toLowerCase().endsWith('.xlsx')){
-  let total=0,count=0;
-  try{const entries=unzipSync(buffer,{filter:entry=>{count++;total+=entry.originalSize;if(count>500||entry.originalSize>8000000||total>20000000)throw Error('Workbook expands beyond the supported size.');return true;}});for(const [name,value] of Object.entries(entries)){if(/vbaProject|externalLinks/i.test(name))throw Error('Use a workbook without macros or external workbook links.');if(/\.xml$/i.test(name)&&/<!DOCTYPE|<!ENTITY/i.test(strFromU8(value)))throw Error('Workbook XML entity declarations are not supported.');if(/\.xml$/i.test(name)&&/<(?:[A-Za-z]+:)?f(?:\s|>)/.test(strFromU8(value)))throw Error('Save formula cells as values before uploading. Formulas are not imported.');}}
-  catch(e){throw new ApiError(400,e instanceof Error?e.message:'Invalid Excel workbook.');}
-  const sheets=await readXlsxFile(buffer);for(const sheet of sheets){const kind=sheetKinds[sheet.sheet];if(kind)items.push(...rowsToItems(sheet.sheet,sheet.data,kind));else ignoredSheets.push(sheet.sheet);}
+  const sheets=await readSafeWorkbook(buffer);for(const sheet of sheets){const kind=sheetKinds[sheet.sheet];if(kind)items.push(...rowsToItems(sheet.sheet,sheet.data,kind));else ignoredSheets.push(sheet.sheet);}
  }else if(filename.toLowerCase().endsWith('.csv')){let rows:unknown[][];try{rows=parse(buffer.toString('utf8'),{bom:true,skip_empty_lines:true,max_record_size:20000});}catch{throw new ApiError(400,'Invalid CSV file.');}items=rowsToItems('CSV',rows);}
  else throw new ApiError(400,'Choose an .xlsx workbook or .csv file.');
  if(!items.length||items.length>2000)throw new ApiError(400,'Upload 1–2,000 data rows using the catalog template worksheets.');
  return {filename,items,ignoredSheets};
+}
+
+export async function readSafeWorkbook(buffer:Buffer){
+ if(buffer.length>3000000)throw new ApiError(413,'Use a workbook smaller than 3 MB.');
+  let total=0,count=0;
+  try{const entries=unzipSync(buffer,{filter:entry=>{count++;total+=entry.originalSize;if(count>500||entry.originalSize>8000000||total>20000000)throw Error('Workbook expands beyond the supported size.');return true;}});for(const [name,value] of Object.entries(entries)){if(/vbaProject|externalLinks/i.test(name))throw Error('Use a workbook without macros or external workbook links.');if(/\.xml$/i.test(name)&&/<!DOCTYPE|<!ENTITY/i.test(strFromU8(value)))throw Error('Workbook XML entity declarations are not supported.');if(/\.xml$/i.test(name)&&/<(?:[A-Za-z]+:)?f(?:\s|>)/.test(strFromU8(value)))throw Error('Save formula cells as values before uploading. Formulas are not imported.');}}
+  catch(e){throw new ApiError(400,e instanceof Error?e.message:'Invalid Excel workbook.');}
+ return readXlsxFile(buffer);
 }

@@ -1,3 +1,5 @@
+import {parseMaterialWorkbook} from './material-workbook';
+import {materialsXlsx} from './material-workbook-xlsx';
 import {documentRoutes} from './document-routes';
 import {pdfRoutes} from './pdf-routes';
 import {accountRoutes,managedAccountRoutes,sessionCookie} from './account-routes';
@@ -37,7 +39,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   });
   app.use(rateLimit({ windowMs: 60_000, limit: 1800, handler:(_req,res)=>{res.status(429).json({error:'Too many requests. Wait a minute before retrying.'});}, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.use(express.json({ limit: '1mb' }));
-  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'catalog-import-v43' }); });
+  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'material-workbook-v44' }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
     const { identity } = z.object({ identity: z.string() }).strict().parse(req.body);
     const token = await auth.issueLocal(identity);
@@ -63,6 +65,8 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   imageRoutes(app,store,services.images);pdfRoutes(app,store,services.images);documentRoutes(app,store,services.images);
   aiRoutes(app,store,services.ai);
   researchRoutes(app,store,services.research,services.researchSourceLoader);
+  app.get('/api/admin/material-workbook.xlsx',async(req,res)=>{const p=principal(res);if(!p.roles.includes('Admin'))throw new ApiError(403,'Administrator role required.');const data=req.query.empty==='1'?{rows:[]}:await store.catalogCommand(p,'material-workbook-export',{});res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').attachment('EtalonOps-Materials.xlsx').send(materialsXlsx(data.rows));});
+  app.post('/api/admin/material-workbook',(_req,res,next)=>{if(!principal(res).roles.includes('Admin'))return next(new ApiError(403,'Administrator role required.'));next();},express.raw({type:'application/octet-stream',limit:'3mb'}),async(req,res)=>{if(!Buffer.isBuffer(req.body))throw new ApiError(400,'Upload an XLSX file.');const mode=z.enum(['preview','stage','apply']).parse(req.query.mode??'preview');let filename:string;try{filename=decodeURIComponent(req.get('x-catalog-filename')??'Materials.xlsx');}catch{throw new ApiError(400,'Invalid filename.');}if(!filename.toLowerCase().endsWith('.xlsx'))throw new ApiError(400,'Use an .xlsx workbook.');const rows=await parseMaterialWorkbook(req.body);res.json(await store.catalogCommand(principal(res),'material-workbook-'+mode,{filename,rows,...(req.get('x-preview-hash')?{previewHash:req.get('x-preview-hash')}:{})}));});
   app.post('/api/admin/catalog-upload',(_req,res,next)=>{if(!principal(res).roles.includes('Admin'))return next(new ApiError(403,'Administrator role required.'));next();},express.raw({type:'application/octet-stream',limit:'3mb'}),async(req,res)=>{if(!Buffer.isBuffer(req.body))throw new ApiError(400,'Upload the workbook as a file.');let filename:string;try{filename=decodeURIComponent(req.get('x-catalog-filename')??'');}catch{throw new ApiError(400,'Invalid filename.');}const {ignoredSheets,...payload}=await parseWorkbookUpload(filename,req.body);res.json({...await store.catalogCommand(principal(res),'inbox-stage',payload),ignoredSheets});});
   app.post('/api/admin/users/:action',async(req,res)=>res.json(await store.users(principal(res),req.params.action,req.body)));
   app.post('/api/submissions/:action',async(req,res)=>res.json(await store.submissions(principal(res),req.params.action,req.body)));

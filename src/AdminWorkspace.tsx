@@ -1,3 +1,4 @@
+import {MaterialWorkbook} from './MaterialWorkbook';
 import {DocumentDesigner} from './DocumentDesigner';
 import {MaterialTable} from './MaterialTable';
 import {CatalogInbox} from './CatalogInbox';
@@ -21,6 +22,7 @@ type Section = typeof sections[number][0];
 export function AdminWorkspace() {
   const [allowed, setAllowed] = useState(false), [open, setOpen] = useState(false);
   const [catalogTarget,setCatalogTarget]=useState<{id:string;request:number}|undefined>(),[imageTarget,setImageTarget]=useState<{id:string;request:number}|undefined>();
+  const [workbookBatch,setWorkbookBatch]=useState<{id:string;request:number}>(),[materialRevision,setMaterialRevision]=useState(0);
   const [section, setSection] = useState<Section>('overview');
   const [visited, setVisited] = useState<Section[]>(['overview']);
   const [changed, setChanged] = useState(false), [error, setError] = useState('');
@@ -66,9 +68,9 @@ export function AdminWorkspace() {
         {visited.includes('pdf')&&<section hidden={section!=='pdf'}><DocumentDesigner/></section>}{visited.includes('status')&&<section hidden={section!=='status'}><AdminStatus/></section>}
         {visited.includes('readiness')&&<section hidden={section!=='readiness'}><CatalogReadiness inspect={inspect}/></section>}
         {visited.includes('users')&&<section hidden={section!=='users'} aria-label="Users and access"><h3>Users and access</h3><UserAdmin embedded/></section>}
-        {visited.includes('materials')&&<section hidden={section!=='materials'}><MaterialTable onImages={id=>inspect(id,'images')}/></section>}
+        {visited.includes('materials')&&<section hidden={section!=='materials'}><MaterialWorkbook onApplied={()=>setMaterialRevision(v=>v+1)} onReview={id=>{setWorkbookBatch({id,request:Date.now()});choose('imports');}}/><MaterialTable key={materialRevision} onImages={id=>inspect(id,'images')}/></section>}
         {visited.includes('catalog')&&<section hidden={section!=='catalog'} aria-label="Catalog and imports"><h3>Catalog and imports</h3><CatalogAdmin embedded materialTarget={catalogTarget}/></section>}
-        {visited.includes('imports')&&<section hidden={section!=='imports'}><CatalogInbox/></section>}
+        {visited.includes('imports')&&<section hidden={section!=='imports'}><CatalogInbox openBatch={workbookBatch}/></section>}
         {visited.includes('research')&&<section hidden={section!=='research'}><CatalogResearch/></section>}
         {visited.includes('images')&&<section hidden={section!=='images'}><ImageAdmin materialTarget={imageTarget}/></section>}
         {visited.includes('restrictions')&&<section hidden={section!=='restrictions'} aria-label="Job restrictions"><h3>Job restrictions</h3><JobManufacturerRestrictions/></section>}

@@ -766,3 +766,4 @@ dialog::backdrop { background: #14203c55; }
  .designer-bottom .company-logo-control label{font-size:0;line-height:0;display:block}.designer-bottom .company-logo-control input{height:24px;min-height:24px}
  .designer-workspace-modal>.modal-heading{min-height:25px}.designer-workspace-modal>.modal-heading .button,.designer-workspace-modal .admin-sections .button{height:24px;min-height:24px;font-size:10px}
 }
+.material-workbook{border:1px solid var(--border,#d8e1f0);padding:.6rem;margin-bottom:.75rem}.material-workbook p{margin:.4rem 0}.material-workbook .catalog-actions{align-items:center;gap:.5rem}.material-workbook .catalog-actions button,.material-workbook input[type=file]{min-height:36px}.material-workbook .workbook-attention{background:#fff2e5;color:#813600}.material-workbook td{vertical-align:top}

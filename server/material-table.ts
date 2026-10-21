@@ -1,3 +1,4 @@
+import {materialFamilies,materialFamily,inferredFamily} from '../src/material-families';
 import {materialCategories,saveCategory} from './material-categories';
 import {parseInches,formatInches} from '../src/measurements';
 import {createHash} from 'node:crypto';
@@ -11,12 +12,13 @@ export function* materialTable(p:Principal,action:string,data:unknown):Operation
  if(action==='material-categories')return {categories:yield* materialCategories(p)};
  if(action==='material-category-save')return yield* saveCategory(p,data);
  if(action==='material-table-page'){
-  const input=z.object({text:z.string().max(200).default(''),page:z.number().int().positive().default(1),category:z.string().max(60).default(''),sort:z.string().max(60).default('description'),direction:z.enum(['asc','desc']).default('asc'),filters:z.array(z.object({field:z.string().regex(/^[a-zA-Z][a-zA-Z0-9]{0,39}$/),op:z.enum(['contains','eq','gte','lte']),value:z.string().max(200)}).strict()).max(25).default([])}).strict().parse(data);
+  const input=z.object({text:z.string().max(200).default(''),page:z.number().int().positive().default(1),category:z.string().max(60).default(''),familyId:z.string().max(60).default(''),sort:z.string().max(60).default('description'),direction:z.enum(['asc','desc']).default('asc'),filters:z.array(z.object({field:z.string().regex(/^[a-zA-Z][a-zA-Z0-9]{0,39}$/),op:z.enum(['contains','eq','gte','lte']),value:z.string().max(200)}).strict()).max(25).default([])}).strict().parse(data);
   const categories=yield* materialCategories(p);if(input.category&&!categories.some(category=>category.id===input.category))throw new ApiError(400,'Choose an existing material category.');
+  if(input.familyId&&!materialFamily(input.familyId))throw new ApiError(400,'Choose a supported family.');
   const rows=yield {text:'SELECT m.id,m.external_key,m.description,m.product_uom,p.attributes FROM materials m LEFT JOIN catalog_profiles p ON p.material_id=m.id AND p.tenant=m.tenant WHERE m.tenant=@p0 AND m.active=1',values:[p.tenant]};
-  const indexed:Record<string,any>[]=rows.map(row=>({...row,attributes:row.attributes?JSON.parse(row.attributes):{}})),norm=(value:unknown)=>String(value??'').normalize('NFKC').trim().toLowerCase();
-  const inCategory=indexed.filter(row=>!input.category||(row.attributes.category??'general')===input.category);
-  const definition=categories.find(category=>category.id===input.category);const schema=definition?.fields??[];
+  const indexed:Record<string,any>[]=rows.map(row=>({...row,attributes:(()=>{const a=row.attributes?JSON.parse(row.attributes):{};return {...a,...(inferredFamily(a)?{familyId:inferredFamily(a)!.id}:{})};})()})),norm=(value:unknown)=>String(value??'').normalize('NFKC').trim().toLowerCase();
+  const inCategory=indexed.filter(row=>!input.category||(row.attributes.category??'general')===input.category).filter(row=>!input.familyId||row.attributes.familyId===input.familyId);
+  const definition=categories.find(category=>category.id===input.category);const family=materialFamily(input.familyId);const schema=family?family.fields.map(f=>({key:f.key,label:f.label,type:f.kind,required:f.required})):definition?.fields??[];
   const fields=[...schema];for(const row of inCategory)for(const [key,value] of Object.entries(row.attributes))if(!['category','recordOrigin'].includes(key)&&!fields.some(field=>field.key===key))fields.push({key,label:key,type:key.endsWith('In')?'inches':typeof value==='number'?'number':'text',required:false});
   const cell=(row:any,field:string)=>field==='unit'?row.product_uom:field==='category'?(categories.find(category=>category.id===(row.attributes.category??'general'))?.name??'general'):field==='description'?row.description:field==='externalKey'?row.external_key:row.attributes[field];
   const filters=input.filters.filter(filter=>filter.value.trim()).map(filter=>{const type=fields.find(field=>field.key===filter.field)?.type;let numeric:number|undefined;if(type==='inches'){try{numeric=parseInches(filter.value);}catch{throw new ApiError(400,'Use an inch measurement such as 1/2 for '+filter.field+'.');}}else if(type==='number'||['gte','lte'].includes(filter.op)){numeric=Number(filter.value);if(!Number.isFinite(numeric))throw new ApiError(400,'Use a number for '+filter.field+'.');}return {...filter,numeric};});
@@ -24,7 +26,7 @@ export function* materialTable(p:Principal,action:string,data:unknown):Operation
   const sort=input.sort.startsWith('attr.')?input.sort.slice(5):input.sort;if(!['description','externalKey','category','unit',...fields.map(field=>field.key)].includes(sort))throw new ApiError(400,'Choose an available sort field.');
   matched.sort((a,b)=>{const av=cell(a,sort),bv=cell(b,sort);if(av===undefined&&bv!==undefined)return 1;if(bv===undefined&&av!==undefined)return -1;let order=typeof av==='number'&&typeof bv==='number'?av-bv:norm(av).localeCompare(norm(bv),undefined,{numeric:true});if(input.direction==='desc')order=-order;return order||norm(a.external_key).localeCompare(norm(b.external_key))||String(a.id).localeCompare(String(b.id));});
   const total=matched.length,pages=Math.max(1,Math.ceil(total/25)),page=Math.min(input.page,pages),records=[];for(const row of matched.slice((page-1)*25,page*25))records.push(withHash(yield* materialDetails(p,String(row.id).toLowerCase())));
-  return {records,total,page,pages,categories,fields:fields.map(field=>({...field,values:[...new Set(inCategory.map(row=>row.attributes[field.key]).filter(value=>value!==undefined).map(value=>field.type==='inches'?formatInches(String(value)):String(value)))].slice(0,50)}))};
+  return {records,total,page,pages,categories,families:materialFamilies,fields:fields.map(field=>({...field,values:[...new Set(inCategory.map(row=>row.attributes[field.key]).filter(value=>value!==undefined).map(value=>field.type==='inches'?formatInches(String(value)):String(value)))].slice(0,50)}))};
  }
 
  const editable=z.object({displayDescription:materialInput.shape.displayDescription,category:materialInput.shape.category,attributes:materialInput.shape.attributes,productUnit:materialInput.shape.productUnit,sourceUrl:materialInput.shape.sourceUrl,verificationBasis:materialInput.shape.verificationBasis}).strict();

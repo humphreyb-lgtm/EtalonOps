@@ -102,3 +102,12 @@ export async function uploadCatalogWorkbook<T>(file:File):Promise<T>{
 }
 
 export async function uploadCompanyLogo(companyId:string,file:File){const response=await fetch(`/api/companies/${encodeURIComponent(companyId)}/logo`,{method:'POST',headers:{...await apiHeaders(),'Content-Type':file.type||'application/octet-stream'},body:file});const value=await response.json();if(!response.ok)throw Error(value.error??'Logo upload failed.');window.dispatchEvent(new Event('company-logo-changed'));return value;}
+
+export async function downloadMaterialWorkbook(empty=false){
+ const response=await fetch('/api/admin/material-workbook.xlsx'+(empty?'?empty=1':''),{headers:await apiHeaders()});
+ if(!response.ok)throw Error('Material workbook export failed.');const url=URL.createObjectURL(await response.blob()),link=document.createElement('a');link.href=url;link.download=empty?'EtalonOps-Materials-Blank.xlsx':'EtalonOps-Materials-Current.xlsx';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+export type MaterialWorkbookPreview={previewHash:string;summary:{new:number;updated:number;unchanged:number;existing:number;duplicates:number;errors:number};results:{row:number;description:string;status:string;reason:string;changes?:Record<string,{before:string;after:string}>}[]};
+export async function uploadMaterialWorkbook(file:File,mode:'preview'|'apply',previewHash?:string):Promise<MaterialWorkbookPreview&{id?:string;workbookSummary?:MaterialWorkbookPreview['summary']}>{
+ const response=await fetch('/api/admin/material-workbook?mode='+mode,{method:'POST',headers:{...await apiHeaders(),'Content-Type':'application/octet-stream','x-catalog-filename':encodeURIComponent(file.name),...(previewHash?{'x-preview-hash':previewHash}:{})},body:file});const value=await response.json();if(!response.ok)throw Error(value.error??'Material workbook upload failed.');return value;
+}

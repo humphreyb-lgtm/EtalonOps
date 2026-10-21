@@ -7,7 +7,7 @@ type PublicationPlan={planHash:string;readyIds:string[];selectedReady:number;hel
 type Summary={id:string;filename:string;unpublished:number;published:number;deleted:number};
 const fieldLabels:Record<string,string>={displayDescription:'Material description',details:'Purchasing details',title:'Description',manufacturer:'Manufacturer',type:'Type',specification:'Specifications',externalKey:'Generic material key',materialKey:'Related material key',partNumber:'Manufacturer part number',sourceUrl:'Source URL',verificationBasis:'Evidence and caveats',diameterIn:'Diameter (inches)',lengthIn:'Length (inches)',endConnection:'End connection',productUnit:'Product unit'};
 function ImportPhoto({item,batch,url,revision}:{item:Item;batch:Import;url:string;revision:number}){const [stored,setStored]=useState('');useEffect(()=>{let active=true,owned='';setStored('');if(item.state==='published'&&(item.kind==='material'||item.kind==='product'))void request<{materialId:string;productId:string|null}>('/catalog/inbox-image-target','POST',{id:batch.id,version:batch.version,itemId:item.id}).then(target=>imageBlob(`/materials/${target.materialId}/image${target.productId?'?productId='+target.productId:''}`)).then(blob=>{if(active){owned=URL.createObjectURL(blob);setStored(owned);}}).catch(()=>{});return()=>{active=false;if(owned)URL.revokeObjectURL(owned);};},[item.id,item.state,batch.id,batch.version,revision]);return stored||url?<img key={stored||url} src={stored||url} alt="Product thumbnail" referrerPolicy="no-referrer" onError={e=>{e.currentTarget.hidden=true;}}/>:<span className="muted">No image</span>;}
-export function CatalogInbox(){
+export function CatalogInbox({openBatch}:{openBatch?:{id:string;request:number}}={}){
  const [photoRevision,setPhotoRevision]=useState(0);
  const [uploads,setUploads]=useState<Record<string,{file:File;preview:string}>>({});const uploadRef=useRef(uploads);uploadRef.current=uploads;useEffect(()=>()=>{Object.values(uploadRef.current).forEach(value=>URL.revokeObjectURL(value.preview));},[]);
  const [recordView,setRecordView]=useState(false);
@@ -17,6 +17,7 @@ export function CatalogInbox(){
  async function list(){setImports((await request<{imports:Summary[]}>('/catalog/inbox-list','POST',{})).imports);}
  async function run(fn:()=>Promise<unknown>){setBusy(true);setError('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'Import operation failed.');}finally{setBusy(false);}}
  useEffect(()=>{void run(list);},[]);
+ useEffect(()=>{if(openBatch)void run(async()=>show(await request<Import>('/catalog/inbox-get','POST',{id:openBatch.id})));},[openBatch?.request]);
  function show(value:Import,keepUploads=false){if(!keepUploads){Object.values(uploadRef.current).forEach(value=>URL.revokeObjectURL(value.preview));setUploads({});}setImageEdits({});setBatch(value);setSelected([]);setApproved(false);setDrafts({});setDeleteReview(false);}
  async function act(action:string,extra:unknown){if(!batch)return;const value=await request<Import>('/catalog/inbox-'+action,'POST',{id:batch.id,version:batch.version,...extra as object});show(value);await list();return value;}
  const dirty=Object.keys(drafts).length>0||Object.keys(imageEdits).length>0;const hasUploads=Object.keys(uploads).length>0;
