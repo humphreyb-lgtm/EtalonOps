@@ -1,0 +1,182 @@
+{
+  "format": "etalonops-research-source-registry-v1",
+  "purpose": "Reusable direct electrical supply-house visits. Sources and inherited URLs are leads, not verified material evidence.",
+  "sources": [
+    {
+      "name": "Gordon Electric Supply",
+      "homeUrl": "https://www.gordonelectricsupply.com/",
+      "sourceType": "electrical",
+      "priority": "first pass",
+      "notes": "Prior workbook links include product pages, datasheets and direct product images.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": [
+        "https://assets.gordonelectricsupply.com/tsimages/Cantex_5140038.jpg",
+        "https://www.gordonelectricsupply.com/p/Cantex-5140038-2-1-2-Pvc-End-Cap/6064358"
+      ]
+    },
+    {
+      "name": "Elliott Electric Supply",
+      "homeUrl": "https://www.elliottelectric.com/",
+      "sourceType": "electrical",
+      "priority": "first pass",
+      "notes": "Prior workbook links include direct product photos and PVC fittings.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": [
+        "https://www.elliottelectric.com/Media/5144008-PVF-0-3-LargeImage.jpg",
+        "https://www.elliottelectric.com/P/Item/PVF/5144008/",
+        "https://www.elliottelectric.com/Media/5144036-PVF-0-3-LargeImage.jpg",
+        "https://www.elliottelectric.com/P/Item/PVF/5144036/"
+      ]
+    },
+    {
+      "name": "Border States",
+      "homeUrl": "https://www.borderstates.com/",
+      "sourceType": "electrical",
+      "priority": "first pass",
+      "notes": "Prior workbook links include PVC adapters and product images.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": [
+        "https://www.borderstates.com/All-Products/Conduit-Cable-Management/Conduit-Conduit-Supports-Fittings/Conduit-Fittings-Bodies/Conduit-Fittings/PVC-Conduit-Fittings/Cantex-PVC-Box-Adapters/Cantex-PVC-Box-Adapters-2-in-PVC-Sch-40-80-Socket/p/2612599"
+      ]
+    },
+    {
+      "name": "Mars Electric",
+      "homeUrl": "https://marselectric.com/",
+      "sourceType": "electrical",
+      "priority": "first pass",
+      "notes": "Prior workbook links include PVC conduit and representative product photos.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": [
+        "https://marselectric.com/cdn-cgi/image/width%3D2000%2Cheight%3D2000%2Cformat%3Dauto%2Cfit%3Dcontain/assets/e7/a3/e7a3597c-4be7-4e63-9014-f625d0e67062/schedule-40-conduit-20-foot-a52ae42-a52ag42-a52ba42-a52be42-a52bc42-a52ce42-a52da42-a52de42-a52ea42.png",
+        "https://marselectric.com/products/6in-pvc-conduit-10ft-length-schedule-40/45027"
+      ]
+    },
+    {
+      "name": "Graybar",
+      "homeUrl": "https://www.graybar.com/",
+      "sourceType": "electrical",
+      "priority": "secondary",
+      "notes": "Candidate direct catalog source; capabilities not verified in this environment.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": []
+    },
+    {
+      "name": "Platt Electric Supply",
+      "homeUrl": "https://www.platt.com/",
+      "sourceType": "electrical",
+      "priority": "secondary",
+      "notes": "Candidate direct catalog source; capabilities not verified in this environment.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": []
+    },
+    {
+      "name": "Rexel USA",
+      "homeUrl": "https://www.rexelusa.com/",
+      "sourceType": "electrical",
+      "priority": "secondary",
+      "notes": "Candidate direct catalog source; capabilities not verified in this environment.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": []
+    },
+    {
+      "name": "Gexpro",
+      "homeUrl": "https://www.gexpro.com/",
+      "sourceType": "electrical",
+      "priority": "secondary",
+      "notes": "Prior research contains product listing references; live contents not verified here.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": []
+    },
+    {
+      "name": "City Electric Supply",
+      "homeUrl": "https://www.cityelectricsupply.com/",
+      "sourceType": "electrical",
+      "priority": "secondary",
+      "notes": "Candidate direct catalog source; capabilities not verified in this environment.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": []
+    },
+    {
+      "name": "Consolidated Electrical Distributors / CED",
+      "homeUrl": "https://www.cesco.com/",
+      "sourceType": "electrical",
+      "priority": "secondary",
+      "notes": "Candidate direct catalog source; local branch catalogs may vary.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": []
+    },
+    {
+      "name": "Wesco",
+      "homeUrl": "https://www.wesco.com/",
+      "sourceType": "electrical",
+      "priority": "secondary",
+      "notes": "Candidate direct supplier entry point; product availability/specification access not verified.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": []
+    },
+    {
+      "name": "Grainger",
+      "homeUrl": "https://www.grainger.com/",
+      "sourceType": "industrial backup",
+      "priority": "secondary",
+      "notes": "Prior workbook links include hardware/fasteners; use as a secondary electrical/PVC source.",
+      "checkedAt": "2026-10-21T16:44:12+00:00",
+      "accessStatus": "environment_proxy_blocked",
+      "httpStatus": null,
+      "searchUrlTemplate": null,
+      "accessDetail": "<urlopen error Tunnel connection failed: 403 Forbidden>",
+      "previouslySuppliedUrls": []
+    }
+  ],
+  "policy": {
+    "directFirst": true,
+    "azureAiCalls": false,
+    "bingCalls": false,
+    "searchUrlTemplates": "Do not guess site search routes. Record a working route only after observing it.",
+    "networkBlock": "Do not retry blocked hosts for every material. Record the access failure and continue with other accessible sources."
+  }
+}

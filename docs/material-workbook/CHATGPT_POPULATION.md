@@ -164,3 +164,7 @@ Return a downloadable populated .xlsx retaining all sheets and headers, plus a s
 ## Starting catalog snapshot
 
 The initial populated workbook reflects the user-provided catalog snapshot dated 2026-10-21, not a fresh authenticated query. Use Download current materials in the app for subsequent bulk updates.
+
+## Direct supply-house sourcing and photo reuse
+
+Use the supplied electrical supply-house source registry before general web search. First try known family/product links from Gordon Electric Supply, Elliott Electric Supply, Border States and Mars Electric, then the listed secondary electrical suppliers. Browse directly, use site-local search only when needed, and follow linked manufacturer PDFs for exact configurations. Reuse each verified family table and representative photo across appropriate material rows instead of repeating research for every size. General web search is a last resort; do not use Azure AI or paid Bing discovery for this workflow. Keep image and specification evidence distinct. Blocked sites and inherited URLs are not verified sources. Follow the companion Direct Supply-House Research instructions when supplied.

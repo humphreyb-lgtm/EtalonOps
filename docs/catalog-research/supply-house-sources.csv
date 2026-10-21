@@ -1,0 +1,13 @@
+name,homeUrl,sourceType,priority,accessStatus,checkedAt,notes
+Gordon Electric Supply,https://www.gordonelectricsupply.com/,electrical,first pass,environment_proxy_blocked,2026-10-21T16:44:12+00:00,"Prior workbook links include product pages, datasheets and direct product images."
+Elliott Electric Supply,https://www.elliottelectric.com/,electrical,first pass,environment_proxy_blocked,2026-10-21T16:44:12+00:00,Prior workbook links include direct product photos and PVC fittings.
+Border States,https://www.borderstates.com/,electrical,first pass,environment_proxy_blocked,2026-10-21T16:44:12+00:00,Prior workbook links include PVC adapters and product images.
+Mars Electric,https://marselectric.com/,electrical,first pass,environment_proxy_blocked,2026-10-21T16:44:12+00:00,Prior workbook links include PVC conduit and representative product photos.
+Graybar,https://www.graybar.com/,electrical,secondary,environment_proxy_blocked,2026-10-21T16:44:12+00:00,Candidate direct catalog source; capabilities not verified in this environment.
+Platt Electric Supply,https://www.platt.com/,electrical,secondary,environment_proxy_blocked,2026-10-21T16:44:12+00:00,Candidate direct catalog source; capabilities not verified in this environment.
+Rexel USA,https://www.rexelusa.com/,electrical,secondary,environment_proxy_blocked,2026-10-21T16:44:12+00:00,Candidate direct catalog source; capabilities not verified in this environment.
+Gexpro,https://www.gexpro.com/,electrical,secondary,environment_proxy_blocked,2026-10-21T16:44:12+00:00,Prior research contains product listing references; live contents not verified here.
+City Electric Supply,https://www.cityelectricsupply.com/,electrical,secondary,environment_proxy_blocked,2026-10-21T16:44:12+00:00,Candidate direct catalog source; capabilities not verified in this environment.
+Consolidated Electrical Distributors / CED,https://www.cesco.com/,electrical,secondary,environment_proxy_blocked,2026-10-21T16:44:12+00:00,Candidate direct catalog source; local branch catalogs may vary.
+Wesco,https://www.wesco.com/,electrical,secondary,environment_proxy_blocked,2026-10-21T16:44:12+00:00,Candidate direct supplier entry point; product availability/specification access not verified.
+Grainger,https://www.grainger.com/,industrial backup,secondary,environment_proxy_blocked,2026-10-21T16:44:12+00:00,Prior workbook links include hardware/fasteners; use as a secondary electrical/PVC source.
