@@ -25,3 +25,22 @@ Cloud Shell uses OAuth for blob access. If the owner lacks an inherited Storage 
 Use `prepare-strut.ts EXTRACTED_STRUT LIVE_EXPORT OUTPUT` for the corrected three-batch strut package. It includes 297 material records, 94 unique images and one excluded held scope record. Tenant IDs, catalog snapshots, users and settings are not included in the output. The wrapper installs the bundled CMS v49.1 maintenance update only over recognized compatible older releases, never an unknown/newer release. The retained image cap is 5,000 in this release.
 
 `start-import.sh` launches the owner-run job with nohup. `status.sh` reports six material batches, image counts and final verification. Publication additionally holds a renewable 60-second blob lease; a dead process releases its lease by expiration. Progress reports are also stored privately at `import-reports/<packageHash>/result.json` in the existing catalog-images container. On rerun, completed records are rediscovered by physical identity, existing keys and approved images are preserved, and per-range batch entries are replaced rather than duplicated. No Azure credentials are packaged or printed.
+
+## Search coverage / translations only
+
+`prepare-search-coverage.ts EXTRACTED_COVERAGE ORIGINAL_MATERIAL_MANIFEST OUTPUT [FIXTURE]`
+validates source coordinates/descriptions and builds an append-only package.
+The CLI-only coverage parser accepts the larger static acceptance-test worksheet;
+it does not change public workbook upload limits. Search-Rules.json is review
+input, never evaluated as executable code.
+
+`mode: translations-only` requires every material identity to exist. The runner
+uses native reviewed translation imports with JSON-in-CSV to retain punctuation,
+reuses existing active translations across origins, rejects disabled-phrase
+reactivation, verifies all expected associations and checks protected data against
+the private backup. It uses paged export rather than the small snapshot endpoint.
+
+After building the application ZIP, run
+`python scripts/publication-import/build-search-update.py PREPARED APP_ZIP OUTPUT_ZIP`.
+The generated installer has a fixed archive checksum. Never package a live catalog
+snapshot, `.runtime`, account/job data, tokens or credentials.

@@ -437,10 +437,23 @@ export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>
  const batch=await store.catalogCommand(admin,'preview',{csv:phrases});await store.catalogCommand(admin,'apply',{id:batch.id,approval:'I reviewed this batch'});
  await store.catalogCommand(admin,'priority',{materialId:ids[39],highUse:true,preferredProductId:null});
  for(let i=0;i<12;i++)await store.catalogCommand(user,'selection',{eventId:randomUUID(),projectId:'riverside',materialId:ids[7],productId:null,phrase:'common stock phrase'});
- const results=await store.search(user,'common stock phrase','riverside');assert.equal(results.length,20);assert.equal(results[0].id,ids[7]);assert.equal(results[0].useCount,12);assert.equal(results[1].id,ids[39]);assert.ok(results.every(row=>row.score===100));
+ const results=await store.search(user,'common stock phrase','riverside');assert.equal(results.length,40);assert.equal(results[0].id,ids[7]);assert.equal(results[0].useCount,12);assert.equal(results[1].id,ids[39]);assert.ok(results.every(row=>row.score===100));
  const prod=await store.catalogCommand(admin,'product',product('group-37','Fixture A','SCALE-37'));
  const exact=await store.search(user,'Fixture A SCALE-37','riverside');assert.equal(exact.length,1);assert.equal(exact[0].id,ids[37]);assert.equal(exact[0].products[0].id,prod.id);
  assert.equal((await store.search(user,'grouping search 18','riverside'))[0].id,ids[18]);
+}},
+{name:'strut normalization respects dimensions, coatings, generic trade names and explicit brand intent',run:async store=>{
+ const {admin,user}=people();await store.member(user,'riverside');
+ const ids:string[]=[];
+ for(const [i,depth]of [0.875,1.625].entries())ids.push((await store.catalogCommand(admin,'material',{externalKey:'strut-profile-'+i,category:'general',attributes:{type:'strut channel',specification:'Synthetic profile '+i,widthIn:1.625,depthIn:depth,lengthIn:120,material:'steel',finish:'pre-galvanized',construction:'single',gauge:'12',slotPattern:'none'},productUnit:'STICK',verification:'provisional',sourceUrl:'',verificationBasis:'Synthetic search safety fixture.'})).id);
+ for(let i=0;i<2;i++)await store.catalogCommand(admin,'translation',{materialKey:'strut-profile-'+i,phrase:'unistrut 1-5/8',origin:'admin_reviewed'});
+ assert.equal((await store.search(user,'unistrut 1-5/8','riverside')).length,2);
+ const specific=await store.search(user,'1.625 by 0.875 inches steel strut channel PG','riverside');assert.deepEqual(specific.map((r:any)=>r.id),[ids[0]]);
+ assert.equal((await store.search(user,'1.625 by 0.875 inches steel strut channel HG','riverside')).length,0);
+ assert.equal((await store.search(user,'Unistrut brand only strut channel','riverside')).length,0);
+ await store.catalogCommand(admin,'product',product('strut-profile-0','Unistrut','EXACT-CHANNEL'));
+ const branded=await store.search(user,'Unistrut brand only strut channel','riverside');assert.deepEqual(branded.map((r:any)=>r.id),[ids[0]]);
+ assert.equal((await store.search(user,'unistrut 1-5/8','riverside')).length,2);
 }},
 {name:'export cursor pages preserve composite aliases and SQL GUID ordering without overlap',run:async store=>{
  const {admin,user,foreign}=people();

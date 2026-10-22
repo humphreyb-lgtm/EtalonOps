@@ -42,7 +42,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   const cmsJson=express.json({limit:'5mb'});
   app.use((req,res,next)=>req.path.startsWith('/api/catalog/cms-')?cmsJson(req,res,next):next());
   app.use(express.json({ limit: '1mb' }));
-  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'cms-suite-v49.1' }); });
+  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'cms-suite-v49.2' }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
     const { identity } = z.object({ identity: z.string() }).strict().parse(req.body);
     const token = await auth.issueLocal(identity);

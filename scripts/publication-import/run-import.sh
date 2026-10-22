@@ -12,13 +12,13 @@ if [[ ! -d node_modules ]]; then npm ci --omit=dev --no-audit --no-fund; fi
 node run.mjs --prepare-state
 if [[ " $* " == *" --apply "* ]]; then
   import_release=$(node --input-type=module -e 'const r=await fetch("https://etalonops-954bb4a3.azurewebsites.net/api/health");if(!r.ok)process.exit(1);const h=await r.json();if(h.engine!=="Azure SQL"||!h.microsoftSignIn)process.exit(1);console.log(h.release)')
-  if [[ "$import_release" != cms-suite-v49.1 ]]; then
+  if [[ "$import_release" != cms-suite-v49.2 ]]; then
     case "$import_release" in
-      publication-import-v45|specification-search-v46|trade-search-v47|manual-review-design-v48|appearance-studio-v49|cms-suite-v49) ;;
+      publication-import-v45|specification-search-v46|trade-search-v47|manual-review-design-v48|appearance-studio-v49|cms-suite-v49|cms-suite-v49.1) ;;
       *) echo 'Unrecognized newer/different app release; stopped without downgrading.' >&2; exit 1;;
     esac
     sha256sum --check app-update.sha256
-    echo 'Installing the compatible CMS v49.1 image-capacity update first. Existing CMS content is preserved.'
+    echo 'Installing the compatible CMS v49.2 search update first. Existing CMS content is preserved.'
     mkdir -p "$HOME/etalonops-westus3"
     unzip -oq app-update.zip -d "$HOME/etalonops-westus3"
     bash "$HOME/etalonops-westus3/scripts/update-cloud-app.sh"

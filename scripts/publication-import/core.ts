@@ -1,14 +1,15 @@
+import {stringify} from 'csv-stringify/sync';
 import {createHash} from 'node:crypto';
 import type {Principal} from '../../server/contracts';
 import type {Repository} from '../../server/repository';
-import {materialIdentity,materialInput,type MaterialInput} from '../../server/catalog-v2';
+import {materialIdentity,materialInput,phraseKey,catalogExportTables,type MaterialInput} from '../../server/catalog-v2';
 import type {WorkbookRow} from '../../src/material-workbook-format';
 import {z} from 'zod';
 
 export const importRecordSchema=z.object({ref:z.string().min(1).max(200),originalKey:z.string().max(100),row:z.record(z.string(),z.string()),material:materialInput,phrases:z.array(z.string().min(1).max(500)).max(100),baselineSignature:z.string().optional(),image:z.object({file:z.string().regex(/^images\/[a-zA-Z0-9_.-]+$/),sha256:z.string().regex(/^[a-f0-9]{64}$/),sourceUrl:z.url(),width:z.number().positive(),height:z.number().positive()}).strict().optional()}).strict();
 export type ImportRecord=z.infer<typeof importRecordSchema>;
-export const packageSchema=z.object({format:z.literal('etalonops-publication-import-v1'),source:z.string().min(1).max(100),expectedTenantHash:z.string().regex(/^[a-f0-9]{64}$/),held:z.number().int().min(0).max(1000),records:z.array(importRecordSchema).min(1).max(1000)}).strict();
-export function stable(value:any):any {if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,stable(value[k])]));return value;}
+export const packageSchema=z.object({format:z.literal('etalonops-publication-import-v1'),source:z.string().min(1).max(100),mode:z.literal('translations-only').optional(),expectedTenantHash:z.string().regex(/^[a-f0-9]{64}$/),held:z.number().int().min(0).max(1000),records:z.array(importRecordSchema).min(1).max(1000)}).strict();
+export function stable(value:any):any {if(value instanceof Date)return value.toISOString();if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,stable(value[k])]));return value;}
 export const hash=(v:unknown)=>createHash('sha256').update(JSON.stringify(stable(v))).digest('hex');
 export const normId=(v:unknown)=>String(v??'').toLowerCase();
 export function signature(m:any,profile:any){const details=JSON.parse(m.details??'{}'),a=profile?JSON.parse(profile.attributes):{};return hash({key:m.external_key,description:m.description,unit:m.product_uom,identity:materialIdentity(a.category??'general',m.product_uom,a),source:details.row?.source_url??'',notes:details.row?.verification_basis??''});}
@@ -31,6 +32,49 @@ export function reconcile(records:ImportRecord[],snapshot:any){
   row._row=String(i+2);prepared.push(row);matches.push({ref:r.ref,identity,existingId:match?normId(match.id):null,existingKey:match?.external_key??null,kind:byKey?'reviewed metadata':match?'reuse':'new'});
  }
  return {prepared,matches};
+}
+// The CLI uses the existing paged export, not the small interactive snapshot.
+// Preserve the web snapshot limits while supporting growing translation catalogs.
+export async function readCatalogSnapshot(store:Repository,p:Principal){
+ const tables:Record<string,any[]>={};let count=0,bytes=0;
+ for(const table of catalogExportTables){const records:any[]=[];let cursor:any;const cursors=new Set<string>();
+  do{const page=await store.catalogCommand(p,'export-page',{table,pageSize:500,...(cursor?{cursor}:{})});records.push(...page.records);count+=page.records.length;bytes+=Buffer.byteLength(JSON.stringify(page.records));if(count>200000||bytes>128000000)throw Error('Catalog exceeds the owner-run update safety bound. Prepare a database-side migration.');cursor=page.nextCursor;if(cursor){const key=JSON.stringify(cursor);if(cursors.has(key))throw Error('Catalog export cursor did not advance.');cursors.add(key);}}while(cursor);
+  tables[table]=records;
+ }
+ return {format:'etalonops-catalog-snapshot',version:1,exportedAt:new Date().toISOString(),tenant:p.tenant,recordCount:count,includesInactive:true,imageFilesIncluded:false,tables};
+}
+export function reconcilePackage(data:z.infer<typeof packageSchema>,snapshot:any){
+ const result=reconcile(data.records,snapshot);
+ if(data.mode==='translations-only'){
+  if(data.records.some(r=>r.image||r.originalKey))throw Error('Translation-only packages cannot contain metadata updates or images.');
+  const missing=result.matches.filter(m=>!m.existingId);
+  if(missing.length)throw Error('Finish the original material import first. Missing '+missing.length+' material identities; no translations were applied.');
+  result.prepared=result.matches.map((m,i)=>({_row:String(i+2),key:m.existingKey,phrases:data.records[i].phrases.join('\n')}));
+ }
+ return result;
+}
+export function verifyTranslationUpdate(data:z.infer<typeof packageSchema>,before:any,after:any){
+ if(data.mode!=='translations-only')return;
+ for(const table of ['materials','aliases','catalog_profiles','manufacturers','manufacturer_products','image_associations','image_references'])if(hash([...(before.tables[table]??[])].sort((a,b)=>String(a.id??a.material_id).localeCompare(String(b.id??b.material_id))))!==hash([...(after.tables[table]??[])].sort((a,b)=>String(a.id??a.material_id).localeCompare(String(b.id??b.material_id)))))throw Error('Protected catalog data changed during translation update: '+table+'. Review the saved backup/report.');
+ const existing=new Map((after.tables.translations??[]).map((r:any)=>[normId(r.id),r]));
+ for(const row of before.tables.translations??[])if(hash(row)!==hash(existing.get(normId(row.id))))throw Error('An existing translation changed during the update.');
+ const resolved=reconcilePackage(data,after);let verified=0;
+ for(const [i,record]of data.records.entries())for(const phrase of record.phrases){const id=resolved.matches[i].existingId;if(!(after.tables.translations??[]).some((r:any)=>normId(r.material_id)===id&&r.active&&r.normalized===phraseKey(phrase)))throw Error('Translation not active after update: '+record.ref+' / '+phrase);verified++;}
+ return {verifiedAssociations:verified,protectedDataUnchanged:true,keyMapping:resolved.matches.map(m=>({ref:m.ref,materialKey:m.existingKey}))};
+}
+export function translationPreview(data:z.infer<typeof packageSchema>,snapshot:any){
+ const resolved=reconcilePackage(data,snapshot),active=new Set<string>(),inactive=new Set<string>();
+ for(const r of snapshot.tables.translations??[]){const key=normId(r.material_id)+'|'+r.normalized;if(r.active)active.add(key);else if(r.origin==='admin_reviewed')inactive.add(key);}
+ const rows:{kind:string;data_json:string}[]=[];let unchanged=0;
+ for(const [i,record]of data.records.entries())for(const phrase of record.phrases){const match=resolved.matches[i],key=match.existingId+'|'+phraseKey(phrase);if(active.has(key)){unchanged++;continue;}if(inactive.has(key))throw Error('An administrator disabled a proposed phrase. Review before reactivating: '+record.ref+' / '+phrase);active.add(key);rows.push({kind:'translation',data_json:JSON.stringify({materialKey:match.existingKey,phrase,origin:'admin_reviewed'})});}
+ return {rows,summary:{new:0,updated:0,newPhrases:rows.length,unchangedPhrases:unchanged,errors:0}};
+}
+export async function applyTranslationChunk(store:Repository,p:Principal,data:z.infer<typeof packageSchema>,snapshot:any,first:number,last:number){
+ const part={...data,records:data.records.slice(first,last)},preview=translationPreview(part,snapshot);
+ // JSON-in-CSV preserves literal semicolons and quoted text inside each phrase.
+ // The material workbook's delimiter-based phrase field is inappropriate here.
+ for(let i=0;i<preview.rows.length;i+=500){const csv=stringify(preview.rows.slice(i,i+500),{header:true});const batch=await store.catalogCommand(p,'preview',{csv});if(batch.report?.errors?.length)throw Error('Translation batch validation failed.');await store.catalogCommand(p,'apply',{id:batch.id,approval:'I reviewed this batch'});}
+ return {summary:preview.summary,publication:null};
 }
 export async function validateChunks(store:Repository,p:Principal,rows:WorkbookRow[],progress:(s:string)=>void=()=>{}){
  const chunks:{rows:WorkbookRow[];preview:any}[]=[];

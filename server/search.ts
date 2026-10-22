@@ -1,3 +1,4 @@
+import {searchLanguage} from './search-language';
 import {tradeTerms} from './trade-terms';
 export function normalize(input: string): string {
   return input.toLowerCase().normalize('NFKC').replace(/["″]/g, ' inch ')
@@ -17,11 +18,14 @@ function oneEditApart(a: string, b: string): boolean {
   }
   return edits + (a.length - i) + (b.length - j) <= 1;
 }
+const termCache=new Map<string,string>();
 function terms(value: string) {
-  return normalize(tradeTerms(value)).replace(/\bsch\.?\s*(\d+)\b/g,'schedule $1')
+  const cached=termCache.get(value);if(cached!==undefined)return cached;
+  const result=normalize(searchLanguage(tradeTerms(value))).replace(/\binch\b/g,' ').replace(/\s+/g,' ').trim().replace(/\bsch\.?\s*(\d+)\b/g,'schedule $1')
     .replace(/\bemt\b/g,'electrical metallic tubing').replace(/\bgalv\b/g,'galvanized')
     .replace(/\bblk\b/g,'black').replace(/\bwht\b/g,'white')
     .replace(/\bself[ -]?tappers?\b/g,'self tapping screws');
+  if(termCache.size>=16384)termCache.clear();termCache.set(value,result);return result;
 }
 export function score(query: string, phrase: string): number {
   const cleanQuery=query.replace(/^(?:i need|i am looking for|looking for|please get me)\s+(?:(?:some|a|an)\s+)?/i,'').replace(/\s+please[.!]?$/i,'');

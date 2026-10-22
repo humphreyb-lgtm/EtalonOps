@@ -1,7 +1,7 @@
 // Shared vocabulary for retrieval AND physical checks. Expand whole trade words,
 // never fragments of manufacturer part numbers (e.g. FA-123).
 export function tradeTerms(input:string){
- let q=input.normalize('NFKC').replace(/[⁄∕]/g,'/');
+ let q=input.replace(/(\d)([¼½¾⅛⅜⅝⅞])/g,'$1 $2').normalize('NFKC').replace(/[⁄∕]/g,'/');
  q=q.replace(/\b(\d+)[ -](\d+)\/(\d+)(?=\s*(?:°|deg(?:ree)?s?\b))/gi,(all,w,n,d)=>Number(d)?String(Number(w)+Number(n)/Number(d)):all);
  const fittingContext=/\bpvc\b|\bconduit\b|\bpipe\b|\d\s*(?:["″]|in(?:ch(?:es)?)?\b)/i.test(q);
  const words:[RegExp,string][]=[

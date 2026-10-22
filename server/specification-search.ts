@@ -4,7 +4,7 @@ import {parseInches} from '../src/measurements';
 // missing data never becomes an implicit assertion of compatibility.
 export function compareSpecifications(query:string,attributes:Record<string,any>,description=''){
  const a={...attributes},missing:string[]=[],conflicts:string[]=[];
- let retrieval=tradeTerms(query).replace(/\bgalv\b/gi,'galvanized').replace(/\bpvc\s+(40|80)\b/gi,'PVC schedule $1');
+ let retrieval=tradeTerms(query).replace(/\b(in|ft)\./gi,'$1').replace(/\bgalv\b/gi,'galvanized').replace(/\bpvc\s+(40|80)\b/gi,'PVC schedule $1');
  const text=description.toLowerCase();
  const number=(s:string)=>{try{return parseInches(s.replace(/^(\d+)-(\d+\/\d+)$/,'$1 $2'));}catch{return NaN;}};
  const measure='(\\d+(?:[ -]\\d+/\\d+|/\\d+|\\.\\d+)?)';
@@ -16,6 +16,9 @@ export function compareSpecifications(query:string,attributes:Record<string,any>
  retrieval=retrieval.replace(new RegExp(measure+"\\s*(?:ft\\b|feet\\b|foot\\b|['′])",'gi'),(_,v)=>{check('lengthIn','Length '+v+' ft',number(v)*12);return ' ';});
  // A labelled length is distinct from trade diameter or a bolt/thread dimension.
  retrieval=retrieval.replace(new RegExp(measure+'\\s*(?:inches|inch|in\\b|["″])\\s*(?:length|long(?![- ](?:line|radius|spring)))\\b','gi'),(_,v)=>{check('lengthIn','Length '+v+' in.',number(v));return ' ';});
+ // Actual OD is not nominal trade size. Component hardware is not body material.
+ retrieval=retrieval.replace(new RegExp(measure+'\\s*(?:inches|inch|in\\b|["″])?\\s*(?:actual )?(?:od|outside diameter)\\b','gi'),(_,v)=>{const actual=a.pipeOutsideDiameterIn??a.conduitOutsideDiameterIn;check('outsideDiameterIn','Outside diameter',number(v),actual);return ' ';});
+ retrieval=retrieval.replace(/\bstainless(?: steel)?\s+(?:fasteners|hardware|screw(?:s)?(?: and nut)?|nut)\b/gi,()=>{const evidence=String(a.assembly??'')+' '+description;if(!/stainless/i.test(evidence))missing.push('Stainless hardware not recorded');return ' ';});
  const explicitDiameter=retrieval.match(new RegExp(measure+'\\s*(?:inches|inch|in\\b|["″])?\\s*(?:diameter|dia\\b)','i'));
  if(explicitDiameter){check('diameterIn','Diameter',number(explicitDiameter[1]));retrieval=retrieval.replace(explicitDiameter[0],' ');}
  const size=retrieval.match(new RegExp(measure+'\\s*(?:inches|inch|in\\b|["″])','i'));

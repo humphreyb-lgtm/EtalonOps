@@ -1,3 +1,6 @@
+import {searchGuidance} from '../src/search-guidance';
+import {explicitBrand,structuredSearchPhrase} from './search-language';
+import {searchConstraints} from './search-constraints';
 import {cmsCommand} from './cms';
 import {appearanceCommand} from './appearance';
 import {manualReview} from './manual-review';
@@ -33,7 +36,7 @@ export type Operation<T = any> = Generator<CatalogQuery, T, RecordRow[]>;
 function* query(text: string, ...values: unknown[]): Operation<RecordRow[]> { return yield { text, values }; }
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const key = (value: string) => value.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
-const phraseKey = (value: string) => key(searchWords(value)).replace(/[″"]/g,' inch ').replace(/\s+/g,' ').trim();
+export const phraseKey = (value: string) => key(searchWords(value)).replace(/[″"]/g,' inch ').replace(/\s+/g,' ').trim();
 const name = z.string().trim().min(1).max(200);
 const reference = z.string().trim().min(1).max(100);
 const https = z.url().max(2000).refine(v=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password;}catch{return false;}},'Use a public HTTPS evidence URL.');
@@ -223,17 +226,19 @@ export function* searchCatalog(p:Principal,input:string,projectId?:string):Opera
   const countsByMaterial=new Map(counts.map(row=>[String(row.material_id).toLowerCase(),Number(row.uses)]));
   const rulesByMaterial=new Map<string,{category:string|null;makers:Set<string>;products:Set<string>}[]>();
   for(const row of policies){const id=row.material_id?String(row.material_id).toLowerCase():'*';const values=rulesByMaterial.get(id)??[];values.push({category:row.category,makers:new Set(JSON.parse(row.manufacturer_ids)),products:new Set(JSON.parse(row.product_ids))});rulesByMaterial.set(id,values);}
-  const queryWords=searchWords(input);
-  const requestedMakers=[...new Set(products.map(product=>product.manufacturer_normalized))].filter(maker=>new RegExp(`(?:^|[^a-z0-9])${String(maker).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?:$|[^a-z0-9])`,'i').test(input));
+  const queryWords=searchWords(input.replace(/\bbrand\s+only\b/gi,''));
+  const brand=explicitBrand(input);
+  const requestedMakers=[...new Set(products.map(product=>product.manufacturer_normalized))].filter(maker=>(brand||String(maker).toLowerCase()!=='unistrut')&&new RegExp(`(?:^|[^a-z0-9])${String(maker).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?:$|[^a-z0-9])`,'i').test(input));
   const results=materials.map(material=>{
     const id=String(material.id).toLowerCase(),details=JSON.parse(material.details),profile=profilesByMaterial.get(id),attributes=profile?JSON.parse(profile.attributes):{};
     let choices=[...(productsByMaterial.get(id)??[])];
     if(requestedMakers.length)choices=choices.filter(product=>requestedMakers.includes(product.manufacturer_normalized));
     if(requestedMakers.length&&!choices.length)return null;
+    if(brand){choices=choices.filter(product=>String(product.manufacturer).toLowerCase().includes(brand));if(!choices.length)return null;}
     const applicable=[...(rulesByMaterial.get('*')??[]),...(rulesByMaterial.get(id)??[])].filter(rule=>!rule.category||rule.category===(attributes.category??details.category));
     for(const rule of applicable)choices=choices.filter(product=>(!rule.makers.size||rule.makers.has(String(product.manufacturer_id).toLowerCase()))&&(!rule.products.size||rule.products.has(String(product.id).toLowerCase())));
     if(applicable.length&&!choices.length)return null;
-    const phraseList=[material.description,...JSON.parse(details.row.aliases_json),...(phrasesByMaterial.get(id)??[])];
+    const phraseList=[structuredSearchPhrase(attributes),material.description,...JSON.parse(details.row.aliases_json),...(phrasesByMaterial.get(id)??[])];
     // Convert only a structured length for retrieval, never a requested quantity/UOM.
     if(attributes.lengthIn)phraseList.push(`${attributes.diameterIn} inch ${attributes.material} ${attributes.type} schedule ${attributes.schedule} ${Number(attributes.lengthIn)/12} ft`);
     for(const product of choices)phraseList.push(`${product.manufacturer} ${product.part_number} ${product.title} ${material.description}`);
@@ -241,7 +246,10 @@ export function* searchCatalog(p:Principal,input:string,projectId?:string):Opera
     const span=q.match(/(?:for\s+(?:a\s+)?)?(\d+(?:\.\d+)?)[ -]*(?:inch|in\b|["″])[ -]*(?:span|spread)/i);
     if(span&&attributes.minSpanIn!=null&&attributes.maxSpanIn!=null){if(Number(span[1])<Number(attributes.minSpanIn)||Number(span[1])>Number(attributes.maxSpanIn))return null;q=q.replace(span[0],'').trim();}
     const comparison=compareSpecifications(q,attributes,material.description);
-    if(comparison.conflicts.length)return null;
+    const physical=searchConstraints(input,attributes);
+    comparison.missing.push(...physical.missing);
+    const guidance=searchGuidance(input);if(guidance&&!brand)comparison.missing.push(guidance);
+    if(comparison.conflicts.length||physical.conflicts.length)return null;
     let rank=0;for(const phrase of new Set(phraseList))rank=Math.max(rank,score(q,searchWords(phrase)));
     const schedule=q.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1],expectedSchedule=attributes.schedule??material.description.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1];
     if(!matchesPhysicalSearch(input,attributes))return null;
@@ -254,7 +262,7 @@ export function* searchCatalog(p:Principal,input:string,projectId?:string):Opera
     const useCount=countsByMaterial.get(id)??0;
     return {id,description:material.description,productUnit:material.product_uom,specs:details.specs,category:details.category,source:material.dataset_kind==='fixture'?'verified_fixture':'verified',verification:profile?.verification??'reviewed',score:rank,highUse:Boolean(profile?.high_use)||useCount>=10,useCount,matchStatus:comparison.missing.length?'needs_verification':'matches_requirements',missingSpecifications:comparison.missing,reason:comparison.missing.length?'Needs verification: '+comparison.missing.join('; '):'Matches requested specifications',preferredProductId:profile?.preferred_product_id?String(profile.preferred_product_id).toLowerCase():null,products:choices.map(product=>({id:String(product.id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,verification:product.verification})),provenance:{sourceUrl:details.row.source_url,verificationBasis:details.row.verification_basis,datasetKind:material.dataset_kind}};
   }).filter((row):row is NonNullable<typeof row>=>Boolean(row&&row.score>=85));
-  return results.sort((a,b)=>Number(a.matchStatus==='needs_verification')-Number(b.matchStatus==='needs_verification')||b.score-a.score||Number(b.highUse)-Number(a.highUse)||Math.min(b.useCount,100)-Math.min(a.useCount,100)||a.description.localeCompare(b.description)).slice(0,20);
+  return results.sort((a,b)=>Number(a.matchStatus==='needs_verification')-Number(b.matchStatus==='needs_verification')||b.score-a.score||Number(b.highUse)-Number(a.highUse)||Math.min(b.useCount,100)-Math.min(a.useCount,100)||a.description.localeCompare(b.description)).slice(0,200);
 }
 const importKinds=['material','product','translation','image'] as const;
 export function parseExtendedCsv(csv:string){
@@ -452,10 +460,11 @@ export function* catalogExportPage(p:Principal,data:unknown):Operation<any>{
   if(input.cursor&&Boolean(input.cursor.normalized)!==alias)throw new ApiError(400,'Invalid export cursor for this table.');
   const source=alias?'aliases a INNER JOIN materials m ON m.id=a.material_id':input.table;
   const id=alias?'a.material_id':profile?'material_id':'id',columns=alias?'a.*,m.tenant':'*',scope=alias?'m.tenant':'tenant';
+  const sortId=`LOWER(CAST(${id} AS VARCHAR(36)))`;
   const values:unknown[]=[p.tenant];let where=`${scope}=@p0`;
-  if(input.cursor){values.push(input.cursor.id);where+=alias?` AND (${id}>@p1 OR (${id}=@p1 AND a.normalized>@p2))`:` AND ${id}>@p1`;if(alias)values.push(input.cursor.normalized);}
+  if(input.cursor){values.push(input.cursor.id);where+=alias?` AND (${sortId}>@p1 OR (${sortId}=@p1 AND a.normalized>@p2))`:` AND ${sortId}>@p1`;if(alias)values.push(input.cursor.normalized);}
   const limit=values.length;values.push(input.pageSize);
-  const rows=yield* query(`SELECT * FROM (SELECT ${columns},ROW_NUMBER() OVER(ORDER BY ${id}${alias?',a.normalized':''}) AS export_row FROM ${source} WHERE ${where}) export_page WHERE export_row<=@p${limit} ORDER BY export_row`,...values);
+  const rows=yield* query(`SELECT * FROM (SELECT ${columns},ROW_NUMBER() OVER(ORDER BY ${sortId}${alias?',a.normalized':''}) AS export_row FROM ${source} WHERE ${where}) export_page WHERE export_row<=@p${limit} ORDER BY export_row`,...values);
   const records=rows.map(({export_row,...row})=>row),last=records.at(-1);
   return {records,nextCursor:records.length===input.pageSize?{id:String(last![alias||profile?'material_id':'id']).toLowerCase(),...(alias?{normalized:last!.normalized}:{})}:null};
 }
