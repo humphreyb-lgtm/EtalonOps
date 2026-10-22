@@ -1,0 +1,3 @@
+CREATE TABLE manual_item_reports(tenant TEXT NOT NULL,id TEXT NOT NULL,actor TEXT NOT NULL,project TEXT NOT NULL,draft_id TEXT,search_phrase TEXT NOT NULL,description TEXT NOT NULL,quantity TEXT NOT NULL,unit TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',material_id TEXT,resolution TEXT NOT NULL DEFAULT '',reviewer TEXT,created_at TEXT NOT NULL,reviewed_at TEXT,version INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(tenant,id));
+CREATE INDEX manual_item_reports_status ON manual_item_reports(tenant,status,created_at);
+CREATE TABLE design_settings(tenant TEXT PRIMARY KEY,settings TEXT NOT NULL,version INTEGER NOT NULL,updated_by TEXT NOT NULL,updated_at TEXT NOT NULL);

@@ -199,6 +199,7 @@ export default function App() {
     };
     changeDraft(current => ({ ...current, lines: [...current.lines, line] }));
     if(databaseMode&&candidate&&/^[a-f\d-]{36}$/i.test(candidate.id)&&line.rawInput.description.length<=500)void request('/catalog/selection','POST',{eventId:line.id,projectId,materialId:candidate.id,productId:product?.id??null,phrase:line.rawInput.description}).catch(()=>setEntryError('Item added, but its search phrase could not be learned. Save your draft to preserve the line.'));
+    if(databaseMode&&!candidate)void request('/catalog/manual-report','POST',{id:line.id,projectId,...(draft.id?{draftId:draft.id}:{}),searchPhrase:line.rawInput.description,description:line.description,quantity:line.quantity,unit:line.requestedUnit}).then(()=>window.dispatchEvent(new Event('manual-inbox-changed'))).catch(()=>setEntryError('Item added. Save your draft to send it to the administrator review inbox.'));
     setAdded(current => [...current, candidate?.id ?? 'description']);
     setEntryError('');
     setAnnouncement(`Added ${formatInchText(line.description)} to your MRF. ${quantity} ${unit}; using the MRF delivery date. Save your draft to keep it.`);

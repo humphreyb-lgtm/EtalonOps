@@ -1,3 +1,4 @@
+import {reportManual} from './manual-review';
 import {selectImage} from '../src/image-selection';
 import {accountAction} from './site-accounts';
 import {resolveForeman} from './mrf-foreman';
@@ -90,6 +91,7 @@ export class SqlStore implements Repository {
   async saveDraft(p: Principal, body: DraftBody, id?: string) {
     await this.requireProject(p, body.projectId);
     return this.transaction(async tx => {
+      if(body.lines.some(line=>line.source==='user_description'))await tx.catalogLock(p);
       const existing = id ? await tx.getDraft(p, id) : null;
       if ((existing && existing.version !== body.version) || (!existing && body.version !== 0)) throw new ApiError(409, 'This draft changed elsewhere. Reload before saving; your on-screen items are preserved.');
       if(existing?.submitted)throw new ApiError(409,'Submitted MRFs cannot be changed. Create a revision from the submitted record.');
@@ -123,6 +125,7 @@ export class SqlStore implements Repository {
           line.id, draftId, index, materialId, line.quantity, line.requestedUnit, line.description, JSON.stringify(line.rawInput), snapshot ? JSON.stringify(snapshot) : null, line.source, line.deliveryMode, line.overrideDate,line.purchasing?JSON.stringify(line.purchasing):null);
         await tx.q('UPDATE dbo.draft_lines SET task_code=@p0 WHERE id=@p1 AND draft_id=@p2',line.taskCode??'',line.id,draftId);
       }
+      for(const line of body.lines)if(line.source==='user_description')await tx.catalogRun(reportManual(p,{id:line.id,projectId:body.projectId,draftId,searchPhrase:line.rawInput.description,description:line.description,quantity:line.quantity,unit:line.requestedUnit}));
       await tx.audit(p, 'draft.saved', draftId);
       return tx.getDraft(p, draftId);
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);

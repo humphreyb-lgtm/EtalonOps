@@ -1,3 +1,4 @@
+import {adminReviewScenarios} from './admin-review-scenarios';
 import {materialWorkbookScenarios} from './material-workbook-scenarios';
 import {builtinCategories} from '../src/material-categories';
 import {workforceScenarios} from './workforce-scenarios';
@@ -14,7 +15,7 @@ const bracket=(externalKey='bracket')=>({externalKey,category:'bracket',attribut
 const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-1624')=>({materialKey,manufacturer,partNumber,title:'Telescoping bracket',sourceUrl:'https://example.invalid/fixture',verification:'provisional'});
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
-export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[...workforceScenarios,...materialWorkbookScenarios,
+export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[...adminReviewScenarios,...workforceScenarios,...materialWorkbookScenarios,
 {name:'trade shorthand finds adapters without crossing gender size or schedule',run:async store=>{
  const {admin,user}=people();const ids:Record<string,string>={};
  for(const type of ['female adapter','male adapter']){const m=await store.catalogCommand(admin,'material',{externalKey:type.replace(' ','-'),category:'general',productUnit:'EA',verification:'provisional',attributes:{type,specification:'threaded to socket',diameterIn:1,material:'PVC'},sourceUrl:'',verificationBasis:'Synthetic abbreviation regression fixture only.'});ids[type]=m.id;}

@@ -39,7 +39,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   });
   app.use(rateLimit({ windowMs: 60_000, limit: 1800, handler:(_req,res)=>{res.status(429).json({error:'Too many requests. Wait a minute before retrying.'});}, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.use(express.json({ limit: '1mb' }));
-  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'trade-search-v47' }); });
+  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'manual-review-design-v48' }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
     const { identity } = z.object({ identity: z.string() }).strict().parse(req.body);
     const token = await auth.issueLocal(identity);
@@ -47,6 +47,7 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
     await store.admit(principal,true);
     res.json({ token, identity, warning: 'Local test session only. Not Microsoft sign-in.' });
   });
+  app.get('/api/public/design',async(_req,res)=>res.json(await store.catalogCommand({tenant:authOptions.mode==='entra'?authOptions.tenant:'local-development',oid:'design-reader',roles:[]},'design-get',{})));
   accountRoutes(app,store,authOptions.mode==='entra'?authOptions.tenant:'local-development',authOptions.mode==='entra');
   app.use('/api', async (req, res, next) => {
     try {

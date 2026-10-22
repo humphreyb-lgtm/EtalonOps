@@ -21,7 +21,7 @@ try {
   await pool.request().batch(migration);
   await pool.request().query('IF OBJECT_ID(\'dbo.migration_checksums\') IS NULL CREATE TABLE dbo.migration_checksums(version int PRIMARY KEY,checksum char(64) NOT NULL)');
   await pool.request().input('checksum', sql.VarChar(64), checksum).query('IF NOT EXISTS(SELECT 1 FROM dbo.migration_checksums WHERE version=1) INSERT dbo.migration_checksums VALUES(1,@checksum)');
-  for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql'],[7,'007-mrf-submissions.sql'],[8,'008-product-details.sql'],[9,'009-material-categories.sql'],[10,'010-mrf-foreman.sql'],[11,'011-line-task-code.sql'],[12,'012-workforce-accounts.sql'],[13,'013-mrf-export.sql'],[14,'014-document-designer.sql']] as const){
+  for(const [version,file] of [[2,'002-catalog.sql'],[3,'003-translation-evidence.sql'],[4,'004-catalog-revisions.sql'],[5,'005-named-drafts.sql'],[6,'006-user-access.sql'],[7,'007-mrf-submissions.sql'],[8,'008-product-details.sql'],[9,'009-material-categories.sql'],[10,'010-mrf-foreman.sql'],[11,'011-line-task-code.sql'],[12,'012-workforce-accounts.sql'],[13,'013-mrf-export.sql'],[14,'014-document-designer.sql'],[15,'015-admin-review-design.sql'],[16,'016-manual-line-identity.sql']] as const){
     const migration=readFileSync(`db/${file}`,'utf8'), checksum=createHash('sha256').update(migration).digest('hex');
     const prior=(await pool.request().input('version',sql.Int,version).query('SELECT checksum FROM dbo.migration_checksums WHERE version=@version')).recordset[0];
     if(prior&&prior.checksum!==checksum)throw new Error('Applied catalog migration checksum changed.');
@@ -33,7 +33,7 @@ try {
   if(liveObject.toLowerCase()!==String(state.runtimePrincipal).toLowerCase())throw new Error('Runtime managed identity changed; stopped before changing SQL permissions.');
   const identity=JSON.parse(execFileSync('az',['ad','sp','show','--id',liveObject,'-o','json'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}));
   if(String(identity.id).toLowerCase()!==liveObject.toLowerCase())throw new Error('Managed identity lookup did not match the pilot.');
-  const tables=['memberships','import_batches','materials','aliases','drafts','draft_lines','image_associations','catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references','material_categories','companies','jobs','user_profiles','site_credentials','account_tokens','account_sessions','account_limits','pdf_templates','document_templates','document_template_defaults','company_logo_defaults'];
+  const tables=['memberships','import_batches','materials','aliases','drafts','draft_lines','image_associations','catalog_profiles','manufacturers','manufacturer_products','translations','selection_events','job_restrictions','catalog_batches','image_references','material_categories','companies','jobs','user_profiles','site_credentials','account_tokens','account_sessions','account_limits','pdf_templates','document_templates','document_template_defaults','company_logo_defaults','manual_item_reports','design_settings'];
   const transaction=pool.transaction();await transaction.begin();
   try{
     const request=()=>new sql.Request(transaction);

@@ -1,3 +1,5 @@
+import {manualReview} from './manual-review';
+import {designCommand} from './global-design';
 import {compareSpecifications} from './specification-search';
 import {matchesPhysicalSearch,sizeQueryWithoutRadius} from './material-search-constraints';
 import {familyDescription,familyIdentityFields} from './material-family';
@@ -476,6 +478,8 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
   return snapshot;
 }
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
+ if(action.startsWith('manual-'))return yield* manualReview(p,action,data);
+ if(action.startsWith('design-'))return yield* designCommand(p,action,data);
  if(action==='material-families')return {families:materialFamilies};
  if(action.startsWith('material-workbook-'))return yield* materialWorkbookAction(p,action,data);
   if(['material-table-page','material-table-row','material-table-preview','material-table-save','material-categories','material-category-save'].includes(action))return yield* materialTable(p,action,data);
@@ -527,3 +531,5 @@ export function* catalogAction(p:Principal,action:string,data:any):Operation<any
     default:throw new ApiError(404,'Unknown catalog operation.');
   }
 }
+
+export {query,audit,materialById,addPhrase};

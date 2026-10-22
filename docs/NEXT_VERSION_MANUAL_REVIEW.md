@@ -1,6 +1,6 @@
 # Next revision: manual MRF item review inbox
 
-Status: requested and queued; not implemented in the completed v47 search release.
+Status: implemented in v48 alongside Global Design; v47 remains the separate completed search release.
 
 When a signed-in user adds an MRF line using their own description, retain it as an MRF-only line. Do not automatically create a catalog material, manufacturer product, or translation. Capture an idempotent review event for the site administrator, including the original search phrase, final entered description, quantity/UOM, job, requester, timestamp, and associated MRF/line when available. Saving a draft should provide a reliable fallback if immediate reporting fails. Avoid duplicated events on retries or repeated saves.
 

@@ -1,3 +1,5 @@
+import {ManualItemReview} from './ManualItemReview';
+import {GlobalDesign} from './GlobalDesign';
 import {MaterialWorkbook} from './MaterialWorkbook';
 import {DocumentDesigner} from './DocumentDesigner';
 import {MaterialTable} from './MaterialTable';
@@ -15,11 +17,12 @@ import { JobManufacturerRestrictions } from './JobManufacturerRestrictions';
 import { AIUsage } from './AIUsage';
 
 const sections = [
-  ['overview', 'Overview'], ['pdf','PDF templates'], ['materials','Materials'], ['readiness','Catalog readiness'], ['users', 'Users and access'], ['catalog', 'Catalog and imports'],
+  ['overview', 'Overview'], ['manual','Manual Item Review'], ['design','Global Design'], ['pdf','PDF templates'], ['materials','Materials'], ['readiness','Catalog readiness'], ['users', 'Users and access'], ['catalog', 'Catalog and imports'],
   ['imports','Workbook imports'], ['research','Product research'], ['images', 'Product images'], ['status','Pilot status'], ['restrictions', 'Job restrictions'], ['ai', 'AI usage'],
 ] as const;
 type Section = typeof sections[number][0];
 export function AdminWorkspace() {
+  const [pendingManual,setPendingManual]=useState(0);
   const [allowed, setAllowed] = useState(false), [open, setOpen] = useState(false);
   const [catalogTarget,setCatalogTarget]=useState<{id:string;request:number}|undefined>(),[imageTarget,setImageTarget]=useState<{id:string;request:number}|undefined>();
   const [workbookBatch,setWorkbookBatch]=useState<{id:string;request:number}>(),[materialRevision,setMaterialRevision]=useState(0);
@@ -34,6 +37,7 @@ export function AdminWorkspace() {
     void request<{roles: string[]}>('/me').then(me => { if (active) setAllowed(me.roles.includes('Admin')); }).catch(() => {});
     return () => { active = false; };
   }, []);
+  useEffect(()=>{if(!allowed)return;let active=true;const refresh=()=>void request<{pending:number}>('/catalog/manual-count','POST',{}).then(v=>{if(active)setPendingManual(v.pending);}).catch(()=>{});refresh();const timer=setInterval(refresh,30000);window.addEventListener('manual-inbox-changed',refresh);window.addEventListener('focus',refresh);return()=>{active=false;clearInterval(timer);window.removeEventListener('manual-inbox-changed',refresh);window.removeEventListener('focus',refresh);};},[allowed]);
   useEffect(() => { if (open && !dialog.current?.open) { dialog.current?.showModal(); heading.current?.focus(); } }, [open]);
   async function enter() {
     setError('');
@@ -57,14 +61,15 @@ export function AdminWorkspace() {
     dialog.current?.close(); setOpen(false); setChanged(false); setVisited(['overview']); setSection('overview');setCatalogTarget(undefined);setImageTarget(undefined); trigger.current?.focus();
   }
   if (!allowed) return null;
-  return <><button ref={trigger} className="button" onClick={() => void enter()}><Settings size={18} aria-hidden="true"/> Administration</button>
+  return <><button ref={trigger} aria-label="Administration" className="button" onClick={() => void enter()}><Settings size={18} aria-hidden="true"/> Administration{pendingManual>0&&<span className="admin-alert-badge" aria-label={`${pendingManual} manual items pending review`}>{pendingManual}</span>}</button>
     {!open && error && <p role="alert">{error}</p>}
     <dialog ref={dialog} className={`admin-workspace ${section==='materials'?'material-table-workspace':section==='pdf'?'designer-workspace-modal':''}`} aria-labelledby="admin-workspace-title" onCancel={event => {event.preventDefault();close();}}>
       <header className="modal-heading"><div><h2 id="admin-workspace-title" ref={heading} tabIndex={-1}>Administration</h2><p>EtalonOps management</p></div><button className="button" onClick={close}><X size={18} aria-hidden="true"/> Return to MRF</button></header>
-      <nav aria-label="Administration sections" className="admin-sections">{sections.map(([id,label]) => <button key={id} className={`button ${section===id?'primary':''}`} aria-current={section===id?'page':undefined} onClick={() => choose(id)}>{label}</button>)}</nav>
+      <nav aria-label="Administration sections" className="admin-sections">{sections.map(([id,label]) => <button key={id} aria-label={label} className={`button ${section===id?'primary':''}`} aria-current={section===id?'page':undefined} onClick={() => choose(id)}>{label}{id==='manual'&&pendingManual>0&&<span className="admin-alert-badge">{pendingManual}</span>}</button>)}</nav>
       {error && <p role="alert">{error}</p>}
       <div className="admin-content" onChange={() => setChanged(true)}>
-        <section hidden={section!=='overview'} aria-label="Administration overview"><h3>Manage your materials workflow</h3><p>Your MRF stays open while you administer the application. Each section keeps its form entries when you switch sections.</p><div className="admin-cards">{sections.slice(1).map(([id,label]) => <article key={id}><h3>{label}</h3><p>{({pdf:'Set up and preview fillable MRF PDF layouts.',materials:'Add and edit generic materials in a compact table without manufacturer parts.',imports:'Upload Excel workbooks directly, edit unpublished records and approve publication.',research:'Review a manufacturer product family, edit specifications and phrases, and add selected products.',status:'Check the installed release, database connection and current sign-in access.',readiness:'View catalog counts, find missing relationships and work through specification, product and image reviews.',users:'Register Microsoft users, manage project access, deactivate accounts and review access history.',catalog:'Maintain canonical materials, manufacturer parts, translations, search priority and reviewed CSV imports.',images:'Upload product photos and review their identity, source evidence and usage rights.',restrictions:'Manage manufacturer restrictions by job or material category.',ai:'Check the current AI activation status and request limits.'} as Record<string,string>)[id]}</p><button className="button" onClick={() => choose(id)}>Open {label.toLowerCase()}</button></article>)}</div><p>Catalog and access changes use the existing review and history controls. Submitting an MRF does not place an order.</p></section>
+        <section hidden={section!=='overview'} aria-label="Administration overview"><h3>Manage your materials workflow</h3><p>Your MRF stays open while you administer the application. Each section keeps its form entries when you switch sections.</p><div className="admin-cards">{sections.slice(1).map(([id,label]) => <article key={id}><h3>{label}</h3><p>{({manual:'Review manually entered MRF items, resolve catalog gaps and approve useful search wording.',design:'Manage shared typography and dense form spacing with a live preview.',pdf:'Set up and preview fillable MRF PDF layouts.',materials:'Add and edit generic materials in a compact table without manufacturer parts.',imports:'Upload Excel workbooks directly, edit unpublished records and approve publication.',research:'Review a manufacturer product family, edit specifications and phrases, and add selected products.',status:'Check the installed release, database connection and current sign-in access.',readiness:'View catalog counts, find missing relationships and work through specification, product and image reviews.',users:'Register Microsoft users, manage project access, deactivate accounts and review access history.',catalog:'Maintain canonical materials, manufacturer parts, translations, search priority and reviewed CSV imports.',images:'Upload product photos and review their identity, source evidence and usage rights.',restrictions:'Manage manufacturer restrictions by job or material category.',ai:'Check the current AI activation status and request limits.'} as Record<string,string>)[id]}</p><button className="button" onClick={() => choose(id)}>Open {label.toLowerCase()}</button></article>)}</div><p>Catalog and access changes use the existing review and history controls. Submitting an MRF does not place an order.</p></section>
+        {visited.includes('manual')&&<section hidden={section!=='manual'}><ManualItemReview onCount={setPendingManual} onImages={id=>inspect(id,'images')}/></section>}{visited.includes('design')&&<section hidden={section!=='design'}><GlobalDesign/></section>}
         {visited.includes('pdf')&&<section hidden={section!=='pdf'}><DocumentDesigner/></section>}{visited.includes('status')&&<section hidden={section!=='status'}><AdminStatus/></section>}
         {visited.includes('readiness')&&<section hidden={section!=='readiness'}><CatalogReadiness inspect={inspect}/></section>}
         {visited.includes('users')&&<section hidden={section!=='users'} aria-label="Users and access"><h3>Users and access</h3><UserAdmin embedded/></section>}

@@ -8,7 +8,7 @@ url=sys.argv[1]
 for attempt in range(24):
     try:
         with urllib.request.urlopen(url+'/api/health',timeout=20) as response: health=json.load(response)
-        if health.get('engine')!='Azure SQL' or health.get('microsoftSignIn') is not True or health.get('release')!='trade-search-v47': raise ValueError('Unexpected health response')
+        if health.get('engine')!='Azure SQL' or health.get('microsoftSignIn') is not True or health.get('release')!='manual-review-design-v48': raise ValueError('Unexpected health response')
         break
     except (urllib.error.URLError,TimeoutError,ValueError):
         if attempt==23: raise SystemExit('Cloud health did not become ready. Inspect POC app logs; do not disable authentication/TLS.')
@@ -22,4 +22,4 @@ for path in ['/api/me','/api/projects/riverside/draft','/api/dev/session']:
         if error.code not in [401,404]: raise
 with urllib.request.urlopen(url,timeout=20) as response:
     if b'runtime-config.js' not in response.read(): raise SystemExit('Cloud runtime configuration missing.')
-print('Pilot trade-search-v47 release, Azure SQL health and anonymous API denial verified. Real Microsoft sign-in and owner-isolation acceptance remain to be checked.')
+print('Pilot manual-review-design-v48 release, Azure SQL health and anonymous API denial verified. Real Microsoft sign-in and owner-isolation acceptance remain to be checked.')
