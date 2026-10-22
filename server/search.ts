@@ -1,3 +1,4 @@
+import {tradeTerms} from './trade-terms';
 export function normalize(input: string): string {
   return input.toLowerCase().normalize('NFKC').replace(/["″]/g, ' inch ')
     .replace(/\b(\d+(?:\/\d+)?)\s*pvc\b/g, '$1 inch pvc')
@@ -17,7 +18,7 @@ function oneEditApart(a: string, b: string): boolean {
   return edits + (a.length - i) + (b.length - j) <= 1;
 }
 function terms(value: string) {
-  return normalize(value.normalize('NFKC').replace(/[⁄∕]/g,'/')).replace(/\bsch\.?\s*(\d+)\b/g,'schedule $1')
+  return normalize(tradeTerms(value)).replace(/\bsch\.?\s*(\d+)\b/g,'schedule $1')
     .replace(/\bemt\b/g,'electrical metallic tubing').replace(/\bgalv\b/g,'galvanized')
     .replace(/\bblk\b/g,'black').replace(/\bwht\b/g,'white')
     .replace(/\bself[ -]?tappers?\b/g,'self tapping screws');

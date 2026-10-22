@@ -15,6 +15,13 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[...workforceScenarios,...materialWorkbookScenarios,
+{name:'trade shorthand finds adapters without crossing gender size or schedule',run:async store=>{
+ const {admin,user}=people();const ids:Record<string,string>={};
+ for(const type of ['female adapter','male adapter']){const m=await store.catalogCommand(admin,'material',{externalKey:type.replace(' ','-'),category:'general',productUnit:'EA',verification:'provisional',attributes:{type,specification:'threaded to socket',diameterIn:1,material:'PVC'},sourceUrl:'',verificationBasis:'Synthetic abbreviation regression fixture only.'});ids[type]=m.id;}
+ for(const [abbr,type] of [['fa','female adapter'],['ma','male adapter'],['female adaptor','female adapter'],['male adapters','male adapter']]){const rows=await store.search(user,'1" PVC sch 40 '+abbr);assert.equal(rows.length,1,abbr);assert.equal(rows[0].id,ids[type]);assert.equal(rows[0].matchStatus,'needs_verification');}
+ assert.equal((await store.search(user,'2" PVC sch 40 fa')).length,0);
+ const body=await store.catalogCommand(admin,'material',{externalKey:'lb-body',category:'general',productUnit:'EA',verification:'provisional',attributes:{type:'conduit body',specification:'LB cover and gasket',bodyType:'LB',diameterIn:1,material:'PVC'},sourceUrl:'',verificationBasis:'Synthetic short-code regression fixture only.'});assert.equal((await store.search(user,'1" PVC sch 40 LB'))[0].id,body.id);
+}},
 {name:'specification-aware search retrieves incomplete couplings without hiding known conflicts',run:async store=>{
  const {admin,user}=people();
  const c=await store.catalogCommand(admin,'material',{externalKey:'coupling-test',category:'general',productUnit:'EA',verification:'provisional',attributes:{type:'coupling',specification:'center stop',diameterIn:1,material:'PVC'},sourceUrl:'https://example.invalid/coupling',verificationBasis:'Synthetic search regression evidence only.'});

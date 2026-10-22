@@ -241,8 +241,8 @@ export function* searchCatalog(p:Principal,input:string,projectId?:string):Opera
     let rank=0;for(const phrase of new Set(phraseList))rank=Math.max(rank,score(q,searchWords(phrase)));
     const schedule=q.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1],expectedSchedule=attributes.schedule??material.description.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1];
     if(!matchesPhysicalSearch(input,attributes))return null;
-    if(comparison.retrieval&&/[a-z]{3}/i.test(comparison.retrieval)){for(const phrase of new Set(phraseList))rank=Math.max(rank,Math.min(90,score(comparison.retrieval,searchWords(phrase))));}
-    const diameter=sizeQueryWithoutRadius(q).match(/\b(\d+(?:\.\d+|\/\d+)?)\s*(?:inch|in\b|["″])/i)?.[1];
+    if(comparison.retrieval&&/[a-z]/i.test(comparison.retrieval)){for(const phrase of new Set(phraseList))rank=Math.max(rank,Math.min(90,score(comparison.retrieval,searchWords(phrase))));}
+    const diameter=/\b(?:diameter|dia)\b/i.test(q)?undefined:sizeQueryWithoutRadius(q).match(/\b(\d+(?:\.\d+|\/\d+)?)\s*(?:inch|in\b|["″])/i)?.[1];
     const mappedTerminology=(phrasesByMaterial.get(id)??[]).some(phrase=>score(q,searchWords(phrase))>=90);
     if(!mappedTerminology&&((/\bpipe\b/i.test(q)&&attributes.type==='conduit')||(/\bconduit\b/i.test(q)&&attributes.type==='pipe')))rank=0;
     if((schedule&&expectedSchedule&&String(schedule)!==String(expectedSchedule))||(diameter&&attributes.diameterIn&&Number(diameter)!==Number(attributes.diameterIn)))rank=0;

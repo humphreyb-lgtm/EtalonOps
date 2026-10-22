@@ -18,3 +18,11 @@ test('physical dimensions, radius and finish never turn a known conflict into a 
  assert.equal(compare('1/2-13 short spring nut',{springType:'long spring'}).conflicts.length,1);
  assert.match(compare('1/2-13 spring nut',{}).retrieval,/1\/2-13/);
 });
+test('compatible raceway material is distinct from the material of accessories and chemicals',()=>{
+ assert.equal(compare('PVC conduit cleaner',{type:'installation consumable',material:'solvent cleaner',specification:'PVC conduit cleaner'}).conflicts.length,0);
+ assert.equal(compare('PVC stub up bracket',{type:'support',material:'steel',compatibleConduit:'PVC Schedule 40'}).conflicts.length,0);
+ assert.deepEqual(compare('PVC temporary plug',{type:'conduit plug',material:'polyurethane'}).missing,['PVC compatibility not recorded']);
+ assert.equal(compare('PVC coupling',{type:'coupling',material:'steel'}).conflicts.length,1);
+ assert.equal(compare('6 in long-line coupling',{type:'long-line coupling',diameterIn:6,lengthIn:6.375}).conflicts.length,0);
+ assert.equal(compare('1-1/4 inch masonry screw 1/4 diameter',{diameterIn:0.25,lengthIn:1.25}).conflicts.length,0);
+});

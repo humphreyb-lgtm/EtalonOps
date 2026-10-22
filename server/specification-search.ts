@@ -1,9 +1,10 @@
+import {tradeTerms} from './trade-terms';
 import {parseInches} from '../src/measurements';
 // Strip only recognized constraints for retrieval; compare them separately so
 // missing data never becomes an implicit assertion of compatibility.
 export function compareSpecifications(query:string,attributes:Record<string,any>,description=''){
  const a={...attributes},missing:string[]=[],conflicts:string[]=[];
- let retrieval=query.normalize('NFKC').replace(/[⁄∕]/g,'/').replace(/\bgalv\b/gi,'galvanized').replace(/\bpvc\s+(40|80)\b/gi,'PVC schedule $1');
+ let retrieval=tradeTerms(query).replace(/\bgalv\b/gi,'galvanized').replace(/\bpvc\s+(40|80)\b/gi,'PVC schedule $1');
  const text=description.toLowerCase();
  const number=(s:string)=>{try{return parseInches(s.replace(/^(\d+)-(\d+\/\d+)$/,'$1 $2'));}catch{return NaN;}};
  const measure='(\\d+(?:[ -]\\d+/\\d+|/\\d+|\\.\\d+)?)';
@@ -14,9 +15,11 @@ export function compareSpecifications(query:string,attributes:Record<string,any>
  retrieval=retrieval.replace(/(\d+(?:\.\d+)?)\s*(?:°|deg(?:ree)?s?\b)/gi,(_,v)=>{check('angleDeg','Angle '+v+'°',Number(v));return ' ';});
  retrieval=retrieval.replace(new RegExp(measure+"\\s*(?:ft\\b|feet\\b|foot\\b|['′])",'gi'),(_,v)=>{check('lengthIn','Length '+v+' ft',number(v)*12);return ' ';});
  // A labelled length is distinct from trade diameter or a bolt/thread dimension.
- retrieval=retrieval.replace(new RegExp(measure+'\\s*(?:inches|inch|in\\b|["″])\\s*(?:length|long)\\b','gi'),(_,v)=>{check('lengthIn','Length '+v+' in.',number(v));return ' ';});
+ retrieval=retrieval.replace(new RegExp(measure+'\\s*(?:inches|inch|in\\b|["″])\\s*(?:length|long(?![- ](?:line|radius|spring)))\\b','gi'),(_,v)=>{check('lengthIn','Length '+v+' in.',number(v));return ' ';});
+ const explicitDiameter=retrieval.match(new RegExp(measure+'\\s*(?:inches|inch|in\\b|["″])?\\s*(?:diameter|dia\\b)','i'));
+ if(explicitDiameter){check('diameterIn','Diameter',number(explicitDiameter[1]));retrieval=retrieval.replace(explicitDiameter[0],' ');}
  const size=retrieval.match(new RegExp(measure+'\\s*(?:inches|inch|in\\b|["″])','i'));
- if(size&&a.diameterIn!=null){check('diameterIn','Trade size',number(size[1]));retrieval=retrieval.replace(size[0],' ');}
+ if(size&&a.diameterIn!=null&&!explicitDiameter){check('diameterIn','Trade size',number(size[1]));retrieval=retrieval.replace(size[0],' ');}
  // Keep unclassified sizes in lexical retrieval (washer ID/OD, box dimensions,
  // threads, etc.) rather than guessing which structured dimension they mean.
  for(const [pattern,field,label,value] of [
@@ -28,6 +31,6 @@ export function compareSpecifications(query:string,attributes:Record<string,any>
   [/\bplain[ -]end\b/gi,'endConnection','Plain end','plain end'],
   [/\bshort[ -]spring\b/gi,'springType','Short spring','short spring'],
   [/\blong[ -]spring\b/gi,'springType','Long spring','long spring'],
- ] as const){retrieval=retrieval.replace(pattern,match=>{const actual=a[field];if(actual==null){if(!text.includes(match.toLowerCase()))missing.push(label+' not recorded');}else{const clean=(s:string)=>s.toLowerCase().replace(/pregalvanized/,'galvanized').replace(/belled/,'bell').replace(/[- ]+/g,' ').trim();if(clean(String(actual))!==clean(value)&&!clean(String(actual)).includes(clean(value)))conflicts.push(label+' differs');}return ' ';});}
+ ] as const){retrieval=retrieval.replace(pattern,match=>{const actual=a[field];if(field==='material'&&value==='pvc'&&String(actual).toLowerCase()!=='pvc'&&/cleaner|primer|cement|consumable|plug|support|bracket|strap|spacer|clamp/i.test(String(a.type)+' '+description)){const evidence=String(a.compatibleConduit??'')+' '+String(a.specification??'')+' '+description;if(!/\bpvc\b/i.test(evidence))missing.push('PVC compatibility not recorded');return ' ';}if(actual==null){if(!text.includes(match.toLowerCase()))missing.push(label+' not recorded');}else{const clean=(s:string)=>s.toLowerCase().replace(/pregalvanized/,'galvanized').replace(/belled/,'bell').replace(/[- ]+/g,' ').trim();if(clean(String(actual))!==clean(value)&&!clean(String(actual)).includes(clean(value)))conflicts.push(label+' differs');}return ' ';});}
  return {retrieval:retrieval.replace(/(^|\s)[.,;](?=\s|$)/g,' ').replace(/\s+/g,' ').trim(),missing:[...new Set(missing)],conflicts:[...new Set(conflicts)]};
 }
