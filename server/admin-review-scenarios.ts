@@ -4,6 +4,17 @@ import type {Repository} from './repository';
 import type {Principal} from './contracts';
 import {defaultDesign} from '../src/global-design';
 export const adminReviewScenarios:{name:string;run:(s:Repository)=>Promise<void>}[]=[
+{name:'appearance drafts, publication and history are isolated, versioned and administrator controlled',run:async s=>{
+ const tenant='appearance-'+randomUUID(),admin:Principal={tenant,oid:'admin',roles:['Admin']},user:Principal={tenant,oid:'worker',roles:['Foreman']};
+ const settings={rules:{fields:{desktop:{paddingTop:0,paddingBottom:0}}},order:['entry','items']};
+ await assert.rejects(async()=>s.catalogCommand(user,'appearance-get',{}));await assert.rejects(async()=>s.catalogCommand(user,'appearance-save',{version:0,settings}));
+ const saved=await s.catalogCommand(admin,'appearance-save',{version:0,settings});assert.equal(saved.version,1);assert.deepEqual((await s.catalogCommand(user,'appearance-public',{})).published.rules,{});
+ await assert.rejects(async()=>s.catalogCommand(admin,'appearance-publish',{version:0,settings}));
+ const published=await s.catalogCommand(admin,'appearance-publish',{version:1,settings});assert.equal(published.history.length,1);assert.deepEqual((await s.catalogCommand(user,'appearance-public',{})).published,settings);
+ assert.deepEqual((await s.catalogCommand({...user,tenant:tenant+'other'},'appearance-public',{})).published.rules,{});
+ const restored=await s.catalogCommand(admin,'appearance-restore',{version:2,settings:published.history[0].settings});assert.deepEqual(restored.published.rules,{});
+ await assert.rejects(async()=>s.catalogCommand(admin,'appearance-publish',{version:3,settings:{rules:{fields:{desktop:{color:'bad;display:none'}}},order:[]}}));
+}},
 {name:'manual MRF reporting is idempotent, scoped, and never creates a material automatically',run:async s=>{
  const tenant='manual-'+randomUUID(),admin:Principal={tenant,oid:'admin',roles:['Admin']},user:Principal={tenant,oid:'worker',roles:['Foreman']},foreign:Principal={...admin,tenant:tenant+'-other'};await s.member(user,'manual-job');
  const input={id:randomUUID(),projectId:'manual-job',searchPhrase:'new synthetic gizmo',description:'synthetic gizmo edited',quantity:'5',unit:'EA'};

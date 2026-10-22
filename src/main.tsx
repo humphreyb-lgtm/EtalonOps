@@ -1,3 +1,4 @@
+import './appearance-preview';
 import {GlobalDesignLoader} from './GlobalDesign';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

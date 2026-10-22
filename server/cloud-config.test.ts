@@ -31,6 +31,9 @@ test('cloud host serves a dedicated sign-in bridge, rejects spoofed identities a
     const index = await fetch(base);
     assert.match(await index.text(), /runtime-config\.js/);
     assert.match(index.headers.get('content-security-policy')!, /script-src 'self'/);
+    assert.match(index.headers.get('content-security-policy')!, /frame-src 'self' https:\/\/login.microsoftonline.com/);
+    assert.match(index.headers.get('content-security-policy')!, /frame-ancestors 'self'/);
+    assert.equal(index.headers.get('x-frame-options'), 'SAMEORIGIN');
     assert.equal(index.headers.get('cross-origin-opener-policy'), 'same-origin-allow-popups');
     const configResponse = await fetch(base + '/runtime-config.js');
     assert.equal(configResponse.headers.get('cache-control'), 'no-store');

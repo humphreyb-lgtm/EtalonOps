@@ -1,0 +1,7 @@
+// The preview runs the real application but never sends data-changing API calls.
+// This is a workflow guard, not an authorization boundary; API authorization remains mandatory.
+if(typeof window!=='undefined'&&window.parent!==window&&new URLSearchParams(location.search).has('appearancePreview')){
+ const original=window.fetch.bind(window);
+ const reads=new Set(['design-get','appearance-public','appearance-get','manual-count','manual-list','material-table','material-table-page','material-table-row','material-categories','readiness','images','translations','products','manufacturers','history','inbox-list','inbox-get','status','job-restrictions','export-snapshot','validate-lines','templates','template-list']);
+ window.fetch=async(input,init)=>{const raw=input instanceof Request?input.url:String(input);const url=new URL(raw,location.href);const method=(init?.method??(input instanceof Request?input.method:'GET')).toUpperCase();if(url.origin===location.origin&&url.pathname.startsWith('/api/')&&!['GET','HEAD'].includes(method)&&url.pathname!=='/api/dev/session'&&!['/api/admin/users/directory','/api/admin/users/assigned-jobs','/api/admin/users/history'].includes(url.pathname)&&!(url.pathname.startsWith('/api/catalog/')&&reads.has(url.pathname.split('/').at(-1)!))){return new Response(JSON.stringify({error:'Design preview is read-only. Return to the main application to make data changes.'}),{status:403,headers:{'Content-Type':'application/json'}});}return original(input,init);};
+}

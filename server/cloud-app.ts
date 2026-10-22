@@ -15,8 +15,8 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1); // App Service's single front-end hop; rate limit still uses authenticated API guards.
 app.use(helmet({ contentSecurityPolicy: { directives: {
   defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"],
-  connectSrc: ["'self'", `https://login.microsoftonline.com`], frameSrc: ['https://login.microsoftonline.com'],
-  imgSrc: ["'self'", 'blob:', 'https:'], objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'none'"],
+  connectSrc: ["'self'", `https://login.microsoftonline.com`], frameSrc: ["'self'",'https://login.microsoftonline.com'],
+  imgSrc: ["'self'", 'blob:', 'https:'], objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'self'"],
 } }, crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' } }));
 app.get('/runtime-config.js', (_req, res) => res.set('Cache-Control', 'no-store').type('application/javascript').send(`window.__ETALONOPS_CONFIG__=${JSON.stringify({ tenant: config.tenant, clientId: config.clientId })};`));
 app.use('/api', (req, _res, next) => {
