@@ -9,4 +9,4 @@ export const imageDecision = z.object({ status: z.enum(['approved','rejected']),
   if (value.status === 'approved' && value.approval !== 'I verified the product image and usage rights') context.addIssue({ code:'custom',message:'Explicit product and rights review is required.' });
 });
 
-export const imageLimits = { maxAssociations:500, maxSourceBytes:5*1024*1024,maxStoredBytes:2*1024*1024,maxPixels:16_000_000,maxDimension:1024 };
+export const imageLimits = { maxAssociations:5000, maxSourceBytes:5*1024*1024,maxStoredBytes:2*1024*1024,maxPixels:16_000_000,maxDimension:1024 };

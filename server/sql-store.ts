@@ -234,7 +234,7 @@ export class SqlStore implements Repository {
       const prior=(await tx.q('SELECT * FROM dbo.image_associations WITH(UPDLOCK,HOLDLOCK) WHERE tenant=@p0 AND material_id=@p1 AND content_hash=@p2',p.tenant,id,hash)).recordset[0];
       if (prior) { if((prior.product_id?String(prior.product_id).toLowerCase():null)!==productId)throw new ApiError(409,'These bytes already belong to another image scope; select a different photo.'); if (prior.status==='rejected') throw new ApiError(409,'This image was rejected for this product; choose a different image.'); return tx.mapImage(prior); }
       const count=(await tx.q('SELECT COUNT(*) AS count FROM dbo.image_associations WITH(UPDLOCK,HOLDLOCK) WHERE tenant=@p0',p.tenant)).recordset[0];
-      if(Number(count.count)>=imageLimits.maxAssociations) throw new ApiError(429,'The pilot limit of 500 retained image associations has been reached.');
+      if(Number(count.count)>=imageLimits.maxAssociations) throw new ApiError(429,`The catalog limit of ${imageLimits.maxAssociations} retained image associations has been reached.`);
       const imageId=randomUUID();
       await tx.q("INSERT dbo.image_associations(id,tenant,material_id,content_hash,source_url,rights_basis,status,product_id) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,'pending',@p6)",imageId,p.tenant,id,hash,evidence.sourceUrl,evidence.rightsBasis,productId);
       await tx.audit(p,'image.uploaded',imageId);

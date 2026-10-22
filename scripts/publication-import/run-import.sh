@@ -4,18 +4,21 @@ set -euo pipefail
 umask 077
 cd "$(dirname "${BASH_SOURCE[0]}")"
 export ETALONOPS_IMPORT_ROOT="$PWD"
+mkdir -p .runtime
+exec 9>.runtime/import.lock
+flock -n 9 || { echo "An import process is already running in this folder. View .runtime/run.log for progress."; exit 0; }
 source node-cloud.sh
 if [[ ! -d node_modules ]]; then npm ci --omit=dev --no-audit --no-fund; fi
 node run.mjs --prepare-state
 if [[ " $* " == *" --apply "* ]]; then
   import_release=$(node --input-type=module -e 'const r=await fetch("https://etalonops-954bb4a3.azurewebsites.net/api/health");if(!r.ok)process.exit(1);const h=await r.json();if(h.engine!=="Azure SQL"||!h.microsoftSignIn)process.exit(1);console.log(h.release)')
-  if [[ "$import_release" != publication-import-v45 ]]; then
+  if [[ "$import_release" != cms-suite-v49.1 ]]; then
     case "$import_release" in
-      source-research-v16|research-contract-v17|assisted-research-v18|catalog-details-v19|prepared-paste-v20|compact-research-v21|compact-research-v21.1|catalog-markers-v22|material-table-v23|material-filters-v24|material-descriptions-v25|compact-materials-v26|mrf-foreman-v27|header-alignment-v28|material-matches-v29|task-code-v30|workforce-accounts-v31|microsoft-session-v32|manual-entry-v33|grouped-review-v34|publish-images-v35|consistent-images-v36|pdf-foundation-v37|document-designer-v38|blank-designer-v39|grid-interaction-v40|automatic-grid-v41|ribbon-designer-v42|catalog-import-v43|material-workbook-v44) ;;
+      publication-import-v45|specification-search-v46|trade-search-v47|manual-review-design-v48|appearance-studio-v49|cms-suite-v49) ;;
       *) echo 'Unrecognized newer/different app release; stopped without downgrading.' >&2; exit 1;;
     esac
     sha256sum --check app-update.sha256
-    echo 'Installing the compatible v45 application update into the existing pilot first.'
+    echo 'Installing the compatible CMS v49.1 image-capacity update first. Existing CMS content is preserved.'
     mkdir -p "$HOME/etalonops-westus3"
     unzip -oq app-update.zip -d "$HOME/etalonops-westus3"
     bash "$HOME/etalonops-westus3/scripts/update-cloud-app.sh"
@@ -49,7 +52,7 @@ if [[ " $* " == *" --apply "* ]]; then
 fi
 node run.mjs --probe > .runtime/sql-source-ip
 import_source_ip=$(cat .runtime/sql-source-ip)
-import_rule="EtalonOpsR2Import-$(date +%s)-$$"
+import_rule="EtalonOpsReviewedImport-$(date +%s)-$$"
 if [[ "$import_source_ip" != already-allowed ]]; then
   python3 - "$import_source_ip" <<'PY'
 import ipaddress,sys

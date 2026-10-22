@@ -7,7 +7,7 @@ import {z} from 'zod';
 
 export const importRecordSchema=z.object({ref:z.string().min(1).max(200),originalKey:z.string().max(100),row:z.record(z.string(),z.string()),material:materialInput,phrases:z.array(z.string().min(1).max(500)).max(100),baselineSignature:z.string().optional(),image:z.object({file:z.string().regex(/^images\/[a-zA-Z0-9_.-]+$/),sha256:z.string().regex(/^[a-f0-9]{64}$/),sourceUrl:z.url(),width:z.number().positive(),height:z.number().positive()}).strict().optional()}).strict();
 export type ImportRecord=z.infer<typeof importRecordSchema>;
-export const packageSchema=z.object({format:z.literal('etalonops-publication-import-v1'),source:z.literal('Publication Review R2'),expectedTenantHash:z.string().regex(/^[a-f0-9]{64}$/),held:z.literal(28),records:z.array(importRecordSchema).min(1).max(1000)}).strict();
+export const packageSchema=z.object({format:z.literal('etalonops-publication-import-v1'),source:z.string().min(1).max(100),expectedTenantHash:z.string().regex(/^[a-f0-9]{64}$/),held:z.number().int().min(0).max(1000),records:z.array(importRecordSchema).min(1).max(1000)}).strict();
 export function stable(value:any):any {if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,stable(value[k])]));return value;}
 export const hash=(v:unknown)=>createHash('sha256').update(JSON.stringify(stable(v))).digest('hex');
 export const normId=(v:unknown)=>String(v??'').toLowerCase();
@@ -49,15 +49,15 @@ export async function applyChunk(store:Repository,p:Principal,rows:WorkbookRow[]
  return {summary:batch.workbookSummary,publication:published.publication};
 }
 
-export async function attachReviewedImages(store:Repository,p:Principal,records:ImportRecord[],matches:{existingId:string|null}[],images:Map<string,{bytes:Buffer;hash:string}>,assets:import('../../server/image-assets').ImageAssets,approve:boolean,progress:(s:any)=>void=()=>{}){
+export async function attachReviewedImages(store:Repository,p:Principal,records:ImportRecord[],matches:{existingId:string|null}[],images:Map<string,{bytes:Buffer;hash:string}>,assets:import('../../server/image-assets').ImageAssets,approve:boolean,progress:(s:any)=>void|Promise<void>=()=>{},assertActive:()=>void=()=>{}){
  const {imageKey}=await import('../../server/image-assets');
  const stats={uploaded:0,preserved:0,alreadyApproved:0,pending:0};
  for(const [i,r] of records.entries()){
-  if(!r.image)continue;const id=matches[i].existingId;if(!id)throw Error('Imported material cannot be found for '+r.ref);const image=images.get(r.image.file);if(!image)throw Error('Normalized image is unavailable: '+r.image.file);
+  assertActive();if(!r.image)continue;const id=matches[i].existingId;if(!id)throw Error('Imported material cannot be found for '+r.ref);const image=images.get(r.image.file);if(!image)throw Error('Normalized image is unavailable: '+r.image.file);
   const stored=await store.listImages(p,id);if(stored.some(x=>x.status==='approved')){if(stored.some(x=>x.status==='approved'&&x.contentHash===image.hash))stats.alreadyApproved++;else stats.preserved++;continue;}
-  const key=imageKey(p.tenant,id,image.hash);await assets.put(key,image.bytes);const association=await store.submitImage(p,id,image.hash,{sourceUrl:r.image.sourceUrl,rightsBasis:'Owner-managed representative catalog image from the reviewed R2 package; no independent license assertion.'},null);
+  const key=imageKey(p.tenant,id,image.hash);await assets.put(key,image.bytes);const association=await store.submitImage(p,id,image.hash,{sourceUrl:r.image.sourceUrl,rightsBasis:'Owner-managed representative catalog image from the owner-approved research package; no independent license assertion.'},null);
   if(approve){if(createHash('sha256').update(await assets.get(key)).digest('hex')!==image.hash)throw Error('Stored image verification failed.');await store.reviewImage(p,id,association.id,'approved');stats.uploaded++;}else stats.pending++;
-  progress({...stats});
+  await progress({...stats});
  }
  return stats;
 }

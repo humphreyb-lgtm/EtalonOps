@@ -227,7 +227,7 @@ export class Store {
       const prior=this.db.prepare('SELECT * FROM image_associations WHERE tenant=? AND material_id=? AND content_hash=?').get(p.tenant,id,hash);
       if (prior) { if((prior.product_id?String(prior.product_id).toLowerCase():null)!==productId)throw new ApiError(409,'These bytes already belong to another image scope; select a different photo.'); if (prior.status==='rejected') throw new ApiError(409,'This image was rejected for this product; choose a different image.'); return this.mapImage(prior); }
       const count=this.db.prepare('SELECT COUNT(*) AS count FROM image_associations WHERE tenant=?').get(p.tenant)!;
-      if(Number(count.count)>=imageLimits.maxAssociations) throw new ApiError(429,'The pilot limit of 500 retained image associations has been reached.');
+      if(Number(count.count)>=imageLimits.maxAssociations) throw new ApiError(429,`The catalog limit of ${imageLimits.maxAssociations} retained image associations has been reached.`);
       const imageId=randomUUID();
       this.db.prepare("INSERT INTO image_associations(id,tenant,material_id,content_hash,source_url,rights_basis,status,product_id) VALUES(?,?,?,?,?,?,'pending',?)").run(imageId,p.tenant,id,hash,evidence.sourceUrl,evidence.rightsBasis,productId);
       this.audit(p,'image.uploaded',imageId);

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import sharp from 'sharp';
 import { Store } from './store';
+import {imageLimits} from './image-contracts';
 import { createApp } from './app';
 import { FileImageAssets,normalizeImage,imageKey } from './image-assets';
 
@@ -79,7 +80,7 @@ test('retained image quota is tenant scoped and rejects new associations',()=>{
   const id=String(store.search(admin,'1 inch pvc')[0].id),otherId=String(store.search(other,'1 inch pvc')[0].id);
   const evidence={sourceUrl:'https://manufacturer.example/test',rightsBasis:'Internal quota fixture, not a real photo.'};
   const rows=store.db.prepare("INSERT INTO image_associations(id,tenant,material_id,content_hash,source_url,rights_basis,status) VALUES(?,?,?,?,?,?,'rejected')");
-  store.transaction(()=>{for(let i=0;i<500;i++)rows.run(randomUUID(),admin.tenant,id,i.toString(16).padStart(64,'0'),evidence.sourceUrl,evidence.rightsBasis);});
-  assert.throws(()=>store.submitImage(admin,id,'f'.repeat(64),evidence),/500 retained/);
+  store.transaction(()=>{for(let i=0;i<imageLimits.maxAssociations;i++)rows.run(randomUUID(),admin.tenant,id,i.toString(16).padStart(64,'0'),evidence.sourceUrl,evidence.rightsBasis);});
+  assert.throws(()=>store.submitImage(admin,id,'f'.repeat(64),evidence),new RegExp(imageLimits.maxAssociations+' retained'));
   assert.equal(store.submitImage(other,otherId,'f'.repeat(64),evidence).status,'pending');store.db.close();
 });

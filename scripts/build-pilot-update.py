@@ -9,7 +9,7 @@ import sys
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v49-CMS.zip')
+output = Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/EtalonOps-pilot-update-v49.1.zip')
 files = [
     'docs/PILOT_UPDATE_V49.md', 'docs/APPEARANCE_STUDIO.md', 'docs/PILOT_UPDATE_V48.md', 'scripts/build-appearance-components.py', 'src/appearance-fields.ts', 'src/appearance-components.ts', 'src/AppearanceWorkspace.tsx', 'src/appearance-preview.ts', 'src/appearance.ts', 'src/AppearanceStudio.tsx', 'server/appearance.ts', 'db/017-appearance-studio.sql', 'db/migrations/017-appearance-studio.sql', 'db/015-admin-review-design.sql', 'db/migrations/015-admin-review-design.sql', 'db/016-manual-line-identity.sql', 'db/migrations/016-manual-line-identity.sql',
     'server/manual-review.ts', 'server/global-design.ts', 'src/ManualItemReview.tsx', 'src/GlobalDesign.tsx', 'src/global-design.ts', 'src/main.tsx',
@@ -77,7 +77,7 @@ files = [
     'docs/SESSION_DRAFT_REPAIR.md', 'docs/CATALOG_SNAPSHOT.md',
     'docs/LARGE_CATALOG_EXPORT.md', 'docs/CATALOG_ADMIN_WORKFLOWS.md', 'docs/PILOT_UPDATE_V2.md', 'docs/PILOT_UPDATE_V3.md',
 ]
-files += ['docs/CONTENT_MANAGEMENT.md', 'docs/CMS_ACCEPTANCE.md', 'server/cms.ts', 'db/018-content-management.sql', 'db/migrations/018-content-management.sql', 'scripts/register-cms-surfaces.mjs']
+files += ['docs/PILOT_UPDATE_V49_1.md', 'server/image-contracts.ts', 'scripts/publication-import/prepare-strut.ts', 'scripts/publication-import/start-import.sh', 'scripts/publication-import/status.sh', 'docs/CONTENT_MANAGEMENT.md', 'docs/CMS_ACCEPTANCE.md', 'server/cms.ts', 'db/018-content-management.sql', 'db/migrations/018-content-management.sql', 'scripts/register-cms-surfaces.mjs']
 files += [str(path.relative_to(root)) for path in (root / 'src').rglob('*') if path.is_file() and path.suffix in {'.ts', '.tsx', '.css'}]
 files = list(dict.fromkeys(files))
 files += sorted(str(path.relative_to(root)) for path in (root / 'docs/catalog-starter').iterdir() if path.is_file())
