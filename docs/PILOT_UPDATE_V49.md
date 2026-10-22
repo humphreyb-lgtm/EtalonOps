@@ -2,7 +2,7 @@
 
 Release: `appearance-studio-v49`.
 
-Adds Administration → Design Studio: a three-panel visual workspace, real read-only preview, component/field selection, MRF section drag-and-drop, responsive layout/spacing/typography/surface controls, saved drafts, publication, undo/redo, ten-version restoration and appearance recovery. Includes 251 registered application component classes. Stable field-container controls separate positioning from the input itself. PDF template design retains its separate settings.
+Adds Administration → Design Studio: a three-panel visual workspace, real read-only preview, component/field selection, MRF section drag-and-drop, direct component move/resize tools, responsive layout/spacing/typography/surface controls, saved drafts, publication, undo/redo, ten-version restoration and appearance recovery. Includes 251 registered application component classes. Stable field-container controls separate positioning from the input itself. PDF template design retains its separate settings.
 
 Fixes the global form-padding limitation by separating field height from button height. Saved draft and submitted MRF lists now use dense, aligned tables while retaining their filters, paging and open actions.
 

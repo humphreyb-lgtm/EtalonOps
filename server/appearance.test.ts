@@ -12,6 +12,7 @@ test('appearance uses bounded code-owned components and safe per-field identitie
  assert.ok(appearanceSchema.safeParse({rules:{'field:quantity':{mobile:{width:120}}},order:[]}).success);
 });
 test('responsive CSS inherits base styles, separates PDF/editor and makes field padding effective',()=>{
+ assert.ok(appearanceSchema.safeParse({rules:{fields:{desktop:{translateX:-25,translateY:12}}},order:[]}).success);assert.match(appearanceCSS({rules:{fields:{desktop:{translateX:-25,translateY:12}}},order:[]}),/translate:-25px 12px!important/);
  const css=appearanceCSS({rules:{fields:{desktop:{paddingTop:0,paddingBottom:0},mobile:{fontSize:12}},'field:quantity':{desktop:{width:80}}},order:['items','entry']});
  assert.match(css,/height:auto!important;min-height:0!important/);assert.match(css,/@media\(max-width:600px\)/);assert.match(css,/\[id="quantity"\]/);assert.match(css,/:not\(\.appearance-studio \*\)/);assert.ok(!css.includes('.workspace{display:flex'));assert.equal(appearanceCSS(emptyAppearance()).includes('!important'),false);
  const d=structuredClone(defaultDesign);d.field.paddingY=0;d.button.paddingY=20;const global=designCSS(d);assert.match(global,/height:22px!important/);assert.match(global,/min-height:62px!important/);
