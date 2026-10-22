@@ -16,7 +16,7 @@ app.set('trust proxy', 1); // App Service's single front-end hop; rate limit sti
 app.use(helmet({ contentSecurityPolicy: { directives: {
   defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"],
   connectSrc: ["'self'", `https://login.microsoftonline.com`], frameSrc: ["'self'",'https://login.microsoftonline.com'],
-  imgSrc: ["'self'", 'blob:', 'https:'], objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'self'"],
+  fontSrc: ["'self'",'https:','data:'],imgSrc: ["'self'", 'blob:', 'https:'], objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'self'"],
 } }, crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' } }));
 app.get('/runtime-config.js', (_req, res) => res.set('Cache-Control', 'no-store').type('application/javascript').send(`window.__ETALONOPS_CONFIG__=${JSON.stringify({ tenant: config.tenant, clientId: config.clientId })};`));
 app.use('/api', (req, _res, next) => {
@@ -33,7 +33,7 @@ const api = createApp(store, { mode: 'entra', tenant: config.tenant, audience: c
 api.set('trust proxy', 1);
 const index = readFileSync(resolve('dist/index.html'), 'utf8').replace('</head>', '<script src="/runtime-config.js"></script></head>');
 app.use(express.static(resolve('dist'), { index: false, dotfiles: 'deny', maxAge: '1h' }));
-app.get('/', (_req, res) => res.set('Cache-Control', 'no-store').type('html').send(index));
+app.get(['/','/cms','/cms-canvas','/pages/:slug'], (_req, res) => res.set('Cache-Control', 'no-store').type('html').send(index));
 app.use((_req, res) => res.status(404).end());
 return app;
 }

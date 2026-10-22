@@ -111,3 +111,5 @@ export type MaterialWorkbookPreview={previewHash:string;summary:{new:number;upda
 export async function uploadMaterialWorkbook(file:File,mode:'preview'|'apply',previewHash?:string):Promise<MaterialWorkbookPreview&{id?:string;workbookSummary?:MaterialWorkbookPreview['summary']}>{
  const response=await fetch('/api/admin/material-workbook?mode='+mode,{method:'POST',headers:{...await apiHeaders(),'Content-Type':'application/octet-stream','x-catalog-filename':encodeURIComponent(file.name),...(previewHash?{'x-preview-hash':previewHash}:{})},body:file});const value=await response.json();if(!response.ok)throw Error(value.error??'Material workbook upload failed.');return value;
 }
+
+export async function uploadCmsImage(file:File){const response=await fetch('/api/cms/media',{method:'POST',headers:{...await apiHeaders(),'Content-Type':file.type||'application/octet-stream','x-cms-filename':encodeURIComponent(file.name)},body:file});const value=await response.json();if(!response.ok)throw new Error(value.error??'CMS image upload failed.');return value as {id:string;url:string};}

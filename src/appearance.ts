@@ -17,7 +17,7 @@ export function elementSelector(id:string){return /^(?:control|container):[a-zA-
 export function appearanceCSS(v:Appearance){
  const cssName=(s:string)=>s.replace(/[A-Z]/g,c=>'-'+c.toLowerCase());
  const unitless=['fontWeight','lineHeight','order','flexGrow','flexShrink','opacity','zIndex'];
- const selectors=(selector:string)=>selector.split(/,(?![^()]*\))/).map(s=>'html :is(#appearance-specificity,'+s.trim()+'):not(.appearance-studio *):not(.designer-paper *)').join(',');
+ const selectors=(selector:string)=>selector.split(/,(?![^()]*\))/).map(s=>'html :is(#appearance-specificity,'+s.trim()+'):not(.appearance-studio *):not([data-cms-editor] *):not(.designer-paper *)').join(',');
  let out='';for(const bp of breakpoints){let rules='';for(const id of Object.keys(v.rules)){const selector=elementSelector(id);if(!selector)continue;const p=v.rules[id]?.[bp];if(!p)continue;const entries=Object.entries(p).filter(([key,value])=>validProperty(key,value));rules+=`${selectors(selector)}{${entries.filter(([key])=>!key.startsWith('translate')).map(([key,value])=>`${cssName(key)}:${typeof value==='number'&&!unitless.includes(key)?value+'px':value}!important;`).join('')}${('translateX'in p||'translateY'in p)?`translate:${p.translateX??0}px ${p.translateY??0}px!important;`:''}${'width'in p&&!('maxWidth'in p)?'max-width:none!important;':''}${('height'in p||'minHeight'in p)?'box-sizing:border-box!important;':''}${(id==='fields'||id.startsWith('field:')||id.startsWith('control:'))&&entries.some(([k])=>/^(padding|font|lineHeight)/.test(k))?`${!('height'in p)?'height:auto!important;':''}${!('minHeight'in p)?'min-height:0!important;':''}`:''}}\n`;}
  if(bp==='desktop')out+=rules;else out+=`@media(max-width:${bp==='tablet'?1024:600}px){${rules}}\n`;}
 

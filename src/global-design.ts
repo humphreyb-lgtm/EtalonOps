@@ -6,7 +6,7 @@ const style=(size:number,weight=400,color='#111a35',paddingY=0,paddingX=0):TextS
 export const defaultDesign:Design={heading1:style(28,600),heading2:style(20,600),heading3:style(16,600),body:style(14),label:style(12,500,'#52617d',1),field:style(14,400,'#111a35',4,8),button:style(14,600,'#111a35',4,10),primaryButton:style(14,600,'#ffffff',4,10),small:style(12,400,'#64718c'),tableHeading:style(12,500,'#52617d',4,8),tableCell:style(14,400,'#111a35',5,8)};
 const font=(value:string)=>value==='system'?'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif':`"${value}", ${/Georgia|Times/.test(value)?'serif':value==='Courier New'?'monospace':'sans-serif'}`;
 export function designCSS(d:Design,scope=''){
- const s=(selector:string)=>selector.split(',').map(v=>scope+' '+v.trim()+':not(.designer-paper *):not(.appearance-studio *)').join(',');
+ const s=(selector:string)=>selector.split(',').map(v=>scope+' '+v.trim()+':not(.designer-paper *):not(.designer-workspace-modal *):not(.appearance-studio *):not([data-cms-editor] *)').join(',');
  const text=(r:TextStyle)=>`font-family:${font(r.font)}!important;font-size:${r.size}px!important;font-weight:${r.weight}!important;color:${r.color}!important;line-height:${r.lineHeight}!important;`;
  const pad=(r:TextStyle)=>`padding:${r.paddingY}px ${r.paddingX}px!important;`;
  const control=Math.ceil(d.field.size*d.field.lineHeight+2*d.field.paddingY+2);

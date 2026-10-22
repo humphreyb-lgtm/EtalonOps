@@ -1,3 +1,4 @@
+import {cmsCommand} from './cms';
 import {appearanceCommand} from './appearance';
 import {manualReview} from './manual-review';
 import {designCommand} from './global-design';
@@ -480,6 +481,7 @@ export function* exportCatalogSnapshot(p:Principal):Operation<any>{
 }
 export function* catalogAction(p:Principal,action:string,data:any):Operation<any>{
  if(action.startsWith('manual-'))return yield* manualReview(p,action,data);
+ if(action.startsWith('cms-'))return yield* cmsCommand(p,action,data);
  if(action.startsWith('appearance-'))return yield* appearanceCommand(p,action,data);
  if(action.startsWith('design-'))return yield* designCommand(p,action,data);
  if(action==='material-families')return {families:materialFamilies};

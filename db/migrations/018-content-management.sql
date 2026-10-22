@@ -1,0 +1,2 @@
+CREATE TABLE cms_settings(tenant TEXT PRIMARY KEY,settings TEXT NOT NULL,version INTEGER NOT NULL);
+CREATE TABLE cms_media(tenant TEXT NOT NULL,id TEXT NOT NULL,name TEXT NOT NULL,mime TEXT NOT NULL,content TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(tenant,id));

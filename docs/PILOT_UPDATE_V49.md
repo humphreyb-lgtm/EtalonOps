@@ -1,11 +1,13 @@
-# Pilot update v49 — Website Design Studio
+# Pilot update v49 — Full content management
 
-Release: `appearance-studio-v49`.
+Release: `cms-suite-v49`. Package: `EtalonOps-pilot-update-v49-CMS.zip`.
 
-Adds Administration → Design Studio: a three-panel visual workspace, real read-only preview, component/field selection, MRF section drag-and-drop, direct component move/resize tools, responsive layout/spacing/typography/surface controls, saved drafts, publication, undo/redo, ten-version restoration and appearance recovery. Includes 251 registered application component classes. Stable field-container controls separate positioning from the input itself. PDF template design retains its separate settings.
+This package supersedes the earlier `appearance-studio-v49` partial build. Use the CMS package and its matching checksum together.
 
-Fixes the global form-padding limitation by separating field height from button height. Saved draft and submitted MRF lists now use dense, aligned tables while retaining their filters, paging and open actions.
+Adds Administration → Content management and a protected full-screen `/cms` editor. It includes page creation/duplication/deletion, nested drag-and-drop containers, reusable blocks, rich text, uploaded media, navigation/submenus, page/role visibility, desktop/tablet/mobile styles, interaction states, global styles, element/document/site CSS, live read-only preview, draft/publication controls and ten-version history/restoration.
 
-Migration 17 adds a tenant-scoped appearance settings table, with runtime permissions assigned by the existing migration process. Existing materials, MRFs, users, templates and images are preserved. Public styling reads return published values only; editing and history require Admin. CSP permits same-origin preview frames while continuing to prevent framing by unrelated origins.
+All current native pages, forms, content sections and seven modal dialogs are registered. There are 1,118 native editable surfaces, including labels and headings. Existing modules retain their database bindings, events and authorization. The original MRF and catalog workflows remain operational. A protected recovery route bypasses custom layouts/styles without bypassing authentication. Dense saved-MRF tables and the earlier field-padding correction are included.
 
-See APPEARANCE_STUDIO.md for use, recovery, current coverage and boundaries. Installation uses the existing source update and cloud deployment script. No AI activation or paid discovery changes are included.
+Migration 018 creates tenant-scoped CMS settings and uploaded-media storage; migration 017 from the prior v49 remains compatible. Migration runners now skip applied migrations after checksum validation, allowing safe updates from v48 or the partial v49. Existing catalog records, users, MRFs, images and PDF templates are preserved. No AI or paid discovery activation is included.
+
+See [CONTENT_MANAGEMENT.md](CONTENT_MANAGEMENT.md) for use/recovery and [CMS_ACCEPTANCE.md](CMS_ACCEPTANCE.md) for coverage and verification. Install using the existing pilot source-update workflow. The deployment check must report `cms-suite-v49`; a different signature does not confirm this package.

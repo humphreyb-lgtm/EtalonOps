@@ -1,3 +1,4 @@
+import {normalizeImage} from './image-assets';
 import {parseMaterialWorkbook} from './material-workbook';
 import {materialsXlsx} from './material-workbook-xlsx';
 import {documentRoutes} from './document-routes';
@@ -38,8 +39,10 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
     next();
   });
   app.use(rateLimit({ windowMs: 60_000, limit: 1800, handler:(_req,res)=>{res.status(429).json({error:'Too many requests. Wait a minute before retrying.'});}, standardHeaders: 'draft-8', legacyHeaders: false }));
+  const cmsJson=express.json({limit:'5mb'});
+  app.use((req,res,next)=>req.path.startsWith('/api/catalog/cms-')?cmsJson(req,res,next):next());
   app.use(express.json({ limit: '1mb' }));
-  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'appearance-studio-v49' }); });
+  app.get('/api/health', async (_req, res) => { await store.health(); res.json({ status: 'ok', engine: store.engine, microsoftSignIn: !local, release:'cms-suite-v49' }); });
   if (local) app.post('/api/dev/session', async (req, res) => {
     const { identity } = z.object({ identity: z.string() }).strict().parse(req.body);
     const token = await auth.issueLocal(identity);
@@ -47,6 +50,8 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
     await store.admit(principal,true);
     res.json({ token, identity, warning: 'Local test session only. Not Microsoft sign-in.' });
   });
+  app.get('/api/public/cms',async(_req,res)=>res.json(await store.catalogCommand({tenant:authOptions.mode==='entra'?authOptions.tenant:'local-development',oid:'cms-public',roles:[]},'cms-public',{})));
+  app.get('/api/cms/media/:id',async(req,res,next)=>{if(req.get('authorization')||sessionCookie(req))return next();try{const media=await store.catalogCommand({tenant:authOptions.mode==='entra'?authOptions.tenant:'local-development',oid:'cms-public',roles:[]},'cms-media-get',{id:req.params.id,public:true});res.type(media.mime).send(Buffer.from(media.content,'base64'));}catch(e){next(e);}});
   app.get('/api/public/appearance',async(_req,res)=>res.json(await store.catalogCommand({tenant:authOptions.mode==='entra'?authOptions.tenant:'local-development',oid:'appearance-reader',roles:[]},'appearance-public',{})));
   app.get('/api/public/design',async(_req,res)=>res.json(await store.catalogCommand({tenant:authOptions.mode==='entra'?authOptions.tenant:'local-development',oid:'design-reader',roles:[]},'design-get',{})));
   accountRoutes(app,store,authOptions.mode==='entra'?authOptions.tenant:'local-development',authOptions.mode==='entra');
@@ -62,6 +67,8 @@ export function createApp(store: Repository, authOptions: AuthOptions, services:
   });
   app.use('/api',rateLimit({windowMs:60_000,limit:600,standardHeaders:'draft-8',legacyHeaders:false,keyGenerator:(_req,res)=>`${res.locals.principal.tenant}/${res.locals.principal.oid}`,handler:(_req,res)=>{res.status(429).json({error:'Account request limit reached. Wait a minute before retrying.'});}}));
   const principal = (res: express.Response): Principal => res.locals.principal;
+  app.get('/api/cms/media/:id',async(req,res)=>{const media=await store.catalogCommand(principal(res),'cms-media-get',{id:req.params.id});res.type(media.mime).send(Buffer.from(media.content,'base64'));});
+  app.post('/api/cms/media',(_req,res,next)=>{if(!principal(res).roles.includes('Admin'))return next(new ApiError(403,'System administrator access required.'));next();},express.raw({type:()=>true,limit:'5mb'}),async(req,res)=>{if(!Buffer.isBuffer(req.body))throw new ApiError(400,'Upload an image file.');const image=await normalizeImage(req.body);let name='Image';try{name=decodeURIComponent(req.get('x-cms-filename')??'Image').slice(0,200);}catch{throw new ApiError(400,'Invalid image filename.');}res.json(await store.catalogCommand(principal(res),'cms-media-put',{id:crypto.randomUUID(),name,mime:'image/webp',content:image.bytes.toString('base64')}));});
   managedAccountRoutes(app,store);
   catalogExportRoutes(app,store);
   imageRoutes(app,store,services.images);pdfRoutes(app,store,services.images);documentRoutes(app,store,services.images);
