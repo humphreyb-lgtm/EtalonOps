@@ -14,6 +14,8 @@ export type Candidate = {
   products?: ManufacturerProduct[];
   preferredProductId?: string|null;
   highUse?: boolean;
+  matchStatus?: 'matches_requirements'|'needs_verification';
+  missingSpecifications?: string[];
   category: 'conduit' | 'screw' | 'tape' | 'general';
 };
 export type Line = {

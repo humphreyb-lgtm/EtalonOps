@@ -5,9 +5,9 @@ const number=(v:string)=>{try{return parseInches(v.replace(/^(\d+)-(\d+\/\d+)$/,
 export function matchesPhysicalSearch(query:string,a:Record<string,any>){
  const q=query.toLowerCase();
  const radius=q.match(new RegExp(`(${measurement})\\s*(?:inches|inch|in\\b|["″])?\\s*(?:radius|rad\\b)`));
- if(radius&&(a.radiusIn==null||number(radius[1])!==Number(a.radiusIn)))return false;
+ if(radius&&a.radiusIn!=null&&number(radius[1])!==Number(a.radiusIn))return false;
  const angle=q.match(/(\d+(?:\.\d+)?)\s*(?:°|deg(?:ree)?s?\b)/)??q.match(/\b(90|60|45|30|22\.5|15|11\.25|5)\s*(?:elbow|ell|bend|sweep)\b/);
- if(angle&&(a.angleDeg==null||Number(angle[1])!==Number(a.angleDeg)))return false;
+ if(angle&&a.angleDeg!=null&&Number(angle[1])!==Number(a.angleDeg))return false;
  if(/\bstandard radius\b/.test(q)&&a.radiusClass&&a.radiusClass!=='standard')return false;
  const type=String(a.type??'').toLowerCase();
  if(/\b(?:female adapter|female adaptor|fa)\b/.test(q)&&!type.includes('female'))return false;

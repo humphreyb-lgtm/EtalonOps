@@ -1,3 +1,4 @@
+import {compareSpecifications} from './specification-search';
 import {matchesPhysicalSearch,sizeQueryWithoutRadius} from './material-search-constraints';
 import {familyDescription,familyIdentityFields} from './material-family';
 import {materialFamilies} from '../src/material-families';
@@ -134,7 +135,9 @@ export function* selectMaterial(p:Principal,data:unknown):Operation<any>{
   if(existing){if(existing.tenant!==p.tenant||existing.actor!==p.oid||String(existing.material_id).toLowerCase()!==input.materialId||existing.phrase!==input.phrase||existing.project!==input.projectId||(existing.product_id?String(existing.product_id).toLowerCase():null)!==input.productId)throw new ApiError(409,'Selection identifier is already used.');return {unchanged:true};}
   if(input.productId)yield* productForMaterial(p,input.materialId,input.productId);
   yield* query('INSERT INTO selection_events(id,tenant,actor,project,material_id,product_id,phrase,created_at) VALUES(@p0,@p1,@p2,@p3,@p4,@p5,@p6,@p7)',input.eventId,p.tenant,p.oid,input.projectId,input.materialId,input.productId,input.phrase,new Date().toISOString());
-  const translation=yield* addPhrase(p,input.materialId,input.phrase,'user_selection');yield* audit(p,'catalog.selected',input.eventId);return {translation,unchanged:false};
+  const selectedProfile=(yield* query('SELECT attributes FROM catalog_profiles WHERE tenant=@p0 AND material_id=@p1',p.tenant,input.materialId))[0];
+  const selectedComparison=compareSpecifications(input.phrase,selectedProfile?JSON.parse(selectedProfile.attributes):{},material.description);
+  const translation=selectedComparison.missing.length||selectedComparison.conflicts.length?{skipped:true,reason:'Requested specifications need verification'}:yield* addPhrase(p,input.materialId,input.phrase,'user_selection');yield* audit(p,'catalog.selected',input.eventId);return {translation,unchanged:false};
 }
 export function* productForMaterial(p:Principal,materialId:string,productId:string):Operation<RecordRow>{
   const product=(yield* query('SELECT p.*,m.name AS manufacturer FROM manufacturer_products p JOIN manufacturers m ON p.manufacturer_id=m.id AND p.tenant=m.tenant WHERE p.id=@p0 AND p.tenant=@p1 AND p.material_id=@p2 AND p.active=1',productId,p.tenant,materialId))[0];
@@ -233,18 +236,21 @@ export function* searchCatalog(p:Principal,input:string,projectId?:string):Opera
     let q=queryWords;
     const span=q.match(/(?:for\s+(?:a\s+)?)?(\d+(?:\.\d+)?)[ -]*(?:inch|in\b|["″])[ -]*(?:span|spread)/i);
     if(span&&attributes.minSpanIn!=null&&attributes.maxSpanIn!=null){if(Number(span[1])<Number(attributes.minSpanIn)||Number(span[1])>Number(attributes.maxSpanIn))return null;q=q.replace(span[0],'').trim();}
+    const comparison=compareSpecifications(q,attributes,material.description);
+    if(comparison.conflicts.length)return null;
     let rank=0;for(const phrase of new Set(phraseList))rank=Math.max(rank,score(q,searchWords(phrase)));
     const schedule=q.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1],expectedSchedule=attributes.schedule??material.description.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1];
     if(!matchesPhysicalSearch(input,attributes))return null;
+    if(comparison.retrieval&&/[a-z]{3}/i.test(comparison.retrieval)){for(const phrase of new Set(phraseList))rank=Math.max(rank,Math.min(90,score(comparison.retrieval,searchWords(phrase))));}
     const diameter=sizeQueryWithoutRadius(q).match(/\b(\d+(?:\.\d+|\/\d+)?)\s*(?:inch|in\b|["″])/i)?.[1];
     const mappedTerminology=(phrasesByMaterial.get(id)??[]).some(phrase=>score(q,searchWords(phrase))>=90);
     if(!mappedTerminology&&((/\bpipe\b/i.test(q)&&attributes.type==='conduit')||(/\bconduit\b/i.test(q)&&attributes.type==='pipe')))rank=0;
     if((schedule&&expectedSchedule&&String(schedule)!==String(expectedSchedule))||(diameter&&attributes.diameterIn&&Number(diameter)!==Number(attributes.diameterIn)))rank=0;
     choices.sort((a,b)=>Number(key(input).includes(key(b.part_number)))-Number(key(input).includes(key(a.part_number)))||Number(String(b.id).toLowerCase()===String(profile?.preferred_product_id).toLowerCase())-Number(String(a.id).toLowerCase()===String(profile?.preferred_product_id).toLowerCase()));
     const useCount=countsByMaterial.get(id)??0;
-    return {id,description:material.description,productUnit:material.product_uom,specs:details.specs,category:details.category,source:material.dataset_kind==='fixture'?'verified_fixture':'verified',verification:profile?.verification??'reviewed',score:rank,highUse:Boolean(profile?.high_use)||useCount>=10,useCount,reason:rank===100?'Exact phrase match':'Potential specification match',preferredProductId:profile?.preferred_product_id?String(profile.preferred_product_id).toLowerCase():null,products:choices.map(product=>({id:String(product.id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,verification:product.verification})),provenance:{sourceUrl:details.row.source_url,verificationBasis:details.row.verification_basis,datasetKind:material.dataset_kind}};
+    return {id,description:material.description,productUnit:material.product_uom,specs:details.specs,category:details.category,source:material.dataset_kind==='fixture'?'verified_fixture':'verified',verification:profile?.verification??'reviewed',score:rank,highUse:Boolean(profile?.high_use)||useCount>=10,useCount,matchStatus:comparison.missing.length?'needs_verification':'matches_requirements',missingSpecifications:comparison.missing,reason:comparison.missing.length?'Needs verification: '+comparison.missing.join('; '):'Matches requested specifications',preferredProductId:profile?.preferred_product_id?String(profile.preferred_product_id).toLowerCase():null,products:choices.map(product=>({id:String(product.id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,verification:product.verification})),provenance:{sourceUrl:details.row.source_url,verificationBasis:details.row.verification_basis,datasetKind:material.dataset_kind}};
   }).filter((row):row is NonNullable<typeof row>=>Boolean(row&&row.score>=85));
-  return results.sort((a,b)=>b.score-a.score||Number(b.highUse)-Number(a.highUse)||Math.min(b.useCount,100)-Math.min(a.useCount,100)||a.description.localeCompare(b.description)).slice(0,20);
+  return results.sort((a,b)=>Number(a.matchStatus==='needs_verification')-Number(b.matchStatus==='needs_verification')||b.score-a.score||Number(b.highUse)-Number(a.highUse)||Math.min(b.useCount,100)-Math.min(a.useCount,100)||a.description.localeCompare(b.description)).slice(0,20);
 }
 const importKinds=['material','product','translation','image'] as const;
 export function parseExtendedCsv(csv:string){

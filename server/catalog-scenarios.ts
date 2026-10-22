@@ -15,6 +15,15 @@ const product=(materialKey:string,manufacturer='Fixture Alpha',partNumber='TEST-
 function people(){const tenant=`catalog-${randomUUID()}`;return {admin:{tenant,oid:'admin',roles:['Admin']} as Principal,user:{tenant,oid:'user',roles:['Foreman']} as Principal,foreign:{tenant:`other-${randomUUID()}`,oid:'user',roles:['Admin']} as Principal};}
 const csv=(kind:string,rows:unknown[])=>stringify(rows.map(data=>({kind,data_json:JSON.stringify(data)})),{header:true});
 export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>}[]=[...workforceScenarios,...materialWorkbookScenarios,
+{name:'specification-aware search retrieves incomplete couplings without hiding known conflicts',run:async store=>{
+ const {admin,user}=people();
+ const c=await store.catalogCommand(admin,'material',{externalKey:'coupling-test',category:'general',productUnit:'EA',verification:'provisional',attributes:{type:'coupling',specification:'center stop',diameterIn:1,material:'PVC'},sourceUrl:'https://example.invalid/coupling',verificationBasis:'Synthetic search regression evidence only.'});
+ for(const q of ['1" PVC SCH 40 coupling','1 inch PVC 40 coupling','1 in. PVC Schedule 40 coupling']){const rows=await store.search(user,q);assert.equal(rows.length,1,q);assert.equal(rows[0].id,c.id);assert.equal(rows[0].matchStatus,'needs_verification');assert.ok(rows[0].missingSpecifications.includes('Schedule 40 not recorded'));}
+ assert.equal((await store.search(user,'3/4" PVC SCH 40 coupling')).length,0);
+ assert.equal((await store.search(user,'1" PVC coupling'))[0].matchStatus,'matches_requirements');
+ await store.member(user,'search-job');const selected=await store.catalogCommand(user,'selection',{eventId:randomUUID(),projectId:'search-job',materialId:c.id,productId:null,phrase:'1" PVC SCH 40 coupling'});assert.equal(selected.translation.skipped,true);assert.equal((await store.catalogCommand(admin,'translations',{id:c.id})).some((x:any)=>x.phrase==='1" PVC SCH 40 coupling'),false);
+}},
+
 {name:'selected registered foreman persists without changing creator ownership and is revalidated on submission',run:async store=>{
  const {admin,user,foreign}=people();user.displayName='Preparing GF';await store.member(user,'riverside');await store.member(admin,'riverside');
  const target={oid:randomUUID(),displayName:'Assigned Foreman',active:true,roleLimit:'Foreman',projects:['riverside'],version:0,reason:'Register foreman for delegated requests.'};await store.users(admin,'save',target);
