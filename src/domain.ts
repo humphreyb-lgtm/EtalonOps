@@ -6,6 +6,7 @@ export const units: Unit[] = ['EA', 'FT', 'STICK', 'BOX', 'ROLL', 'PAIR'];
 export type Source = 'verified_fixture' | 'ai_fixture' | 'user_description' | 'verified';
 export type Candidate = {
   id: string;
+  searchFacets?: import('./search-facets').SearchFacets;
   description: string;
   specs: string[];
   productUnit: Unit;

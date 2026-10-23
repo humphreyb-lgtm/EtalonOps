@@ -1,3 +1,4 @@
+import {materialFacets,couplingPhrases} from '../src/search-facets';
 import {searchGuidance} from '../src/search-guidance';
 import {explicitBrand,structuredSearchPhrase} from './search-language';
 import {searchConstraints} from './search-constraints';
@@ -238,7 +239,8 @@ export function* searchCatalog(p:Principal,input:string,projectId?:string):Opera
     const applicable=[...(rulesByMaterial.get('*')??[]),...(rulesByMaterial.get(id)??[])].filter(rule=>!rule.category||rule.category===(attributes.category??details.category));
     for(const rule of applicable)choices=choices.filter(product=>(!rule.makers.size||rule.makers.has(String(product.manufacturer_id).toLowerCase()))&&(!rule.products.size||rule.products.has(String(product.id).toLowerCase())));
     if(applicable.length&&!choices.length)return null;
-    const phraseList=[structuredSearchPhrase(attributes),material.description,...JSON.parse(details.row.aliases_json),...(phrasesByMaterial.get(id)??[])];
+    const facets=materialFacets(attributes,material.description);
+    const phraseList=[...couplingPhrases(attributes),structuredSearchPhrase(attributes),material.description,...JSON.parse(details.row.aliases_json),...(phrasesByMaterial.get(id)??[])];
     // Convert only a structured length for retrieval, never a requested quantity/UOM.
     if(attributes.lengthIn)phraseList.push(`${attributes.diameterIn} inch ${attributes.material} ${attributes.type} schedule ${attributes.schedule} ${Number(attributes.lengthIn)/12} ft`);
     for(const product of choices)phraseList.push(`${product.manufacturer} ${product.part_number} ${product.title} ${material.description}`);
@@ -250,7 +252,7 @@ export function* searchCatalog(p:Principal,input:string,projectId?:string):Opera
     comparison.missing.push(...physical.missing);
     const guidance=searchGuidance(input);if(guidance&&!brand)comparison.missing.push(guidance);
     if(comparison.conflicts.length||physical.conflicts.length)return null;
-    let rank=0;for(const phrase of new Set(phraseList))rank=Math.max(rank,score(q,searchWords(phrase)));
+    let rank=/^unistrut$|^strut$/i.test(input.trim())&&facets.family?.includes('Unistrut')?85:/^pvc$/i.test(input.trim())&&facets.family?.includes('PVC')?85:0;for(const phrase of new Set(phraseList))rank=Math.max(rank,score(q,searchWords(phrase)));
     const schedule=q.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1],expectedSchedule=attributes.schedule??material.description.match(/\bsch(?:edule)?\s*(\d+)\b/i)?.[1];
     if(!matchesPhysicalSearch(input,attributes))return null;
     if(comparison.retrieval&&/[a-z]/i.test(comparison.retrieval)){for(const phrase of new Set(phraseList))rank=Math.max(rank,Math.min(90,score(comparison.retrieval,searchWords(phrase))));}
@@ -260,9 +262,9 @@ export function* searchCatalog(p:Principal,input:string,projectId?:string):Opera
     if((schedule&&expectedSchedule&&String(schedule)!==String(expectedSchedule))||(diameter&&attributes.diameterIn&&Number(diameter)!==Number(attributes.diameterIn)))rank=0;
     choices.sort((a,b)=>Number(key(input).includes(key(b.part_number)))-Number(key(input).includes(key(a.part_number)))||Number(String(b.id).toLowerCase()===String(profile?.preferred_product_id).toLowerCase())-Number(String(a.id).toLowerCase()===String(profile?.preferred_product_id).toLowerCase()));
     const useCount=countsByMaterial.get(id)??0;
-    return {id,description:material.description,productUnit:material.product_uom,specs:details.specs,category:details.category,source:material.dataset_kind==='fixture'?'verified_fixture':'verified',verification:profile?.verification??'reviewed',score:rank,highUse:Boolean(profile?.high_use)||useCount>=10,useCount,matchStatus:comparison.missing.length?'needs_verification':'matches_requirements',missingSpecifications:comparison.missing,reason:comparison.missing.length?'Needs verification: '+comparison.missing.join('; '):'Matches requested specifications',preferredProductId:profile?.preferred_product_id?String(profile.preferred_product_id).toLowerCase():null,products:choices.map(product=>({id:String(product.id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,verification:product.verification})),provenance:{sourceUrl:details.row.source_url,verificationBasis:details.row.verification_basis,datasetKind:material.dataset_kind}};
+    return {id,searchFacets:facets,description:material.description,productUnit:material.product_uom,specs:details.specs,category:details.category,source:material.dataset_kind==='fixture'?'verified_fixture':'verified',verification:profile?.verification??'reviewed',score:rank,highUse:Boolean(profile?.high_use)||useCount>=10,useCount,matchStatus:comparison.missing.length?'needs_verification':'matches_requirements',missingSpecifications:comparison.missing,reason:comparison.missing.length?'Needs verification: '+comparison.missing.join('; '):'Matches requested specifications',preferredProductId:profile?.preferred_product_id?String(profile.preferred_product_id).toLowerCase():null,products:choices.map(product=>({id:String(product.id).toLowerCase(),manufacturer:product.manufacturer,partNumber:product.part_number,verification:product.verification})),provenance:{sourceUrl:details.row.source_url,verificationBasis:details.row.verification_basis,datasetKind:material.dataset_kind}};
   }).filter((row):row is NonNullable<typeof row>=>Boolean(row&&row.score>=85));
-  return results.sort((a,b)=>Number(a.matchStatus==='needs_verification')-Number(b.matchStatus==='needs_verification')||b.score-a.score||Number(b.highUse)-Number(a.highUse)||Math.min(b.useCount,100)-Math.min(a.useCount,100)||a.description.localeCompare(b.description)).slice(0,200);
+  return results.sort((a,b)=>Number(a.matchStatus==='needs_verification')-Number(b.matchStatus==='needs_verification')||b.score-a.score||Number(b.highUse)-Number(a.highUse)||Math.min(b.useCount,100)-Math.min(a.useCount,100)||a.description.localeCompare(b.description));
 }
 const importKinds=['material','product','translation','image'] as const;
 export function parseExtendedCsv(csv:string){

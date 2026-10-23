@@ -15,7 +15,7 @@ export function searchConstraints(query:string,a:Record<string,any>){
  const bare=q.replace(/[.,](?!\d)/g,' ').replace(/\s+/g,' ').trim();
  // An unqualified strut size/profile asks for channel stock, not every accessory
  // whose compatibility notes happen to mention that channel.
- if(/^(?:(?:\d+(?:\.\d+)?|shallow|deep|double|single|solid|slotted|halfslot|longslot)\s+)*(?:strut|strut channel)(?:\s+\d+(?:\.\d+)?)?$/.test(bare)&&type!=='strut channel')conflicts.push('Requested channel stock');
+ if(bare!=='strut'&&/^(?:(?:\d+(?:\.\d+)?|shallow|deep|double|single|solid|slotted|halfslot|longslot)\s+)*(?:strut|strut channel)(?:\s+\d+(?:\.\d+)?)?$/.test(bare)&&type!=='strut channel')conflicts.push('Requested channel stock');
  if(/\bchannel nut\b/.test(q.split(',')[0])&&!/beam|clamp|washer|bolt|hanger|swivel/.test(q.split(',')[0])&&type!=='strut channel nut')conflicts.push('Requested channel nut');
  const tuple=q.match(/(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+(?:(?:steel|strut|soft|vinyl|polyurethane|end|single|double|plastic|back-to-back)\s+)*(?:channel|cap|insert)\b/);
  if(tuple&&/cap|end insert/.test(type)&&!q.includes('combined')){

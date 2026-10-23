@@ -44,3 +44,9 @@ After building the application ZIP, run
 `python scripts/publication-import/build-search-update.py PREPARED APP_ZIP OUTPUT_ZIP`.
 The generated installer has a fixed archive checksum. Never package a live catalog
 snapshot, `.runtime`, account/job data, tokens or credentials.
+
+For v49.3 joining fittings, run `prepare-couplings.ts ORIGINAL_MATERIAL_MANIFEST OUTPUT`.
+It generates an append-only manifest plus `Coupling-Search-Phrases.csv` for review.
+Use `build-search-update.py PREPARED APP_ZIP OUTPUT_ZIP v49.3` for the versioned
+archive; its installer directory derives from the output archive name and its
+status counts derive from the manifest, rather than the older 297-record package.

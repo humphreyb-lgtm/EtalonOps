@@ -454,6 +454,10 @@ export const catalogScenarios:{name:string;run:(store:Repository)=>Promise<void>
  await store.catalogCommand(admin,'product',product('strut-profile-0','Unistrut','EXACT-CHANNEL'));
  const branded=await store.search(user,'Unistrut brand only strut channel','riverside');assert.deepEqual(branded.map((r:any)=>r.id),[ids[0]]);
  assert.equal((await store.search(user,'unistrut 1-5/8','riverside')).length,2);
+ await store.catalogCommand(admin,'material',{externalKey:'strut-join-test',category:'general',attributes:{type:'strut splice clevis',specification:'Synthetic shallow coupling',openingIn:0.9375,compatibleChannelDepthsIn:'0.8125 / 0.875',material:'steel',finish:'electro-galvanized'},productUnit:'EA',verification:'provisional',sourceUrl:'',verificationBasis:'Synthetic search facet fixture.'});
+ assert.equal((await store.search(user,'Unistrut','riverside')).length,3);
+ const joined=await store.search(user,'7/8 Unistrut coupling','riverside');assert.equal(joined.length,1);assert.deepEqual(joined[0].searchFacets.channelSize,['7/8 in.']);
+ assert.equal((await store.search(user,'Unistrut channel','riverside')).length,2);
 }},
 {name:'export cursor pages preserve composite aliases and SQL GUID ordering without overlap',run:async store=>{
  const {admin,user,foreign}=people();

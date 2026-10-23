@@ -21,7 +21,7 @@ npm ci --no-audit --no-fund
 npm run build
 bash scripts/migrate-cloud-schema.sh
 python3 deploy/package.py
-az webapp deploy --name etalonops-954bb4a3 --resource-group rg-etalonops-poc --src-path .runtime/app.zip --type zip --output none
+az webapp deploy --name etalonops-954bb4a3 --resource-group rg-etalonops-poc --src-path .runtime/app.zip --type zip --track-status false --output none
 host=$(az webapp show --name etalonops-954bb4a3 --resource-group rg-etalonops-poc --query defaultHostName -o tsv)
 python3 deploy/callback.py "$host" >/dev/null
 python3 deploy/check-cloud.py "https://${host}"
