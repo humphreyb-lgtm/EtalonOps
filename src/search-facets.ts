@@ -4,8 +4,8 @@ export const facetLabels:Record<string,string>={family:'Family',type:'Part type'
 const inch=(n:number)=>formatInchText(`${n} in.`).replace(/\s+in\.?$/,' in.');
 function numbers(value:unknown):number[]{return String(value??'').split(/\s+\/\s+|[,;]|\s+and\s+/i).flatMap(v=>{try{return [parseInches(v.trim().replace(/(?:inches|inch|in\.?|["″])$/i,'').trim().replace(/^(\d+)-(\d+\/\d+)$/,'$1 $2'))];}catch{return [];}});}
 // Owner-approved browsing groups, not a change to any measured specification or
-// assertion of interchangeability. Other dimensions retain their recorded size.
-export function channelGroup(n:number):number {return ({'0.8125':0.875,'0.9375':0.875,'1.5625':1.625} as Record<string,number>)[String(n)]??n;}
+// assertion of interchangeability. Unsupported depths stay in Details, not a guessed group.
+export function channelGroup(n:number):number|undefined {return [0.875,1.625,3.25].find(value=>Math.abs(n-value)<=0.0625);}
 export function materialFacets(a:Record<string,any>,description=''):SearchFacets{
  const f:SearchFacets={},type=String(a.type??'').trim(),strut=/\bstrut\b/i.test(type)||type==='rubber vibration isolation pad';
  const pvc=!strut&&/\bpvc\b/i.test([a.material,a.type,a.specification,a.compatibleConduit,description].join(' '));
@@ -13,7 +13,7 @@ export function materialFacets(a:Record<string,any>,description=''):SearchFacets
  if(type)f.type=[type];if(a.finish)f.finish=[String(a.finish)];if(a.schedule!=null)f.schedule=[String(a.schedule)];
  if(a.diameterIn!=null)f.size=[inch(Number(a.diameterIn))];
  const fit=strut?(type==='strut channel'?numbers(a.depthIn):numbers(a.compatibleChannelDepthIn??a.compatibleChannelDepthsIn)):[];
- if(strut)f.channelSize=fit.length?[...new Set(fit.map(channelGroup).map(inch))]:['Not specified'];
+ if(strut&&fit.length)f.channelSize=[...new Set(fit.map(channelGroup).filter((value):value is number=>value!=null).map(inch))];
  if(strut&&(a.construction||a.channelConstruction))f.construction=[String(a.construction??a.channelConstruction)];
  if(a.gauge!=null)f.gauge=[String(a.gauge)];if(a.slotPattern)f.slots=[String(a.slotPattern)];if(a.holeCount!=null)f.holes=[String(a.holeCount)];
  if(a.threadSize)f.thread=[String(a.threadSize)+(a.threadPitch&&!String(a.threadSize).includes('-')?'-'+a.threadPitch:'')];
@@ -27,3 +27,23 @@ export function couplingPhrases(a:Record<string,any>):string[]{if(!strutCoupling
  if(a.holeCount)variants.push(`${a.holeCount} hole strut coupling`,`${a.holeCount} hole unistrut coupling`);
  if(a.finish)variants.push(`${a.finish} strut coupling`,`${a.finish} unistrut coupling`);
  return [...base,...variants,...size.flatMap(s=>{const n=s.replace(/\s*in\.$/,'').replace(/(\d)\s+(\d+\/\d+)/,'$1-$2');return [`${n} unistrut coupling`,`${n} strut coupling`,`${n} strut splice coupling`];})];}
+
+export type FacetRow={searchFacets?:SearchFacets};
+export function initialSearchFilters(rows:FacetRow[],query:string):Record<string,string>{
+ const families=facetOptions(rows,{},'family');
+ const requested=/\b(?:unistrut|strut)\b/i.test(query)?'Unistrut':/\bpvc\b/i.test(query)?'PVC':undefined;
+ const family=requested&&families.includes(requested)?requested:rows.find(r=>r.searchFacets?.family?.length)?.searchFacets?.family?.[0];
+ return family?{family}:{};
+}
+export function availableFacetKeys(rows:FacetRow[],selected:Record<string,string>){
+ const family=selected.family,keys=family==='PVC'?['family','type','size','schedule','length']:family==='Unistrut'?['family','type','channelSize','finish','construction','thread','length','gauge','slots','holes',...(/conduit clamp/i.test(selected.type??'')?['size']:[])]:Object.keys(facetLabels);
+ return keys.filter(key=>{const scope=key==='family'?{}:key==='type'?{family}:selected;return facetOptions(rows,scope,key).length>0;});
+}
+export function changeSearchFilter(rows:FacetRow[],selected:Record<string,string>,key:string,value:string){
+ if(key==='family')return value?{family:value}:{};
+ if(key==='type')return {...(selected.family?{family:selected.family}:{}),...(value?{type:value}:{})};
+ const next={...selected,[key]:value};const priority={family:next.family??'',type:next.type??'',[key]:value};
+ for(const field of Object.keys(next))if(!['family','type',key].includes(field)&&!facetOptions(rows,priority,field).includes(next[field]))delete next[field];
+ for(const field of Object.keys(next))if(!next[field]||!availableFacetKeys(rows,next).includes(field))delete next[field];
+ return next;
+}

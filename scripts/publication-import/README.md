@@ -50,3 +50,10 @@ It generates an append-only manifest plus `Coupling-Search-Phrases.csv` for revi
 Use `build-search-update.py PREPARED APP_ZIP OUTPUT_ZIP v49.3` for the versioned
 archive; its installer directory derives from the output archive name and its
 status counts derive from the manifest, rather than the older 297-record package.
+
+For the v49.4 UI-only release, use
+`build-search-update.py EMPTY_PREPARED_DIR APP_ZIP OUTPUT_ZIP v49.4 --app-only`.
+This needs no catalog export or material manifest. The resulting archive excludes
+material/phrase data, starts with `--apply --app-only`, and exits after exact-release
+health verification, before any SQL catalog import or temporary storage access.
+Its status report shows release and completion rather than material batch counters.

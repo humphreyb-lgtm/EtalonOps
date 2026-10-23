@@ -803,3 +803,18 @@ dialog::backdrop { background: #14203c55; }
 .result-pagination .button{min-height:32px;padding:5px 10px}
 @media(max-width:600px){.search-filters label{flex:1 1 135px}.result-pagination{flex-wrap:wrap;justify-content:center}}
 .search-filters .button{height:auto}
+.result-details-button{border:0;background:transparent;color:var(--primary,#164fee);font:inherit;font-size:12px;padding:3px 2px;text-decoration:underline;cursor:pointer}
+.result-spec-popover{z-index:2000;box-sizing:border-box;overflow:auto;background:white;color:#17243a;border:1px solid #cbd7eb;border-radius:7px;padding:12px;box-shadow:0 8px 28px #13284c30;font-size:13px;line-height:1.45}
+.result-spec-heading,.image-preview-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.result-spec-heading>button{border:0;background:transparent;cursor:pointer;font-size:22px;line-height:1;min-width:30px;min-height:30px}
+.result-spec-popover .result-spec-description{font-size:12px!important;margin:5px 0 9px;font-weight:500!important}
+.result-spec-popover ul{padding-left:18px;margin:0;overflow-wrap:anywhere}.result-spec-popover li+li{margin-top:4px}
+.product-photo-zoom{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border:0;background:transparent;padding:0;cursor:zoom-in;border-radius:4px}
+.product-photo-zoom:focus-visible,.result-details-button:focus-visible{outline:2px solid #2455ff;outline-offset:3px}
+.product-image-preview{box-sizing:border-box;width:min(920px,95vw);max-height:92dvh;padding:14px;border:1px solid #cad6ea;border-radius:10px;box-shadow:0 12px 60px #13284c50}
+.product-image-preview::backdrop{background:#10213e99}.product-image-preview>img{display:block;object-fit:contain;max-width:100%;width:auto;height:auto;max-height:70dvh;margin:10px auto}.product-image-preview>p{font-size:13px!important;margin:8px 0 0}
+.results-table .specs{align-self:center}.results-table .specs .source-tag{display:block;font-size:11px;margin-top:3px}
+@media(min-width:701px){.result-head,.result-row{grid-template-columns:50px minmax(160px,1fr) 65px 160px 110px 75px}}
+.results-table .specs{display:flex;align-items:center;flex-wrap:wrap;gap:5px}.results-table .specs>.source-tag{margin:0}
+@media(max-width:700px){.results-table .specs .mobile-label{display:none}.results-table .specs{padding-top:4px!important;gap:8px}}
+.result-spec-popover:focus-visible{outline:2px solid #2455ff;outline-offset:2px}

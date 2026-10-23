@@ -9,20 +9,41 @@ exec 9>.runtime/import.lock
 flock -n 9 || { echo "An import process is already running in this folder. View .runtime/run.log for progress."; exit 0; }
 source node-cloud.sh
 if [[ ! -d node_modules ]]; then npm ci --omit=dev --no-audit --no-fund; fi
+ui_only=false
+if [[ " $* " == *" --app-only "* ]]; then
+  ui_only=true
+  ui_report() {
+    python3 - "$1" "${2:-}" <<'PYREPORT'
+import json,pathlib,sys,datetime
+p=pathlib.Path('.runtime/result.json')
+p.write_text(json.dumps({'state':sys.argv[1],'release':'cms-suite-v49.4','catalogImport':False,'error':sys.argv[2] or None,'updatedAt':datetime.datetime.now(datetime.timezone.utc).isoformat()},indent=2))
+PYREPORT
+  }
+  ui_report 'verifying owner/context'
+  trap 'ui_exit_code=$?; if [[ $ui_exit_code != 0 ]]; then ui_report stopped "Application update did not complete; see .runtime/run.log."; fi' EXIT
+fi
 node run.mjs --prepare-state
+if [[ "$ui_only" == true ]]; then ui_report "updating application"; fi
 if [[ " $* " == *" --apply "* ]]; then
   import_release=$(node --input-type=module -e 'const r=await fetch("https://etalonops-954bb4a3.azurewebsites.net/api/health");if(!r.ok)process.exit(1);const h=await r.json();if(h.engine!=="Azure SQL"||!h.microsoftSignIn)process.exit(1);console.log(h.release)')
-  if [[ "$import_release" != cms-suite-v49.3 ]]; then
+  if [[ "$import_release" != cms-suite-v49.4 ]]; then
     case "$import_release" in
-      publication-import-v45|specification-search-v46|trade-search-v47|manual-review-design-v48|appearance-studio-v49|cms-suite-v49|cms-suite-v49.1|cms-suite-v49.2) ;;
+      publication-import-v45|specification-search-v46|trade-search-v47|manual-review-design-v48|appearance-studio-v49|cms-suite-v49|cms-suite-v49.1|cms-suite-v49.2|cms-suite-v49.3) ;;
       *) echo 'Unrecognized newer/different app release; stopped without downgrading.' >&2; exit 1;;
     esac
     sha256sum --check app-update.sha256
-    echo 'Installing the compatible CMS v49.3 search filters update first. Existing CMS content is preserved.'
+    echo 'Installing the compatible CMS v49.4 search interface update first. Existing CMS content is preserved.'
     mkdir -p "$HOME/etalonops-westus3"
     unzip -oq app-update.zip -d "$HOME/etalonops-westus3"
     bash "$HOME/etalonops-westus3/scripts/update-cloud-app.sh"
   fi
+fi
+if [[ "$ui_only" == true ]]; then
+  python3 check-cloud.py 'https://etalonops-954bb4a3.azurewebsites.net'
+  ui_report complete
+  trap - EXIT
+  echo 'COMPLETE: v49.4 search interface installed and health verified. No catalog import was run.'
+  exit 0
 fi
 import_storage_assignment=''
 import_sql_rule_created=false

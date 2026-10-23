@@ -3479,7 +3479,7 @@ export const cmsSurfaces=[
     "id": "s1-content",
     "title": "Content",
     "editableText": false,
-    "renderTag": ""
+    "renderTag": "SearchFilters"
    },
    {
     "id": "s2-panel-footer",
@@ -3510,6 +3510,117 @@ export const cmsSurfaces=[
     "editableText": true,
     "renderTag": "",
     "previewText": " matches"
+   }
+  ]
+ },
+ {
+  "id": "app-p-95",
+  "title": "No materials match these filters. Clear a filter to see more options.",
+  "file": "App.tsx",
+  "kind": "p",
+  "access": "authenticated",
+  "classes": "",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-no-materials-match-these-filters-clear-a-filt",
+    "title": "No materials match these filters. Clear a filter to see more",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": "No materials match these filters. Clear a filter to see more options."
+   }
+  ]
+ },
+ {
+  "id": "app-button-96",
+  "title": "Previous results",
+  "file": "App.tsx",
+  "kind": "button",
+  "access": "authenticated",
+  "classes": "button secondary",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-previous-results",
+    "title": "Previous results",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": "Previous results"
+   }
+  ]
+ },
+ {
+  "id": "app-span-97",
+  "title": "Page of · matches",
+  "file": "App.tsx",
+  "kind": "span",
+  "access": "authenticated",
+  "classes": "",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-page",
+    "title": "Page",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": "Page "
+   },
+   {
+    "id": "s1-content",
+    "title": "Content",
+    "editableText": false,
+    "renderTag": ""
+   },
+   {
+    "id": "s2-of",
+    "title": "of",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": " of "
+   },
+   {
+    "id": "s3-content",
+    "title": "Content",
+    "editableText": false,
+    "renderTag": ""
+   },
+   {
+    "id": "s4-",
+    "title": "·",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": " · "
+   },
+   {
+    "id": "s5-content",
+    "title": "Content",
+    "editableText": false,
+    "renderTag": ""
+   },
+   {
+    "id": "s6-matches",
+    "title": "matches",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": " matches"
+   }
+  ]
+ },
+ {
+  "id": "app-button-98",
+  "title": "Next results",
+  "file": "App.tsx",
+  "kind": "button",
+  "access": "authenticated",
+  "classes": "button secondary",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-next-results",
+    "title": "Next results",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": "Next results"
    }
   ]
  },
@@ -3603,7 +3714,7 @@ export const cmsSurfaces=[
  },
  {
   "id": "app-span-96",
-  "title": "Edit the description or add it as entered. This adds an MRF line only.",
+  "title": "muted",
   "file": "App.tsx",
   "kind": "span",
   "access": "authenticated",
@@ -3614,8 +3725,7 @@ export const cmsSurfaces=[
     "id": "s0-edit-the-description-or-add-it-as-entered-thi",
     "title": "Edit the description or add it as entered. This adds an MRF ",
     "editableText": true,
-    "renderTag": "",
-    "previewText": "Edit the description or add it as entered. This adds an MRF line only."
+    "renderTag": ""
    }
   ]
  },
@@ -22103,6 +22213,105 @@ export const cmsSurfaces=[
   ]
  },
  {
+  "id": "productphoto-button-0",
+  "title": "product-photo-zoom",
+  "file": "ProductPhoto.tsx",
+  "kind": "button",
+  "access": "authenticated",
+  "classes": "product-photo-zoom",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-content",
+    "title": "Content",
+    "editableText": false,
+    "renderTag": ""
+   }
+  ]
+ },
+ {
+  "id": "productphoto-dialog-1",
+  "title": "Product image preview",
+  "file": "ProductPhoto.tsx",
+  "kind": "dialog",
+  "access": "authenticated",
+  "classes": "product-image-preview",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-image-preview-heading",
+    "title": "image-preview-heading",
+    "editableText": false,
+    "renderTag": "div"
+   },
+   {
+    "id": "s1-img",
+    "title": "img",
+    "editableText": false,
+    "renderTag": ""
+   },
+   {
+    "id": "s2-p",
+    "title": "p",
+    "editableText": false,
+    "renderTag": "p"
+   }
+  ]
+ },
+ {
+  "id": "productphoto-strong-2",
+  "title": "Product image",
+  "file": "ProductPhoto.tsx",
+  "kind": "strong",
+  "access": "authenticated",
+  "classes": "",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-product-image",
+    "title": "Product image",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": "Product image"
+   }
+  ]
+ },
+ {
+  "id": "productphoto-button-3",
+  "title": "Close",
+  "file": "ProductPhoto.tsx",
+  "kind": "button",
+  "access": "authenticated",
+  "classes": "button secondary",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-close",
+    "title": "Close",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": "Close"
+   }
+  ]
+ },
+ {
+  "id": "productphoto-p-4",
+  "title": "p",
+  "file": "ProductPhoto.tsx",
+  "kind": "p",
+  "access": "authenticated",
+  "classes": "",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-content",
+    "title": "Content",
+    "editableText": false,
+    "renderTag": ""
+   }
+  ]
+ },
+ {
   "id": "purchasingfields-legend-0",
   "title": "Manufacturer and substitutions",
   "file": "PurchasingFields.tsx",
@@ -22265,6 +22474,155 @@ export const cmsSurfaces=[
     "title": "Content",
     "editableText": false,
     "renderTag": ""
+   }
+  ]
+ },
+ {
+  "id": "resultdetails-button-0",
+  "title": "Details",
+  "file": "ResultDetails.tsx",
+  "kind": "button",
+  "access": "authenticated",
+  "classes": "result-details-button",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-details",
+    "title": "Details",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": "Details"
+   }
+  ]
+ },
+ {
+  "id": "resultdetails-strong-1",
+  "title": "Specifications",
+  "file": "ResultDetails.tsx",
+  "kind": "strong",
+  "access": "authenticated",
+  "classes": "",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-specifications",
+    "title": "Specifications",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": "Specifications"
+   }
+  ]
+ },
+ {
+  "id": "resultdetails-button-2",
+  "title": "×",
+  "file": "ResultDetails.tsx",
+  "kind": "button",
+  "access": "authenticated",
+  "classes": "",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-",
+    "title": "×",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": "×"
+   }
+  ]
+ },
+ {
+  "id": "resultdetails-p-3",
+  "title": "result-spec-description",
+  "file": "ResultDetails.tsx",
+  "kind": "p",
+  "access": "authenticated",
+  "classes": "result-spec-description",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-content",
+    "title": "Content",
+    "editableText": false,
+    "renderTag": ""
+   }
+  ]
+ },
+ {
+  "id": "searchfilters-label-0",
+  "title": "All",
+  "file": "SearchFilters.tsx",
+  "kind": "label",
+  "access": "authenticated",
+  "classes": "",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-content",
+    "title": "Content",
+    "editableText": false,
+    "renderTag": ""
+   },
+   {
+    "id": "s1-select",
+    "title": "select",
+    "editableText": false,
+    "renderTag": "select"
+   }
+  ]
+ },
+ {
+  "id": "searchfilters-button-1",
+  "title": "Clear filters",
+  "file": "SearchFilters.tsx",
+  "kind": "button",
+  "access": "authenticated",
+  "classes": "button secondary",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-clear-filters",
+    "title": "Clear filters",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": "Clear filters"
+   }
+  ]
+ },
+ {
+  "id": "searchfilters-span-2",
+  "title": "of matches",
+  "file": "SearchFilters.tsx",
+  "kind": "span",
+  "access": "authenticated",
+  "classes": "",
+  "domId": "",
+  "slots": [
+   {
+    "id": "s0-content",
+    "title": "Content",
+    "editableText": false,
+    "renderTag": ""
+   },
+   {
+    "id": "s1-of",
+    "title": "of",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": " of "
+   },
+   {
+    "id": "s2-content",
+    "title": "Content",
+    "editableText": false,
+    "renderTag": ""
+   },
+   {
+    "id": "s3-matches",
+    "title": "matches",
+    "editableText": true,
+    "renderTag": "",
+    "previewText": " matches"
    }
   ]
  },
@@ -25500,10 +25858,12 @@ export const cmsRenderDependencies={
  ],
  "App.tsx": [
   "ProductPhoto.tsx",
+  "ResultDetails.tsx",
   "AdminWorkspace.tsx",
   "CatalogAdmin.tsx",
   "UserAdmin.tsx",
   "SubmissionCenter.tsx",
+  "SearchFilters.tsx",
   "PurchasingFields.tsx"
  ],
  "CatalogAdmin.tsx": [
@@ -25550,6 +25910,8 @@ export const cmsRenderDependencies={
  "PurchasingFields.tsx": [
   "ProductPhoto.tsx"
  ],
+ "ResultDetails.tsx": [],
+ "SearchFilters.tsx": [],
  "SubmissionCenter.tsx": [
   "ProductPhoto.tsx"
  ],

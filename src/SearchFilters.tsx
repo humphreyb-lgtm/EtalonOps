@@ -1,9 +1,10 @@
-import {facetLabels,facetMatches,facetOptions,type SearchFacets} from './search-facets';
-export function SearchFilters({rows,selected,onChange}:{rows:{searchFacets?:SearchFacets}[];selected:Record<string,string>;onChange:(value:Record<string,string>)=>void}){
- const keys=Object.keys(facetLabels).filter(key=>facetOptions(rows,{},key).length>0);if(!keys.length)return null;
+import {CmsSurface,CmsSource} from './CmsSurface';
+import {facetLabels,facetMatches,facetOptions,availableFacetKeys,changeSearchFilter,initialSearchFilters,type SearchFacets} from './search-facets';
+export function SearchFilters({rows,selected,onChange,query=''}:{query?:string;rows:{searchFacets?:SearchFacets}[];selected:Record<string,string>;onChange:(value:Record<string,string>)=>void}){
+ const keys=availableFacetKeys(rows,selected);if(!keys.length)return null;
  const count=rows.filter(r=>facetMatches(r.searchFacets,selected)).length;
  return <div className="search-filters" role="group" aria-label="Filter material matches">
- {keys.map(key=><label key={key}>{facetLabels[key]}<select aria-label={facetLabels[key]} value={selected[key]??''} onChange={e=>onChange({...selected,[key]:e.target.value})}><option value="">All</option>{facetOptions(rows,selected,key).map(value=><option key={value} value={value}>{value}</option>)}</select></label>)}
- <button type="button" className="button secondary" disabled={!Object.values(selected).some(Boolean)} onClick={()=>onChange({})}>Clear filters</button><span role="status">{count} of {rows.length} matches</span>
+ {keys.map(key=><CmsSurface as="label" surfaceId="searchfilters-label-0" surfaceTitle="label" key={key}><CmsSource slot="s0-content" title="Content" editableText="false">{key==='size'&&selected.family==='Unistrut'?'Conduit size':facetLabels[key]}</CmsSource><CmsSource slot="s1-select" title="select" editableText="false"><select aria-label={key==='size'&&selected.family==='Unistrut'?'Conduit size':facetLabels[key]} value={selected[key]??''} onChange={e=>onChange(changeSearchFilter(rows,selected,key,e.target.value))}>{key!=='family'&&<option value="">All</option>}{facetOptions(rows,key==='family'?{}:key==='type'?{family:selected.family}:selected,key).map(value=><option key={value} value={value}>{value}</option>)}</select></CmsSource></CmsSurface>)}
+ <CmsSurface as="button" surfaceId="searchfilters-button-1" surfaceTitle="button secondary" type="button" className="button secondary" disabled={JSON.stringify(selected)===JSON.stringify(initialSearchFilters(rows,query))} onClick={()=>onChange(initialSearchFilters(rows,query))}><CmsSource slot="s0-clear-filters" title="Clear filters" editableText="true">Clear filters</CmsSource></CmsSurface><CmsSurface as="span" surfaceId="searchfilters-span-2" surfaceTitle="span" role="status"><CmsSource slot="s0-content" title="Content" editableText="false">{count}</CmsSource><CmsSource slot="s1-of" title="of" editableText="true"> of </CmsSource><CmsSource slot="s2-content" title="Content" editableText="false">{rows.length}</CmsSource><CmsSource slot="s3-matches" title="matches" editableText="true"> matches</CmsSource></CmsSurface>
  </div>;
 }
